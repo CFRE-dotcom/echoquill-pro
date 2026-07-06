@@ -189,6 +189,13 @@ class MediaWindow:
         if path:
             threading.Thread(target=self._run, args=(path, False), daemon=True).start()
 
+    def _engine(self):
+        """Own transcription engine per window so it never blocks dictation."""
+        if not hasattr(self, "_own_engine"):
+            from .transcriber import Transcriber
+            self._own_engine = Transcriber(self.cfg.get("model", "base"))
+        return self._own_engine
+
     def _run(self, source, is_url):
         if _allowance(self.cfg) <= 0:
             self._set_status(LIMIT_MSG)
@@ -201,10 +208,12 @@ class MediaWindow:
             else:
                 path = source
                 title = os.path.splitext(os.path.basename(source))[0]
+            self._last_title = title
             header = f"{title}\n{source}\n\n"
             self._append(header)
             self._set_status("Transcribing… (long videos take a while)")
-            model = self.transcriber.load()
+            eng = self._engine()
+            model = eng.load()
             lang = self.cfg.get("language", "auto")
             lang = None if lang in ("", "auto") else lang
             parts = []
@@ -212,7 +221,7 @@ class MediaWindow:
             self._seg_map = []          # (char_start, char_end, seconds)
             pos = len(header)
             _keep_awake(True)
-            with self.transcriber._lock:
+            with eng._lock:
                 segments, _info = model.transcribe(path, language=lang, vad_filter=True)
                 for seg in segments:
                     t = seg.text.strip()
@@ -262,7 +271,7 @@ class MediaWindow:
         if not getattr(self, "_segments", None):
             self._set_status("Transcribe a video first, then ask away.")
             return
-        AskWindow(self.win, self._segments, self.cfg)
+        AskWindow(self.win, self._segments, self.cfg, getattr(self, "_last_title", "transcript"))
 
     def _search(self):
         term = self.search_var.get().strip()
@@ -412,8 +421,11 @@ class BatchWindow:
                 self._log(f"[{i}/{len(urls)}] Downloading: {url}")
                 path, title = fetch_audio_info(url, lambda s: None)
                 self._log(f"[{i}/{len(urls)}] Transcribing: {title}")
-                model = self.transcriber.load()
-                with self.transcriber._lock:
+                if not hasattr(self, "_beng"):
+                    from .transcriber import Transcriber
+                    self._beng = Transcriber(self.cfg.get("model", "base"))
+                model = self._beng.load()
+                with self._beng._lock:
                     segments, _info = model.transcribe(path, language=lang,
                                                        vad_filter=True)
                     text = " ".join(seg.text.strip() for seg in segments).strip()
@@ -442,9 +454,11 @@ class BatchWindow:
 class AskWindow:
     """Ask questions about the transcript; answers cite timestamps."""
 
-    def __init__(self, parent, segments, cfg):
+    def __init__(self, parent, segments, cfg, title="transcript"):
         self.segments = segments
         self.cfg = cfg
+        self.title = title
+        self._last_q = ""
         self.win = tk.Toplevel(parent)
         self.win.title("Ask AI — about this video")
         self.win.geometry("620x480")
@@ -474,6 +488,7 @@ class AskWindow:
                    command=self._copy).pack(side="left")
         ttk.Button(bar, text="Search the web instead",
                    command=self._web).pack(side="left", padx=8)
+        ttk.Button(bar, text="Save answer", command=self._save_answer).pack(side="left", padx=8)
         self.copy_status = ttk.Label(bar, text="", style="Dim.TLabel")
         self.copy_status.pack(side="left", padx=10)
 
@@ -484,6 +499,7 @@ class AskWindow:
         q = self.q_var.get().strip()
         if not q:
             return
+        self._last_q = q
         self.ask_btn.configure(state="disabled", text="Thinking…")
         self.out.delete("1.0", "end")
         self.out.insert("1.0", "…")
@@ -512,3 +528,19 @@ class AskWindow:
         q = self.q_var.get().strip()
         if q:
             webbrowser.open("https://www.google.com/search?q=" + q.replace(" ", "+"))
+
+    def _save_answer(self):
+        answer = self.out.get("1.0", "end").strip()
+        if not answer:
+            return
+        folder = transcripts_dir(self.cfg)
+        fname = safe_filename(f"{self.title} - Q&A")
+        out = os.path.join(folder, fname)
+        block = f"Q: {self._last_q}\nA: {answer}\n\n"
+        try:
+            with open(out, "a", encoding="utf-8") as f:
+                f.write(block)
+            self.copy_status.configure(text=f"Saved to {os.path.basename(out)} ✓")
+        except Exception as e:
+            self.copy_status.configure(text=f"Save failed: {e}")
+        self.win.after(2500, lambda: self.copy_status.configure(text=""))

@@ -6,7 +6,7 @@ def _bearer(cfg: dict) -> str:
     if cfg.get("ai_auth_method", "api_key") == "oauth":
         from . import oauth, config as cfgmod
         return oauth.get_access_token(cfg, save_cb=cfgmod.save)
-    return cfg.get("ai_api_key", "")
+    return (cfg.get("ai_api_key", "") or "").strip()
 
 
 def ask(question: str, segments, cfg: dict) -> str:
