@@ -373,7 +373,10 @@ class SettingsWindow:
         self._title(f, "AI Enhancement",
                     "Optional and off by default. Smarter cleanup and per-app tone "
                     "via any OpenAI-compatible service — or a free local LLM "
-                    "(Ollama, LM Studio) so nothing leaves your PC.")
+                    "(Ollama, LM Studio) so nothing leaves your PC. "
+                    "Note: local models run on your CPU and can add several "
+                    "seconds per dictation — a cloud API key is much faster, "
+                    "or pick a small local model like llama3.2:1b.")
         self.ai_var = tk.BooleanVar(value=self.cfg["ai_enhancement"])
         ttk.Checkbutton(f, text="Enable AI enhancement",
                         variable=self.ai_var).pack(anchor="w", pady=(0, 8))

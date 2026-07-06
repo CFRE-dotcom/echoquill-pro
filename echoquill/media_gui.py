@@ -468,14 +468,17 @@ class AskWindow:
                                   command=self._go)
         self.ask_btn.pack(side="left", padx=(8, 0))
 
-        self.out = theme.dark_text(self.win, wrap="word")
-        self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))
-
         bar = ttk.Frame(self.win)
-        bar.pack(fill="x", padx=18, pady=(2, 12))
-        ttk.Button(bar, text="Copy answer", command=self._copy).pack(side="left")
+        bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
+        ttk.Button(bar, text="Copy answer", style="Accent.TButton",
+                   command=self._copy).pack(side="left")
         ttk.Button(bar, text="Search the web instead",
                    command=self._web).pack(side="left", padx=8)
+        self.copy_status = ttk.Label(bar, text="", style="Dim.TLabel")
+        self.copy_status.pack(side="left", padx=10)
+
+        self.out = theme.dark_text(self.win, wrap="word")
+        self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))
 
     def _go(self):
         q = self.q_var.get().strip()
@@ -499,8 +502,10 @@ class AskWindow:
         try:
             import pyperclip
             pyperclip.copy(self.out.get("1.0", "end").strip())
+            self.copy_status.configure(text="Copied ✓")
+            self.win.after(1500, lambda: self.copy_status.configure(text=""))
         except Exception:
-            pass
+            self.copy_status.configure(text="Copy failed")
 
     def _web(self):
         import webbrowser
