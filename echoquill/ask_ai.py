@@ -37,7 +37,7 @@ def ask(question: str, segments, cfg: dict) -> str:
             f"{base_url}/chat/completions",
             headers={"Authorization": f"Bearer {_bearer(cfg)}",
                      "Content-Type": "application/json"},
-            json={"model": cfg.get("ai_model", "gpt-4o-mini"),
+            json={"model": __import__("echoquill.config", fromlist=["api_model"]).api_model(cfg.get("ai_model", "gpt-4o-mini")),
                   "messages": [{"role": "system", "content": system},
                                {"role": "user", "content": question}],
                   "temperature": 0.1, "keep_alive": "30m"},
