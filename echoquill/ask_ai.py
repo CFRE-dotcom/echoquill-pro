@@ -40,7 +40,7 @@ def ask(question: str, segments, cfg: dict) -> str:
             json={"model": cfg.get("ai_model", "gpt-4o-mini"),
                   "messages": [{"role": "system", "content": system},
                                {"role": "user", "content": question}],
-                  "temperature": 0.1},
+                  "temperature": 0.1, "keep_alive": "30m"},
             timeout=45)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
