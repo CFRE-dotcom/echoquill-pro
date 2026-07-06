@@ -5,7 +5,7 @@
 ; building dist\EchoQuill.exe with build_exe.bat.
 
 #define AppName "EchoQuill Pro"
-#define AppVersion "2.0.0"
+#define AppVersion "2.0.1"
 #define AppExe "EchoQuill.exe"
 
 [Setup]
@@ -85,6 +85,10 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if CurStep = ssPostInstall then begin
+    { refresh the Windows icon cache so the new version badge shows }
+    Exec('ie4uinit.exe', '-show', '', SW_HIDE, ewNoWait, ResultCode);
+  end;
   if CurStep = ssInstall then begin
     { make sure no copy is running, old or new }
     Exec('taskkill.exe', '/F /IM EchoQuill.exe', '', SW_HIDE,
