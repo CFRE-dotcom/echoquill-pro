@@ -486,8 +486,6 @@ class AskWindow:
         bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
         ttk.Button(bar, text="Copy answer", style="Accent.TButton",
                    command=self._copy).pack(side="left")
-        ttk.Button(bar, text="Search the web instead",
-                   command=self._web).pack(side="left", padx=8)
         ttk.Button(bar, text="Save answer", command=self._save_answer).pack(side="left", padx=8)
         self.copy_status = ttk.Label(bar, text="", style="Dim.TLabel")
         self.copy_status.pack(side="left", padx=10)
@@ -522,12 +520,6 @@ class AskWindow:
             self.win.after(1500, lambda: self.copy_status.configure(text=""))
         except Exception:
             self.copy_status.configure(text="Copy failed")
-
-    def _web(self):
-        import webbrowser
-        q = self.q_var.get().strip()
-        if q:
-            webbrowser.open("https://www.google.com/search?q=" + q.replace(" ", "+"))
 
     def _save_answer(self):
         answer = self.out.get("1.0", "end").strip()
