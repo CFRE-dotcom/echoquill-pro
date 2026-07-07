@@ -50,8 +50,15 @@ def _validate(cfg: dict) -> bool:
         return True   # offline: keep Pro alive; the 14-day window governs
 
 
+# This is the Pro edition build — all Pro features are unlocked. (When a
+# store/license flow exists, gate on the key instead by setting this False.)
+PRO_BUILD = True
+
+
 def is_pro(cfg: dict) -> bool:
-    """Licensed and validated within the grace window (quiet re-check when due)."""
+    """Pro edition: always unlocked. (License checks apply only if PRO_BUILD is False.)"""
+    if PRO_BUILD:
+        return True
     if not cfg.get("pro_license_key"):
         return False
     age = time.time() - float(cfg.get("pro_last_valid", 0) or 0)
