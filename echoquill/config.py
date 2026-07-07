@@ -265,6 +265,34 @@ def api_model(name: str) -> str:
     return (name or "").split(" (")[0].strip()
 
 
+KEYRING_MARK = "__stored_in_credential_manager__"
+_SECRET_KEYS = ("ai_api_key", "pro_license_key")
+
+
+def _kr_set(name: str, value: str) -> bool:
+    """Store a secret in Windows Credential Manager. True if it worked."""
+    try:
+        import keyring
+        if value:
+            keyring.set_password("EchoQuill", name, value)
+        else:
+            try:
+                keyring.delete_password("EchoQuill", name)
+            except Exception:
+                pass
+        return True
+    except Exception:
+        return False
+
+
+def _kr_get(name: str) -> str:
+    try:
+        import keyring
+        return keyring.get_password("EchoQuill", name) or ""
+    except Exception:
+        return ""
+
+
 def load() -> dict:
     cfg = dict(DEFAULTS)
     try:
@@ -281,8 +309,12 @@ def load() -> dict:
 def save(cfg: dict) -> None:
     try:
         out = dict(cfg)
-        out["ai_api_key"] = _encrypt_key(out.get("ai_api_key", ""))
-        out["pro_license_key"] = _encrypt_key(out.get("pro_license_key", ""))
+        for k in _SECRET_KEYS:
+            val = out.get(k, "")
+            if _kr_set(k, val):
+                out[k] = KEYRING_MARK if val else ""   # vault holds it; file has a marker
+            else:
+                out[k] = _encrypt_key(val)              # fallback: DPAPI in-file
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(out, f, indent=2, ensure_ascii=False)
     except Exception:
