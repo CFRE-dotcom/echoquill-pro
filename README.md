@@ -1,5 +1,8 @@
 # EchoQuill Pro (PRIVATE — never make this repo public)
 
+<p align="center"><img src="assets/hero.png" alt="EchoQuill — free voice dictation for Windows" width="820"></p>
+
+
 The paid edition. Everything in the free app plus: license-key activation
 (Lemon Squeezy), unlimited video transcriptions, unlimited clip library
 (50/page), ★ Favorites, and Ask AI about any transcript with timestamped answers.
