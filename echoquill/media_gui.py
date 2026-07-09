@@ -373,6 +373,8 @@ class BatchWindow:
         self.start_btn = ttk.Button(bar, text="Start batch",
                                     style="Accent.TButton", command=self._start)
         self.start_btn.pack(side="left")
+        self.stop_btn = ttk.Button(bar, text="Stop", command=self._stop, state="disabled")
+        self.stop_btn.pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="Open transcripts folder",
                    command=self._open_folder).pack(side="left", padx=8)
         ttk.Button(bar, text="Copy last transcript",
@@ -414,12 +416,18 @@ class BatchWindow:
         except Exception:
             pass
 
+    def _stop(self):
+        self._bcancel = True
+        self._log("Stopping after the current step…")
+
     def _start(self):
         urls = [normalize_url(u) for u in self.urls.get("1.0", "end").splitlines()
                 if u.strip()]
         if not urls:
             return
+        self._bcancel = False
         self.start_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
         threading.Thread(target=self._run, args=(urls,), daemon=True).start()
 
     def _run(self, urls):
@@ -428,6 +436,9 @@ class BatchWindow:
         lang = None if lang in ("", "auto") else lang
         done = 0
         for i, url in enumerate(urls, 1):
+            if getattr(self, "_bcancel", False):
+                self._log("Stopped.")
+                break
             if _allowance(self.cfg) <= 0:
                 self._log(LIMIT_MSG)
                 break
@@ -442,7 +453,17 @@ class BatchWindow:
                 with self._beng._lock:
                     segments, _info = model.transcribe(path, language=lang,
                                                        vad_filter=True)
-                    text = " ".join(seg.text.strip() for seg in segments).strip()
+                    _parts = []
+                    for _seg in segments:
+                        if getattr(self, "_bcancel", False):
+                            break
+                        _parts.append(_seg.text.strip())
+                    text = " ".join(_parts).strip()
+                if getattr(self, "_bcancel", False):
+                    import shutil as _sh
+                    _sh.rmtree(os.path.dirname(path), ignore_errors=True)
+                    self._log("Stopped.")
+                    break
                 out = os.path.join(self.folder, safe_filename(title))
                 base, n = out, 2
                 while os.path.exists(out):
@@ -461,8 +482,12 @@ class BatchWindow:
             except Exception as e:
                 self._log(f"[{i}/{len(urls)}] FAILED: {e}")
         _keep_awake(False)
-        self._log(f"Batch finished — {done}/{len(urls)} saved to {self.folder}")
+        if not getattr(self, "_bcancel", False):
+            self._log(f"Batch finished — {done}/{len(urls)} saved to {self.folder}")
+        else:
+            self._log(f"Batch stopped — {done} saved to {self.folder}")
         self.win.after(0, lambda: self.start_btn.configure(state="normal"))
+        self.win.after(0, lambda: self.stop_btn.configure(state="disabled"))
 
 
 class AskWindow:
