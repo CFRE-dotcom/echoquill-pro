@@ -272,10 +272,21 @@ KEYRING_MARK = "__stored_in_credential_manager__"
 _SECRET_KEYS = ("ai_api_key", "pro_license_key")
 
 
+def _kr_backend():
+    import keyring
+    try:
+        from keyring.backends import Windows
+        if Windows.WinVaultKeyring.viable:
+            keyring.set_keyring(Windows.WinVaultKeyring())
+    except Exception:
+        pass
+    return keyring
+
+
 def _kr_set(name: str, value: str) -> bool:
     """Store a secret in Windows Credential Manager. True if it worked."""
     try:
-        import keyring
+        keyring = _kr_backend()
         if value:
             keyring.set_password("EchoQuill", name, value)
         else:
@@ -290,7 +301,7 @@ def _kr_set(name: str, value: str) -> bool:
 
 def _kr_get(name: str) -> str:
     try:
-        import keyring
+        keyring = _kr_backend()
         return keyring.get_password("EchoQuill", name) or ""
     except Exception:
         return ""
@@ -306,6 +317,16 @@ def load() -> dict:
                 cfg.update(saved)
     except Exception:
         pass  # fall back to defaults on any corruption
+    for k in _SECRET_KEYS:
+        v = cfg.get(k, "")
+        if v == KEYRING_MARK:
+            cfg[k] = _kr_get(k)                 # read from Credential Manager
+        else:
+            plain = _decrypt_key(v)             # migrate any legacy DPAPI value
+            if plain and _kr_set(k, plain):
+                cfg[k] = plain
+            else:
+                cfg[k] = plain or ""
     return cfg
 
 
@@ -314,6 +335,12 @@ def save(cfg: dict) -> None:
         out = dict(cfg)
         for k in _SECRET_KEYS:
             val = out.get(k, "")
+            if not val:
+                # never blank an existing stored secret by accident
+                existing = _kr_get(k)
+                if existing:
+                    out[k] = KEYRING_MARK
+                    continue
             if _kr_set(k, val):
                 out[k] = KEYRING_MARK if val else ""   # vault holds it; file has a marker
             else:
