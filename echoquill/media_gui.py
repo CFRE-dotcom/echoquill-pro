@@ -129,6 +129,10 @@ class MediaWindow:
             "Paste a video URL (YouTube and most sites), or pick a file from "
             "your computer. Runs on your PC with the same free engine — "
             "nothing is uploaded anywhere.")).pack(anchor="w", padx=18)
+        self.drop_hint = ttk.Label(self.win, style="Dim.TLabel", wraplength=580,
+            text="⤓  Or drag an audio or video file anywhere onto this window to transcribe it.")
+        self.drop_hint.pack(anchor="w", padx=18, pady=(4, 0))
+        self._enable_drop()
 
         row = ttk.Frame(self.win)
         row.pack(fill="x", padx=18, pady=(12, 4))
@@ -183,6 +187,24 @@ class MediaWindow:
         self.url_var.set(url)
         if url:
             threading.Thread(target=self._run, args=(url, True), daemon=True).start()
+
+    def _enable_drop(self):
+        """Pro: drop an audio/video file onto the window to auto-transcribe."""
+        try:
+            from tkinterdnd2 import DND_FILES
+            self.win.drop_target_register(DND_FILES)
+            self.win.dnd_bind("<<Drop>>", self._on_drop)
+        except Exception:
+            self.drop_hint.pack_forget()   # drag-drop engine unavailable
+
+    def _on_drop(self, event):
+        raw = (event.data or "").strip()
+        if raw.startswith("{") and raw.endswith("}"):
+            raw = raw[1:-1]                 # Windows wraps paths with spaces in { }
+        path = raw.split("} {")[0].strip("{} ")
+        if path and os.path.exists(path):
+            self.url_var.set("")
+            threading.Thread(target=self._run, args=(path, False), daemon=True).start()
 
     def _go_file(self):
         path = filedialog.askopenfilename(parent=self.win, title="Pick video or audio",
