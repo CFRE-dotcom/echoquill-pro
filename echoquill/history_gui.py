@@ -1,7 +1,7 @@
-"""Pop-up browser of recent transcriptions (Pro: paged, unlimited)."""
+"""Pop-up browser of recent transcriptions (Pro: paged, unlimited, deletable)."""
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 
 from . import history, license, theme
 
@@ -10,13 +10,12 @@ class ClipboardWindow:
     def __init__(self, root: tk.Tk):
         self.win = tk.Toplevel(root)
         self.win.title("EchoQuill — Recent transcriptions")
-        self.win.geometry("560x420")
-        self.win.minsize(460, 340)
+        self.win.geometry("620x460")
+        self.win.minsize(500, 360)
         self.win.attributes("-topmost", True)
         self.win.protocol("WM_DELETE_WINDOW", self.win.destroy)
         theme.apply(self.win)
 
-        # --- load data FIRST (before any widget references it) ---
         try:
             from . import config as _cfg
             self._pro = license.is_pro(_cfg.load())
@@ -24,43 +23,54 @@ class ClipboardWindow:
             self._pro = False
         self._page = 0
         self._page_size = 50 if self._pro else 10
-        try:
-            self._all = history.entries(limit=100000 if self._pro else 10)
-        except Exception:
-            self._all = []
+        self._reload()
 
         ttk.Label(self.win, text="Recent transcriptions",
                   style="Title.TLabel").pack(anchor="w", padx=16, pady=(14, 2))
         ttk.Label(self.win, style="Dim.TLabel",
-                  text="Double-click a line to copy it."
+                  text="Click to select · Shift/Ctrl-click for many · double-click to copy."
                   ).pack(anchor="w", padx=16, pady=(0, 8))
 
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=16, pady=10)
         self.status = ttk.Label(bar, text="", style="Dim.TLabel")
         self.status.pack(side="left")
-        ttk.Button(bar, text="Copy selected", style="Accent.TButton",
-                   command=self._copy).pack(side="right")
-        if self._pro and len(self._all) > self._page_size:
-            ttk.Button(bar, text="Older →", command=lambda: self._flip(1)).pack(side="right", padx=4)
-            ttk.Button(bar, text="← Newer", command=lambda: self._flip(-1)).pack(side="right")
+        ttk.Button(bar, text="Delete all", command=self._delete_all).pack(side="right", padx=(4, 0))
+        ttk.Button(bar, text="Delete selected", command=self._delete_selected).pack(side="right", padx=4)
+        ttk.Button(bar, text="Select all", command=self._select_all).pack(side="right", padx=4)
+        ttk.Button(bar, text="Copy", style="Accent.TButton", command=self._copy).pack(side="right", padx=4)
 
-        self.listbox = theme.dark_listbox(self.win, activestyle="none")
+        nav = ttk.Frame(self.win)
+        nav.pack(side="bottom", fill="x", padx=16)
+        if self._pro:
+            ttk.Button(nav, text="← Newer", command=lambda: self._flip(-1)).pack(side="left")
+            ttk.Button(nav, text="Older →", command=lambda: self._flip(1)).pack(side="left", padx=6)
+
+        self.listbox = theme.dark_listbox(self.win, activestyle="none",
+                                          selectmode="extended")
         self.listbox.pack(fill="both", expand=True, padx=16)
         self.listbox.bind("<Double-Button-1>", lambda e: self._copy())
         self.entries = []
         self._fill()
 
+    def _reload(self):
+        try:
+            self._all = history.entries(limit=100000 if self._pro else 10)
+        except Exception:
+            self._all = []
+
     def _fill(self):
         self.listbox.delete(0, "end")
+        max_page = max(0, (len(self._all) - 1) // self._page_size)
+        self._page = max(0, min(max_page, self._page))
         start = self._page * self._page_size
         self.entries = self._all[start:start + self._page_size]
         if not self.entries:
             self.listbox.insert("end", "  No transcriptions yet.")
         for e in self.entries:
             text = e.get("text", "").replace("\n", " ")
-            when = str(e.get("date", ""))[11:16]
-            shown = text if len(text) <= 80 else text[:77] + "…"
+            when = str(e.get("date", ""))[:16]
+            shown = text if len(text) <= 76 else text[:73] + "…"
             self.listbox.insert("end", f" {when}   {shown}")
         self.status.configure(
             text=f"Page {self._page + 1} · {len(self._all):,} total" if self._all else "")
@@ -68,19 +78,46 @@ class ClipboardWindow:
     def _flip(self, direction):
         if not self._all:
             return
-        max_page = max(0, (len(self._all) - 1) // self._page_size)
-        self._page = max(0, min(max_page, self._page + direction))
+        self._page += direction
         self._fill()
 
-    def _copy(self):
-        sel = self.listbox.curselection()
-        if not sel or not self.entries or sel[0] >= len(self.entries):
+    def _select_all(self):
+        if self.entries:
+            self.listbox.select_set(0, "end")
+
+    def _selected_entries(self):
+        return [self.entries[i] for i in self.listbox.curselection()
+                if i < len(self.entries)]
+
+    def _delete_selected(self):
+        chosen = self._selected_entries()
+        if not chosen:
+            self.status.configure(text="Nothing selected")
             return
-        entry = self.entries[sel[0]]
+        history.delete_many(e.get("ts") for e in chosen)
+        self._reload()
+        self._fill()
+        self.status.configure(text=f"Deleted {len(chosen)}")
+
+    def _delete_all(self):
+        if not self._all:
+            return
+        if messagebox.askyesno("Delete all",
+                               f"Delete ALL {len(self._all):,} transcriptions? This can't be undone.",
+                               parent=self.win):
+            history.clear()
+            self._reload()
+            self._fill()
+            self.status.configure(text="All deleted")
+
+    def _copy(self):
+        chosen = self._selected_entries()
+        if not chosen:
+            return
         try:
             import pyperclip
-            pyperclip.copy(entry.get("text", ""))
-            self.status.configure(text="Copied ✓")
+            pyperclip.copy("\n\n".join(e.get("text", "") for e in chosen))
+            self.status.configure(text=f"Copied {len(chosen)} ✓")
             self.win.after(1500, lambda: self.status.configure(text=""))
         except Exception:
             self.status.configure(text="Copy failed")
