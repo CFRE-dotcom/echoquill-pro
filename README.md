@@ -1,17 +1,25 @@
-# EchoQuill Pro (PRIVATE — never make this repo public)
+# EchoQuill Pro — PRIVATE (never make this repo public)
 
-<p align="center"><img src="assets/hero.png" alt="EchoQuill — free voice dictation for Windows" width="820"></p>
+<p align="center"><img src="assets/hero.png" alt="EchoQuill" width="820"></p>
 
+The paid edition of EchoQuill. Everything in the free app, plus the power features below.
 
-The paid edition. Everything in the free app plus: license-key activation
-(Lemon Squeezy), unlimited video transcriptions, unlimited clip library
-(50/page), ★ Favorites, and Ask AI about any transcript with timestamped answers.
+## Pro-only features
+- **Unlimited video transcription** (free is capped at 5)
+- **Drag-and-drop upload** — drop any audio/video file onto the transcriber and it auto-transcribes
+- **Ask AI about any video** — ask a question, get an answer grounded only in that video's transcript, with timestamps; save the Q&A alongside the transcript
+- **Unlimited clip library** with paging (50 per page) and a **★ Favorites** tab
+- **Priority support**
+
+## Everything from the free edition
+Live dictation into any app · voice commands · rewrite-by-voice · batch URL transcription with Stop · timestamped transcript search · clips tray with drag-and-drop paste · learning dictionary (add/edit/remove) · multi-provider AI cleanup & formatting (Claude, OpenAI, Groq, Ollama, Ollama Cloud, DeepSeek, Qwen, Z.AI) · light/dark/system theme · optional audio history with budget + ZIP export · daily/weekly/monthly stats · administrator mode · self-update · first-run tour. Keys stored in Windows Credential Manager. 100% local unless you enable a cloud AI provider.
 
 ## Release flow
-1. Bump version in `echoquill/__init__.py` + `installer.iss`
+1. Bump the version in `echoquill/__init__.py` and `installer.iss`.
 2. `git tag vX.Y.Z && git push origin main vX.Y.Z`
-3. GitHub Actions builds `EchoQuill-Pro-Setup.exe` (private release)
-4. Download it from this repo's Releases → upload as the file on the
-   Lemon Squeezy product → buyers get key + download automatically
+3. GitHub Actions builds `EchoQuill-Pro-Setup.exe` (private release).
+4. Update `pro-version.json` in the `echo-quill-site` repo so the in-app update check reports the new version.
+5. Upload the installer as the file on the Lemon Squeezy product → buyers get their key + download automatically.
 
-Public repo (free edition): github.com/CFRE-dotcom/echoquill
+Public repo (free edition): https://github.com/CFRE-dotcom/echoquill
+Website: https://echo-quill.com
