@@ -39,6 +39,7 @@ class ClipboardWindow:
         ttk.Button(bar, text="Delete selected", command=self._delete_selected).pack(side="right", padx=4)
         ttk.Button(bar, text="Select all", command=self._select_all).pack(side="right", padx=4)
         ttk.Button(bar, text="Copy", style="Accent.TButton", command=self._copy).pack(side="right", padx=4)
+        ttk.Button(bar, text="Edit…", command=self._edit).pack(side="right", padx=4)
 
         nav = ttk.Frame(self.win)
         nav.pack(side="bottom", fill="x", padx=16)
@@ -109,6 +110,38 @@ class ClipboardWindow:
             self._reload()
             self._fill()
             self.status.configure(text="All deleted")
+
+    def _edit(self):
+        sel = self.listbox.curselection()
+        if not sel or not self.entries or sel[0] >= len(self.entries):
+            self.status.configure(text="Select one entry to edit")
+            return
+        entry = self.entries[sel[0]]
+        ts = entry.get("ts")
+        dlg = tk.Toplevel(self.win)
+        dlg.title("Edit transcription")
+        dlg.geometry("560x300")
+        dlg.attributes("-topmost", True)
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+        theme.apply(dlg)
+        ttk.Label(dlg, text="Edit the text, then Save:",
+                  style="Dim.TLabel").pack(anchor="w", padx=14, pady=(12, 4))
+        box = theme.dark_text(dlg, wrap="word")
+        box.pack(fill="both", expand=True, padx=14)
+        box.insert("1.0", entry.get("text", ""))
+        row = ttk.Frame(dlg); row.pack(fill="x", padx=14, pady=10)
+
+        def save():
+            new_text = box.get("1.0", "end").strip()
+            history.update(ts, new_text)
+            self._reload() if hasattr(self, "_reload") else None
+            self._fill()
+            dlg.destroy()
+            self.status.configure(text="Saved ✓")
+
+        ttk.Button(row, text="Save", style="Accent.TButton",
+                   command=save).pack(side="right")
+        ttk.Button(row, text="Cancel", command=dlg.destroy).pack(side="right", padx=6)
 
     def _copy(self):
         chosen = self._selected_entries()
