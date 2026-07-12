@@ -60,6 +60,9 @@ class App:
             level_provider=lambda: (self.recorder.level if self.recorder else 0.0),
         )
 
+        from .update_badge import UpdateBadge
+        self._update_badge = UpdateBadge(self.root, lambda: self.events.put("open_update"))
+
         self._register_activation()
         self._refresh_idle_hint()
         self.overlay.show_idle()
@@ -87,16 +90,19 @@ class App:
     # ---------- setup ----------
 
     def _startup_update_check(self):
-        try:
-            time.sleep(6)
-            from . import update
-            found = update.check()
-            if found:
-                ver, _url = found
-                self.events.put(("overlay", "result",
-                                 f"⬆ EchoQuill Pro v{ver} is out — check your purchase email / Lemon Squeezy library"))
-        except Exception:
-            pass
+        # check shortly after launch, then roughly twice a day
+        first = True
+        while True:
+            try:
+                time.sleep(6 if first else 12 * 3600)
+                first = False
+                from . import update
+                found = update.check()
+                if found:
+                    ver, _url = found
+                    self.events.put(("update_available", ver))
+            except Exception:
+                time.sleep(3600)
 
     def _warm_model(self):
         try:
@@ -200,6 +206,14 @@ class App:
                     self._open_settings(section="Stats")
                 elif ev == "help":
                     self._open_settings(section="Help")
+                elif ev == "open_update":
+                    self._update_badge.hide()
+                    self._open_settings(section="About")
+                elif isinstance(ev, tuple) and ev[0] == "update_available":
+                    try:
+                        self._update_badge.show(ev[1])
+                    except Exception:
+                        pass
                 elif ev == "history":
                     self._open_history()
                 elif ev == "clips":
@@ -471,6 +485,9 @@ class App:
         _theme1.set_mode(cfg.get("theme", "dark"))
         self.transcriber.set_model(cfg["model"])
         self.preview_transcriber.set_model(cfg.get("preview_model", "tiny"))
+        from .update_badge import UpdateBadge
+        self._update_badge = UpdateBadge(self.root, lambda: self.events.put("open_update"))
+
         self._register_activation()
         self._refresh_idle_hint()
         self.overlay.show_idle()
