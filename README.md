@@ -11,6 +11,9 @@ The paid edition of EchoQuill. Everything in the free app, plus the power featur
 - **Unlimited clip library** with paging (50 per page) and a **★ Favorites** tab
 - **Priority support**
 
+## Also unique to EchoQuill (free & pro)
+Click a clip to paste it straight at your cursor · edit the text of any past transcription and save it · full history search, multi-select and delete. No other dictation app does these.
+
 ## Everything from the free edition
 Live dictation into any app · voice commands · rewrite-by-voice · batch URL transcription with Stop · timestamped transcript search · clips tray with drag-and-drop paste · learning dictionary (add/edit/remove) · multi-provider AI cleanup & formatting (Claude, OpenAI, Groq, Ollama, Ollama Cloud, DeepSeek, Qwen, Z.AI) · light/dark/system theme · optional audio history with budget + ZIP export · daily/weekly/monthly stats · administrator mode · self-update · first-run tour. Keys stored in Windows Credential Manager. 100% local unless you enable a cloud AI provider.
 
