@@ -814,9 +814,10 @@ class SettingsWindow:
                 if not found:
                     status("You're on the latest version ✓")
                     return
-                ver, _url = found
-                status(f"Pro v{ver} is available — download it from your "
-                       "Lemon Squeezy library (link in your purchase email)")
+                ver, page = found
+                import webbrowser
+                webbrowser.open(page)
+                status(f"v{ver} is out — opened GitHub; download EchoQuill-Pro-Setup.exe")
             except Exception as e:
                 status(f"Update check failed: {e}")
         threading.Thread(target=run, daemon=True).start()

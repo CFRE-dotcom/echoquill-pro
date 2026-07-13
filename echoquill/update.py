@@ -18,11 +18,12 @@ def _ver_tuple(v: str):
 
 
 MANIFEST_URL = "https://echo-quill.com/pro-version.json"
+RELEASES_PAGE = "https://github.com/CFRE-dotcom/echoquill-pro/releases/latest"
 
 
 def check():
-    """Pro reads a public version manifest on the site (no token needed).
-    Returns (latest_version, download_page) if newer, else None."""
+    """Version comes from the public manifest (no login needed). Returns
+    (latest_version, releases_page) if newer, else None."""
     from . import __version__
     import requests
     r = requests.get(MANIFEST_URL, timeout=15)
@@ -30,9 +31,7 @@ def check():
     latest = (r.json() or {}).get("version", "")
     if _ver_tuple(latest) <= _ver_tuple(__version__):
         return None
-    # Pro downloads come from your store/private releases, not public GitHub
-    return (latest.lstrip("v"),
-            "https://github.com/CFRE-dotcom/echoquill-pro/releases/latest")
+    return (latest.lstrip("v"), RELEASES_PAGE)
     url = None
     for a in data.get("assets", []):
         if a.get("name", "").endswith("Setup.exe"):
