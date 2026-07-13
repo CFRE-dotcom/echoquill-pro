@@ -67,6 +67,7 @@ class ClipsTray:
                          font=("Segoe UI", 11), cursor="hand2")
         close.pack(side="right", padx=6)
         close.bind("<Button-1>", lambda e: self._close())
+        helptip.tip(close, "Close the clips tray.")
         _help = ("How to use the Clips tray\n\n"
                  "• CLICK a clip — it pastes straight into whatever text field "
                  "your cursor is in (the app you were just using).\n"
@@ -101,6 +102,8 @@ class ClipsTray:
             self._tab_favs.pack(side="left", padx=4)
             self._tab_recent.bind("<Button-1>", lambda e: self._switch("recent"))
             self._tab_favs.bind("<Button-1>", lambda e: self._switch("favs"))
+            helptip.tip(self._tab_recent, "Your last 10 clips.")
+            helptip.tip(self._tab_favs, "Only your starred clips.")
 
         srow = tk.Frame(self.win, bg=theme.PANEL)
         srow.pack(fill="x", padx=8, pady=(8, 0))
