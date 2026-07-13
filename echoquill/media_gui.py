@@ -8,6 +8,11 @@ import tempfile
 import threading
 
 from . import config as cfgmod
+from . import helptip
+
+MEDIA_HELP = 'How to transcribe video and audio\n\n- Paste a URL from YouTube (incl. Shorts), TikTok, and ~1,800 sites, then click Transcribe URL.\n- Choose a file on this PC to transcribe any audio or video file.\n- Drag and drop: drop an audio/video file anywhere on this window and it transcribes automatically.\n- Batch: many URLs - paste a whole list; each is transcribed one at a time and auto-saved (named after the video) in your Transcriptions folder.\n- Stop cancels a transcription in progress.\n- Find in transcript: type a word to highlight it, with timestamps.\n- Ask AI: after transcribing, ask questions and get answers from the video itself, with timestamps.\n\nEverything runs on your PC - nothing is uploaded.'
+ASK_HELP = 'How to use Ask AI\n\n- Type a question about the video you just transcribed and click Ask.\n- Answers come only from the video transcript, and cite the timestamps where the info was said, like [12:34].\n- If the video does not cover it, it says so - it will not make things up.\n- Copy answer copies the reply.\n- Save answer appends the Q and A to a file named after the video, in your Transcriptions folder. Ask more and they stack in the same file.\n\nRequires AI Enhancement set up in Settings, AI Enhancement.'
+
 
 
 def _allowance(cfg) -> int:
@@ -129,6 +134,9 @@ class MediaWindow:
             "Paste a video URL (YouTube and most sites), or pick a file from "
             "your computer. Runs on your PC with the same free engine — "
             "nothing is uploaded anywhere.")).pack(anchor="w", padx=18)
+        media_help_row = ttk.Frame(self.win); media_help_row.pack(anchor="w", padx=18, pady=(2, 0))
+        ttk.Label(media_help_row, text="New here?", style="Dim.TLabel").pack(side="left")
+        helptip.attach(self.win, media_help_row, "Transcriber - help", MEDIA_HELP).pack(side="left", padx=6)
         self.drop_hint = ttk.Label(self.win, style="Dim.TLabel", wraplength=580,
             text="⤓  Or drag an audio or video file anywhere onto this window to transcribe it.")
         self.drop_hint.pack(anchor="w", padx=18, pady=(4, 0))
@@ -527,8 +535,10 @@ class AskWindow:
         self.win.attributes("-topmost", True)
         theme.apply(self.win)
 
-        ttk.Label(self.win, text="Ask AI about this video",
-                  style="Title.TLabel").pack(anchor="w", padx=18, pady=(14, 2))
+        _ask_top = ttk.Frame(self.win); _ask_top.pack(fill="x", padx=18, pady=(14, 2))
+        ttk.Label(_ask_top, text="Ask AI about this video",
+                  style="Title.TLabel").pack(side="left")
+        helptip.attach(self.win, _ask_top, "Ask AI - help", ASK_HELP).pack(side="right")
         ttk.Label(self.win, style="Dim.TLabel", wraplength=560, text=(
             "Answers come only from the transcript, with timestamps. "
             "If it's not in the video, it says so.")).pack(anchor="w", padx=18)
