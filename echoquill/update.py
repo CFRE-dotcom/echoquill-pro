@@ -17,21 +17,28 @@ def _ver_tuple(v: str):
     return tuple(int(n) for n in nums[:3]) or (0,)
 
 
-MANIFEST_URL = "https://echo-quill.com/pro-version.json"
-RELEASES_PAGE = "https://github.com/CFRE-dotcom/echoquill-pro/releases/latest"
-
-
 def check():
-    """Version comes from the public manifest (no login needed). Returns
-    (latest_version, releases_page) if newer, else None."""
+    """Returns (latest_version, installer_url) if newer — reads GitHub Releases,
+    exactly like the free app. Works fully (auto download+install) once the
+    Pro repo is public; until then the download step needs a logged-in browser."""
     from . import __version__
     import requests
-    r = requests.get(MANIFEST_URL, timeout=15)
+    r = requests.get(API_LATEST, timeout=15,
+                     headers={"Accept": "application/vnd.github+json"})
     r.raise_for_status()
-    latest = (r.json() or {}).get("version", "")
+    data = r.json()
+    latest = data.get("tag_name", "")
     if _ver_tuple(latest) <= _ver_tuple(__version__):
         return None
-    return (latest.lstrip("v"), RELEASES_PAGE)
+    url = None
+    for a in data.get("assets", []):
+        if a.get("name", "").endswith("Setup.exe"):
+            url = a.get("browser_download_url"); break
+    if not url:
+        for a in data.get("assets", []):
+            if a.get("name", "").endswith(".exe"):
+                url = a.get("browser_download_url"); break
+    return (latest.lstrip("v"), url) if url else None
     url = None
     for a in data.get("assets", []):
         if a.get("name", "").endswith("Setup.exe"):

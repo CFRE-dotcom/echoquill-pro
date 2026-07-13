@@ -814,10 +814,12 @@ class SettingsWindow:
                 if not found:
                     status("You're on the latest version ✓")
                     return
-                ver, page = found
-                import webbrowser
-                webbrowser.open(page)
-                status(f"v{ver} is out — opened GitHub; download EchoQuill-Pro-Setup.exe")
+                ver, url = found
+                status(f"v{ver} available — downloading…")
+                update.download_and_run(url, status)
+                status("Installer launched — EchoQuill will close.")
+                if self.on_quit:
+                    self.win.after(1500, self.on_quit)
             except Exception as e:
                 status(f"Update check failed: {e}")
         threading.Thread(target=run, daemon=True).start()
