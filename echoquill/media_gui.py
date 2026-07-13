@@ -125,8 +125,11 @@ class MediaWindow:
         ttk.Button(bar, text="Open transcripts folder",
                    command=lambda: os.startfile(transcripts_dir(self.cfg))
                    ).pack(side="left")
-        ttk.Button(bar, text="🤖 Ask AI about this video", style="Accent.TButton",
-                   command=self._ask_ai).pack(side="right")
+        _ask_video_btn = ttk.Button(bar, text="🤖 Ask AI about this video",
+                   style="Accent.TButton", command=self._ask_ai)
+        _ask_video_btn.pack(side="right")
+        helptip.tip(_ask_video_btn, "Transcribe first, then ask questions and "
+                    "get answers straight from the video, with timestamps.")
 
         _title_row = ttk.Frame(self.win)
         _title_row.pack(anchor="w", padx=18, pady=(14, 2))
@@ -543,15 +546,20 @@ class AskWindow:
             "Answers come only from the transcript, with timestamps. "
             "If it's not in the video, it says so.")).pack(anchor="w", padx=18)
 
+        ttk.Label(self.win, style="Dim.TLabel",
+                  text="Type your question about the video below, then click Ask:"
+                  ).pack(anchor="w", padx=18, pady=(10, 0))
         row = ttk.Frame(self.win)
-        row.pack(fill="x", padx=18, pady=(12, 4))
+        row.pack(fill="x", padx=18, pady=(4, 4))
         self.q_var = tk.StringVar()
-        qe = ttk.Entry(row, textvariable=self.q_var)
-        qe.pack(side="left", fill="x", expand=True)
+        qe = ttk.Entry(row, textvariable=self.q_var, font=("Segoe UI", 10))
+        qe.pack(side="left", fill="x", expand=True, ipady=3)
         qe.bind("<Return>", lambda e: self._go())
         self.ask_btn = ttk.Button(row, text="Ask", style="Accent.TButton",
                                   command=self._go)
         self.ask_btn.pack(side="left", padx=(8, 0))
+        helptip.tip(self.ask_btn, "Answer your question using only this video's "
+                    "transcript, citing the timestamps where it was said.")
 
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
