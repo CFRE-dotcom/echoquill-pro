@@ -7,7 +7,7 @@ import tempfile
 
 # Pro edition: version check against the public repo (same version numbers),
 # but downloads come from your Lemon Squeezy library, not public GitHub.
-REPO = "CFRE-dotcom/echoquill"
+REPO = "CFRE-dotcom/echoquill-pro"
 PRO_EDITION = True
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 
