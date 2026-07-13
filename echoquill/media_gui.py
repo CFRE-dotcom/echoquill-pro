@@ -128,15 +128,15 @@ class MediaWindow:
         ttk.Button(bar, text="🤖 Ask AI about this video", style="Accent.TButton",
                    command=self._ask_ai).pack(side="right")
 
-        ttk.Label(self.win, text="Transcribe video / audio",
-                  style="Title.TLabel").pack(anchor="w", padx=18, pady=(14, 2))
+        _title_row = ttk.Frame(self.win)
+        _title_row.pack(anchor="w", padx=18, pady=(14, 2))
+        ttk.Label(_title_row, text="Transcribe video / audio",
+                  style="Title.TLabel").pack(side="left")
+        helptip.attach(self.win, _title_row, "Transcriber - help", MEDIA_HELP).pack(side="left", padx=8)
         ttk.Label(self.win, style="Dim.TLabel", wraplength=580, text=(
             "Paste a video URL (YouTube and most sites), or pick a file from "
             "your computer. Runs on your PC with the same free engine — "
             "nothing is uploaded anywhere.")).pack(anchor="w", padx=18)
-        media_help_row = ttk.Frame(self.win); media_help_row.pack(anchor="w", padx=18, pady=(2, 0))
-        ttk.Label(media_help_row, text="New here?", style="Dim.TLabel").pack(side="left")
-        helptip.attach(self.win, media_help_row, "Transcriber - help", MEDIA_HELP).pack(side="left", padx=6)
         self.drop_hint = ttk.Label(self.win, style="Dim.TLabel", wraplength=580,
             text="⤓  Or drag an audio or video file anywhere onto this window to transcribe it.")
         self.drop_hint.pack(anchor="w", padx=18, pady=(4, 0))
@@ -538,7 +538,7 @@ class AskWindow:
         _ask_top = ttk.Frame(self.win); _ask_top.pack(fill="x", padx=18, pady=(14, 2))
         ttk.Label(_ask_top, text="Ask AI about this video",
                   style="Title.TLabel").pack(side="left")
-        helptip.attach(self.win, _ask_top, "Ask AI - help", ASK_HELP).pack(side="right")
+        helptip.attach(self.win, _ask_top, "Ask AI - help", ASK_HELP).pack(side="left", padx=8)
         ttk.Label(self.win, style="Dim.TLabel", wraplength=560, text=(
             "Answers come only from the transcript, with timestamps. "
             "If it's not in the video, it says so.")).pack(anchor="w", padx=18)
