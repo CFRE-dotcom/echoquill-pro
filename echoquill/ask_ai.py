@@ -32,17 +32,6 @@ def ask(question: str, segments, cfg: dict) -> str:
         "If the transcript doesn't contain the answer, say exactly: "
         "\"The video doesn't cover that.\" Do not use outside knowledge.\n\n"
         "TRANSCRIPT:\n" + context)
-    try:
-        r = requests.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {_bearer(cfg)}",
-                     "Content-Type": "application/json"},
-            json={"model": __import__("echoquill.config", fromlist=["api_model"]).api_model(cfg.get("ai_model", "gpt-4o-mini")),
-                  "messages": [{"role": "system", "content": system},
-                               {"role": "user", "content": question}],
-                  "temperature": 0.1, "keep_alive": "30m"},
-            timeout=45)
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"AI request failed: {e}"
+    from . import ai_call
+    ok, out = ai_call.chat(cfg, system, question, temperature=0.1, timeout=45)
+    return out
