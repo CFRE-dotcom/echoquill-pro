@@ -233,16 +233,19 @@ class MediaWindow:
         # bottom action bar FIRST so it can never be pushed off-screen
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
-        _b_copy = ttk.Button(bar, text="Copy transcript", style="Accent.TButton",
+        _b_copy = ttk.Button(bar, text="Copy", style="Accent.TButton",
                    command=self._copy); _b_copy.pack(side="left")
         helptip.tip(_b_copy, "Copy the whole transcript to the clipboard.")
         _b_save = ttk.Button(bar, text="Save as .txt…", command=self._save)
         _b_save.pack(side="left", padx=8)
         helptip.tip(_b_save, "Save the transcript as a text file.")
-        _b_open = ttk.Button(bar, text="Open transcripts folder",
+        _b_open = ttk.Button(bar, text="Open folder",
                    command=lambda: os.startfile(transcripts_dir(self.cfg)))
         _b_open.pack(side="left")
         helptip.tip(_b_open, "Open the folder where transcripts are saved.")
+        _b_clear = ttk.Button(bar, text="Clear", command=self._clear)
+        _b_clear.pack(side="left", padx=8)
+        helptip.tip(_b_clear, "Clear the URL box and the transcript.")
         _ask_video_btn = ttk.Button(bar, text="🤖 Ask AI about this video",
                    style="Accent.TButton", command=self._ask_ai)
         _ask_video_btn.pack(side="right")
@@ -280,9 +283,6 @@ class MediaWindow:
         _b_batch = ttk.Button(row2, text="Batch: many URLs…",
                    command=self._open_batch); _b_batch.pack(side="left", padx=8)
         helptip.tip(_b_batch, "Transcribe a whole list of URLs, one after another.")
-        _b_clear = ttk.Button(row2, text="Clear", command=self._clear)
-        _b_clear.pack(side="left")
-        helptip.tip(_b_clear, "Clear the URL box and the transcript.")
         self.stop_btn = ttk.Button(row2, text="Stop", command=self._stop, state="disabled")
         self.stop_btn.pack(side="left", padx=(8, 0))
         helptip.tip(self.stop_btn, "Stop the transcription in progress.")
@@ -493,9 +493,20 @@ class MediaWindow:
         if not getattr(self, "_segments", None):
             self._set_status("Transcribe a video first, then ask away.")
             return
-        AskWindow(self.win, self._segments, self.cfg,
-                 getattr(self, "_last_title", "transcript"),
-                 getattr(self, "_last_url", ""))
+        title = getattr(self, "_last_title", "transcript")
+        url = getattr(self, "_last_url", "")
+        # Reuse one Ask AI window and always re-bind it to the CURRENT
+        # transcript, so a lingering window can never answer about an old video.
+        win = getattr(self, "_ask_win", None)
+        if win is not None:
+            try:
+                if win.win.winfo_exists():
+                    win.update_context(self._segments, title, url)
+                    win.win.deiconify(); win.win.lift(); win.win.focus_force()
+                    return
+            except Exception:
+                pass
+        self._ask_win = AskWindow(self.win, self._segments, self.cfg, title, url)
 
     def _search(self):
         term = self.search_var.get().strip()
@@ -587,12 +598,12 @@ class BatchWindow:
         self.stop_btn = ttk.Button(bar, text="Stop", command=self._stop, state="disabled")
         self.stop_btn.pack(side="left", padx=(8, 0))
         helptip.tip(self.stop_btn, "Stop the batch after the current item.")
-        _bb_open = ttk.Button(bar, text="Open transcripts folder",
+        _bb_copy = ttk.Button(bar, text="Copy",
+                   command=self._copy_last); _bb_copy.pack(side="left", padx=(16, 0))
+        helptip.tip(_bb_copy, "Copy the most recently finished transcript.")
+        _bb_open = ttk.Button(bar, text="Open folder",
                    command=self._open_folder); _bb_open.pack(side="left", padx=8)
         helptip.tip(_bb_open, "Open the folder where transcripts are saved.")
-        _bb_copy = ttk.Button(bar, text="Copy last transcript",
-                   command=self._copy_last); _bb_copy.pack(side="left")
-        helptip.tip(_bb_copy, "Copy the most recently finished transcript.")
         _bb_clear = ttk.Button(bar, text="Clear", command=self._clear)
         _bb_clear.pack(side="left", padx=8)
         helptip.tip(_bb_clear, "Clear the list and log.")
@@ -727,39 +738,43 @@ class AskWindow:
         ttk.Label(_ask_top, text="Ask AI about this video",
                   style="Title.TLabel").pack(side="left")
         helptip.attach(self.win, _ask_top, "Ask AI - help", ASK_HELP).pack(side="left", padx=8)
-        ttk.Label(self.win, style="Dim.TLabel", wraplength=560, text=(
-            "Answers use this video's title, URL and full transcript, with "
-            "timestamps.")).pack(anchor="w", padx=18)
+        self._bound_lbl = ttk.Label(self.win, style="Dim.TLabel",
+            wraplength=560, text="")
+        self._bound_lbl.pack(anchor="w", padx=18)
+        self._set_bound_label()
 
-        ttk.Label(self.win, style="Dim.TLabel",
-                  text="Type your question about the video below, then click Ask:"
-                  ).pack(anchor="w", padx=18, pady=(10, 0))
-        row = ttk.Frame(self.win)
-        row.pack(fill="x", padx=18, pady=(4, 4))
-        self.q_var = tk.StringVar()
+        prow = ttk.Frame(self.win)
+        prow.pack(fill="x", padx=18, pady=(10, 2))
+        ttk.Label(prow, text="Presets:").pack(side="left")
         from . import prompts as _pr
         self.preset_var = tk.StringVar(value="Presets \u25be")
-        self._pmenu = ttk.OptionMenu(row, self.preset_var, "Presets \u25be",
-                       *_pr.menu_items(self.cfg),
-                       command=self._preset_pick)
-        self._pmenu.pack(side="left", padx=(0, 6))
+        self._pmenu = ttk.OptionMenu(prow, self.preset_var, "Presets \u25be")
+        self._pmenu.configure(width=18)          # fixed width: never balloons
+        self._pmenu.pack(side="left", padx=(6, 0))
         helptip.tip(self._pmenu, "Pick a ready-made question, or the bottom "
                     "item to add / edit your own.")
-        qe = ttk.Entry(row, textvariable=self.q_var, font=("Segoe UI", 10))
-        qe.pack(side="left", fill="x", expand=True, ipady=3)
-        qe.bind("<Return>", lambda e: self._go())
+        ttk.Label(self.win, style="Dim.TLabel",
+                  text="Type your question below, then click Ask:"
+                  ).pack(anchor="w", padx=18, pady=(6, 0))
+        row = ttk.Frame(self.win)
+        row.pack(fill="x", padx=18, pady=(4, 4))
         self.ask_btn = ttk.Button(row, text="Ask", style="Accent.TButton",
                                   command=self._go)
-        self.ask_btn.pack(side="left", padx=(8, 0))
-        helptip.tip(self.ask_btn, "Answer your question using only this video's "
-                    "transcript, citing the timestamps where it was said.")
+        self.ask_btn.pack(side="right", padx=(8, 0))   # pinned right, always visible
+        helptip.tip(self.ask_btn, "Answer your question using this video's "
+                    "title, URL and transcript, with timestamps.")
+        self.q_box = tk.Text(row, height=2, wrap="word", bg=theme.FIELD,
+                             fg=theme.FG, insertbackground=theme.FG, borderwidth=1,
+                             relief="solid", font=("Segoe UI", 10), padx=6, pady=4)
+        self.q_box.pack(side="left", fill="x", expand=True)
+        self.q_box.bind("<Return>", lambda e: (self._go(), "break")[1])
 
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
-        _a_copy = ttk.Button(bar, text="Copy answer", style="Accent.TButton",
+        _a_copy = ttk.Button(bar, text="Copy", style="Accent.TButton",
                    command=self._copy); _a_copy.pack(side="left")
         helptip.tip(_a_copy, "Copy the AI's answer to the clipboard.")
-        _a_save = ttk.Button(bar, text="Save answer", command=self._save_answer)
+        _a_save = ttk.Button(bar, text="Save as .txt…", command=self._save_answer)
         _a_save.pack(side="left", padx=8)
         helptip.tip(_a_save, "Append this Q&A to a file named after the video.")
         _a_open = ttk.Button(bar, text="Open folder", command=self._ask_open_folder)
@@ -773,26 +788,50 @@ class AskWindow:
 
         self.out = theme.dark_text(self.win, wrap="word")
         self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))
+        self._preset_refresh()
+
+    def _set_bound_label(self):
+        name = (self.title or "this transcript").strip()
+        if len(name) > 70:
+            name = name[:67] + "…"
+        self._bound_lbl.configure(
+            text="Answering about:  " + name
+            + "   (title, URL & full transcript, with timestamps)")
+
+    def update_context(self, segments, title, url):
+        """Re-bind this window to a newly transcribed video."""
+        self.segments = segments
+        self.title = title or "transcript"
+        self.url = url or ""
+        self._last_q = ""
+        self._set_bound_label()
+        try:
+            self.out.delete("1.0", "end")
+            self.q_box.delete("1.0", "end")
+        except Exception:
+            pass
 
     def _preset_pick(self, v):
         from . import prompts as _pr
+        self.preset_var.set("Presets \u25be")     # keep the dropdown compact
         if v == _pr.MANAGE_LABEL:
-            self.preset_var.set("Presets \u25be")
             _pr.manage_dialog(self.win, self.cfg, self._preset_refresh)
         else:
-            self.q_var.set(v)
+            self.q_box.delete("1.0", "end")
+            self.q_box.insert("1.0", v)
 
     def _preset_refresh(self):
         try:
             from . import prompts as _pr
             m = self._pmenu["menu"]; m.delete(0, "end")
             for q in _pr.menu_items(self.cfg):
-                m.add_command(label=q, command=lambda v=q: self._preset_pick(v))
+                lbl = q if len(q) <= 60 else q[:57] + "\u2026"
+                m.add_command(label=lbl, command=lambda v=q: self._preset_pick(v))
         except Exception:
             pass
 
     def _ask_clear(self):
-        self.q_var.set("")
+        self.q_box.delete("1.0", "end")
         self.out.delete("1.0", "end")
         self.copy_status.configure(text="")
 
@@ -804,7 +843,7 @@ class AskWindow:
             self.copy_status.configure(text=str(e))
 
     def _go(self):
-        q = self.q_var.get().strip()
+        q = self.q_box.get("1.0", "end").strip()
         if not q:
             return
         self._last_q = q
