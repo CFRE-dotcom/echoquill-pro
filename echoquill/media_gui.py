@@ -706,6 +706,11 @@ class AskWindow:
         row = ttk.Frame(self.win)
         row.pack(fill="x", padx=18, pady=(4, 4))
         self.q_var = tk.StringVar()
+        from . import prompts as _pr
+        self.preset_var = tk.StringVar(value="Presets \u25be")
+        ttk.OptionMenu(row, self.preset_var, "Presets \u25be",
+                       *_pr.all_prompts(self.cfg),
+                       command=lambda v: self.q_var.set(v)).pack(side="left", padx=(0, 6))
         qe = ttk.Entry(row, textvariable=self.q_var, font=("Segoe UI", 10))
         qe.pack(side="left", fill="x", expand=True, ipady=3)
         qe.bind("<Return>", lambda e: self._go())
