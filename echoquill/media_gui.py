@@ -708,9 +708,10 @@ class AskWindow:
         self.q_var = tk.StringVar()
         from . import prompts as _pr
         self.preset_var = tk.StringVar(value="Presets \u25be")
-        ttk.OptionMenu(row, self.preset_var, "Presets \u25be",
+        self._pmenu = ttk.OptionMenu(row, self.preset_var, "Presets \u25be",
                        *_pr.all_prompts(self.cfg),
-                       command=lambda v: self.q_var.set(v)).pack(side="left", padx=(0, 6))
+                       command=lambda v: self.q_var.set(v))
+        self._pmenu.pack(side="left", padx=(0, 6))
         qe = ttk.Entry(row, textvariable=self.q_var, font=("Segoe UI", 10))
         qe.pack(side="left", fill="x", expand=True, ipady=3)
         qe.bind("<Return>", lambda e: self._go())
@@ -719,6 +720,12 @@ class AskWindow:
         self.ask_btn.pack(side="left", padx=(8, 0))
         helptip.tip(self.ask_btn, "Answer your question using only this video's "
                     "transcript, citing the timestamps where it was said.")
+        _apv = ttk.Button(row, text="+", width=3, command=self._preset_add)
+        _apv.pack(side="left", padx=(6, 0))
+        helptip.tip(_apv, "Save the current question as a preset.")
+        _rpv = ttk.Button(row, text="\U0001f5d1", width=3, command=self._preset_remove)
+        _rpv.pack(side="left", padx=(2, 0))
+        helptip.tip(_rpv, "Remove the current question from your presets.")
 
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
@@ -733,6 +740,23 @@ class AskWindow:
 
         self.out = theme.dark_text(self.win, wrap="word")
         self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))
+
+    def _preset_refresh(self):
+        try:
+            from . import prompts as _pr
+            m = self._pmenu["menu"]; m.delete(0, "end")
+            for q in _pr.all_prompts(self.cfg):
+                m.add_command(label=q, command=lambda v=q: self.q_var.set(v))
+        except Exception:
+            pass
+
+    def _preset_add(self):
+        from . import prompts as _pr
+        _pr.add_prompt(self.cfg, self.q_var.get()); self._preset_refresh()
+
+    def _preset_remove(self):
+        from . import prompts as _pr
+        _pr.remove_prompt(self.cfg, self.q_var.get().strip()); self._preset_refresh()
 
     def _go(self):
         q = self.q_var.get().strip()
