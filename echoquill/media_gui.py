@@ -736,9 +736,11 @@ class AskWindow:
         from . import prompts as _pr
         self.preset_var = tk.StringVar(value="Presets \u25be")
         self._pmenu = ttk.OptionMenu(row, self.preset_var, "Presets \u25be",
-                       *_pr.all_prompts(self.cfg),
-                       command=lambda v: self.q_var.set(v))
+                       *_pr.menu_items(self.cfg),
+                       command=self._preset_pick)
         self._pmenu.pack(side="left", padx=(0, 6))
+        helptip.tip(self._pmenu, "Pick a ready-made question, or the bottom "
+                    "item to add / edit your own.")
         qe = ttk.Entry(row, textvariable=self.q_var, font=("Segoe UI", 10))
         qe.pack(side="left", fill="x", expand=True, ipady=3)
         qe.bind("<Return>", lambda e: self._go())
@@ -747,12 +749,6 @@ class AskWindow:
         self.ask_btn.pack(side="left", padx=(8, 0))
         helptip.tip(self.ask_btn, "Answer your question using only this video's "
                     "transcript, citing the timestamps where it was said.")
-        _apv = ttk.Button(row, text="+", width=3, command=self._preset_add)
-        _apv.pack(side="left", padx=(6, 0))
-        helptip.tip(_apv, "Save the current question as a preset.")
-        _rpv = ttk.Button(row, text="\U0001f5d1", width=3, command=self._preset_remove)
-        _rpv.pack(side="left", padx=(2, 0))
-        helptip.tip(_rpv, "Remove the current question from your presets.")
 
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
@@ -762,28 +758,46 @@ class AskWindow:
         _a_save = ttk.Button(bar, text="Save answer", command=self._save_answer)
         _a_save.pack(side="left", padx=8)
         helptip.tip(_a_save, "Append this Q&A to a file named after the video.")
+        _a_open = ttk.Button(bar, text="Open folder", command=self._ask_open_folder)
+        _a_open.pack(side="left")
+        helptip.tip(_a_open, "Open the folder where answers are saved.")
+        _a_clear = ttk.Button(bar, text="Clear", command=self._ask_clear)
+        _a_clear.pack(side="left", padx=8)
+        helptip.tip(_a_clear, "Clear the question and the answer box.")
         self.copy_status = ttk.Label(bar, text="", style="Dim.TLabel")
         self.copy_status.pack(side="left", padx=10)
 
         self.out = theme.dark_text(self.win, wrap="word")
         self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))
 
+    def _preset_pick(self, v):
+        from . import prompts as _pr
+        if v == _pr.MANAGE_LABEL:
+            self.preset_var.set("Presets \u25be")
+            _pr.manage_dialog(self.win, self.cfg, self._preset_refresh)
+        else:
+            self.q_var.set(v)
+
     def _preset_refresh(self):
         try:
             from . import prompts as _pr
             m = self._pmenu["menu"]; m.delete(0, "end")
-            for q in _pr.all_prompts(self.cfg):
-                m.add_command(label=q, command=lambda v=q: self.q_var.set(v))
+            for q in _pr.menu_items(self.cfg):
+                m.add_command(label=q, command=lambda v=q: self._preset_pick(v))
         except Exception:
             pass
 
-    def _preset_add(self):
-        from . import prompts as _pr
-        _pr.add_prompt(self.cfg, self.q_var.get()); self._preset_refresh()
+    def _ask_clear(self):
+        self.q_var.set("")
+        self.out.delete("1.0", "end")
+        self.copy_status.configure(text="")
 
-    def _preset_remove(self):
-        from . import prompts as _pr
-        _pr.remove_prompt(self.cfg, self.q_var.get().strip()); self._preset_refresh()
+    def _ask_open_folder(self):
+        import os
+        try:
+            os.startfile(transcripts_dir(self.cfg))
+        except Exception as e:
+            self.copy_status.configure(text=str(e))
 
     def _go(self):
         q = self.q_var.get().strip()
