@@ -401,6 +401,7 @@ class MediaWindow:
             if custom:
                 title = custom
             self._last_title = title
+            self._last_url = source
             header = f"{title}\n{source}\n\n"
             self._append(header)
             # Keep audio/video BEFORE transcribing, while the signed link is
@@ -492,7 +493,9 @@ class MediaWindow:
         if not getattr(self, "_segments", None):
             self._set_status("Transcribe a video first, then ask away.")
             return
-        AskWindow(self.win, self._segments, self.cfg, getattr(self, "_last_title", "transcript"))
+        AskWindow(self.win, self._segments, self.cfg,
+                 getattr(self, "_last_title", "transcript"),
+                 getattr(self, "_last_url", ""))
 
     def _search(self):
         term = self.search_var.get().strip()
@@ -707,10 +710,11 @@ class BatchWindow:
 class AskWindow:
     """Ask questions about the transcript; answers cite timestamps."""
 
-    def __init__(self, parent, segments, cfg, title="transcript"):
+    def __init__(self, parent, segments, cfg, title="transcript", url=""):
         self.segments = segments
         self.cfg = cfg
         self.title = title
+        self.url = url
         self._last_q = ""
         self.win = tk.Toplevel(parent)
         self.win.title("Ask AI — about this video")
@@ -724,8 +728,8 @@ class AskWindow:
                   style="Title.TLabel").pack(side="left")
         helptip.attach(self.win, _ask_top, "Ask AI - help", ASK_HELP).pack(side="left", padx=8)
         ttk.Label(self.win, style="Dim.TLabel", wraplength=560, text=(
-            "Answers come only from the transcript, with timestamps. "
-            "If it's not in the video, it says so.")).pack(anchor="w", padx=18)
+            "Answers use this video's title, URL and full transcript, with "
+            "timestamps.")).pack(anchor="w", padx=18)
 
         ttk.Label(self.win, style="Dim.TLabel",
                   text="Type your question about the video below, then click Ask:"
@@ -810,7 +814,8 @@ class AskWindow:
 
         def run():
             from . import ask_ai
-            answer = ask_ai.ask(q, self.segments, self.cfg)
+            answer = ask_ai.ask(q, self.segments, self.cfg,
+                                 title=self.title, url=self.url)
             def show():
                 self.out.delete("1.0", "end")
                 self.out.insert("1.0", answer)
@@ -834,7 +839,10 @@ class AskWindow:
         folder = transcripts_dir(self.cfg)
         fname = safe_filename(f"{self.title} - Q&A")
         out = os.path.join(folder, fname)
-        block = f"Q: {self._last_q}\nA: {answer}\n\n"
+        sep = "*" * 50
+        block = (f"{sep}\n{sep}\n"
+                 f"Q: {self._last_q}\n\n"
+                 f"A: {answer}\n\n")
         try:
             with open(out, "a", encoding="utf-8") as f:
                 f.write(block)
