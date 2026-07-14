@@ -167,6 +167,21 @@ class ClipsTray:
         term = self._search_value().lower()
         if self._tab == "favs":
             entries = favorites.all_favorites()
+            self._fav_folder = getattr(self, "_fav_folder", "All")
+            fbar = tk.Frame(self.body, bg=theme.PANEL)
+            fbar.pack(fill="x", pady=(0, 4))
+            tk.Label(fbar, text="Folder:", bg=theme.PANEL, fg=theme.DIM,
+                     font=("Segoe UI", 9)).pack(side="left")
+            opts = ["All"] + favorites.folders()
+            if self._fav_folder not in opts:
+                self._fav_folder = "All"
+            fv = tk.StringVar(value=self._fav_folder)
+            from tkinter import ttk as _ttk
+            _ttk.OptionMenu(fbar, fv, self._fav_folder, *opts,
+                            command=self._set_fav_folder).pack(side="left", padx=6)
+            if self._fav_folder != "All":
+                entries = [e for e in entries
+                           if (e.get("folder", "") or "") == self._fav_folder]
         else:
             entries = history.entries(limit=10)
         if not entries:
@@ -194,6 +209,14 @@ class ClipsTray:
                 st.pack(side="right")
                 st.bind("<Button-1>", lambda ev, t=text: self._star(t))
                 helptip.tip(st, "Favorite / unfavorite")
+            if self._tab == "favs":
+                fo = tk.Label(row, text="\U0001f5c2", bg=bg, fg=theme.DIM,
+                              font=("Segoe UI", 10), padx=4, cursor="hand2")
+                fo.pack(side="right")
+                fo.bind("<Button-1>", lambda ev, t=text: self._assign_folder(t))
+                fo.bind("<Enter>", lambda ev, w=fo: w.configure(fg=theme.ACCENT))
+                fo.bind("<Leave>", lambda ev, w=fo: w.configure(fg=theme.DIM))
+                helptip.tip(fo, "Move to a folder (type a new name to create one)")
             ed = tk.Label(row, text="✎", bg=bg, fg=theme.DIM,
                           font=("Segoe UI", 10), padx=4, cursor="hand2")
             ed.pack(side="right")
@@ -221,6 +244,25 @@ class ClipsTray:
         on, off = (self._tab_recent, self._tab_favs) if tab == "recent" else (self._tab_favs, self._tab_recent)
         on.configure(bg=theme.FIELD, fg=theme.FG)
         off.configure(bg=theme.PANEL, fg=theme.DIM)
+        self.refresh()
+
+    def _set_fav_folder(self, v):
+        self._fav_folder = v
+        self.refresh()
+
+    def _assign_folder(self, text):
+        from tkinter import simpledialog
+        cur = favorites.folder_of(text)
+        name = simpledialog.askstring(
+            "Move to folder",
+            "Folder name (blank = none). Type a new name to create it:",
+            initialvalue=cur, parent=self.win)
+        if name is None:
+            return
+        favorites.set_folder(text, name.strip())
+        self.status.configure(text=(f"Moved to '{name.strip()}'" if name.strip()
+                                    else "Removed from folder"))
+        self.win.after(1500, lambda: self.status.configure(text=""))
         self.refresh()
 
     def _star(self, text):
