@@ -448,6 +448,15 @@ class SettingsWindow:
         except Exception:
             pass
 
+    def _ra_error(self, where, e):
+        from . import tts
+        tts.log_error(where, e)
+        msg = str(e)
+        self._ra_set(msg)
+        self.win.after(0, lambda: messagebox.showerror(
+            "Read aloud", msg + "\n\n(Details saved to tts_error.log in your "
+            "EchoQuill settings folder.)"))
+
     def _ra_open_folder(self):
         import os
         from .media_gui import narration_dir
@@ -555,17 +564,17 @@ class SettingsWindow:
         self._ra_set("Generating audio\u2026")
 
         def run():
-            tmp = os.path.join(tempfile.gettempdir(), "echoquill_readaloud.mp3")
+            wav = os.path.join(tempfile.gettempdir(), "echoquill_readaloud.wav")
             try:
-                tts.synthesize_to_mp3(text, self.cfg, self._ra_voice_id, tmp,
-                                      status_cb=self._ra_set)
-                wav = tts.mp3_to_wav(tmp)
+                pcm = tts.synth_pcm(text, self.cfg, self._ra_voice_id,
+                                    status_cb=self._ra_set)
+                tts.pcm_to_wav(pcm, wav)
                 import winsound
                 winsound.PlaySound(wav, winsound.SND_FILENAME | winsound.SND_ASYNC
                                    | winsound.SND_NODEFAULT)
                 self._ra_set("Playing \u25b6")
             except Exception as e:
-                self._ra_set(str(e))
+                self._ra_error("play", e)
             finally:
                 self._ra_busy = False
                 self.win.after(0, lambda: self._ra_play.configure(state="normal"))
@@ -602,7 +611,7 @@ class SettingsWindow:
                                       status_cb=self._ra_set)
                 self._ra_set(f"Saved \u2713  {os.path.basename(path)}")
             except Exception as e:
-                self._ra_set(str(e))
+                self._ra_error("save", e)
             finally:
                 self._ra_busy = False
         threading.Thread(target=run, daemon=True).start()

@@ -5,7 +5,7 @@ as an MP3. Pro feature, powered by your own ElevenLabs account.
 import os
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 
 from . import theme, helptip, tts
 from .media_gui import narration_dir
@@ -108,6 +108,14 @@ class ReadAloudWindow:
 
     def _set_status(self, text):
         self.win.after(0, lambda: self.status.configure(text=text))
+
+    def _error(self, where, e):
+        tts.log_error(where, e)
+        msg = str(e)
+        self._set_status(msg)
+        self.win.after(0, lambda: messagebox.showerror(
+            "Read aloud", msg + "\n\n(Details saved to tts_error.log in your "
+            "EchoQuill settings folder.)"))
 
     def _open_folder(self):
         try:
@@ -217,11 +225,12 @@ class ReadAloudWindow:
 
         def run():
             import tempfile
-            tmp = os.path.join(tempfile.gettempdir(), "echoquill_readaloud.mp3")
             try:
-                tts.synthesize_to_mp3(text, self.cfg, self._voice_id, tmp,
-                                      status_cb=self._set_status)
-                wav = tts.mp3_to_wav(tmp)
+                pcm = tts.synth_pcm(text, self.cfg, self._voice_id,
+                                    status_cb=self._set_status)
+                wav = os.path.join(tempfile.gettempdir(),
+                                   "echoquill_readaloud.wav")
+                tts.pcm_to_wav(pcm, wav)
                 self._play_wav = wav
                 import winsound
                 winsound.PlaySound(
@@ -229,7 +238,7 @@ class ReadAloudWindow:
                     | winsound.SND_NODEFAULT)
                 self._set_status("Playing ▶")
             except Exception as e:
-                self._set_status(str(e))
+                self._error("play", e)
             finally:
                 self._busy = False
                 self.win.after(0, lambda: self.play_btn.configure(state="normal"))
@@ -263,7 +272,7 @@ class ReadAloudWindow:
                                       status_cb=self._set_status)
                 self._set_status(f"Saved ✓  {os.path.basename(path)}")
             except Exception as e:
-                self._set_status(str(e))
+                self._error("save", e)
             finally:
                 self._busy = False
         threading.Thread(target=run, daemon=True).start()

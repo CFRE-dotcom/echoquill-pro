@@ -1,34 +1,42 @@
 """Text-to-speech - turn text (or a document) into spoken audio.
 
-Pro feature. Uses YOUR ElevenLabs account (bring your own API key). The key is
-kept in Windows Credential Manager, same as your other secrets. Long text is
-split at sentence boundaries and the parts are stitched back together with the
-ffmpeg that's already bundled for the Meeting recorder.
+Pro feature. Uses YOUR ElevenLabs account (bring your own API key), kept in
+Windows Credential Manager. No ffmpeg needed: playback pulls raw PCM and plays
+it with the built-in Windows player; saving concatenates MP3 chunks directly.
+Long text is split at sentence boundaries.
 """
 
 import os
 import re
-import subprocess
-import sys
-import tempfile
+import traceback
 
 ELEVEN_BASE = "https://api.elevenlabs.io/v1"
 DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM"   # "Rachel" - a stock ElevenLabs voice
 DEFAULT_MODEL = "eleven_multilingual_v2"
-CHUNK_LIMIT = 2400                        # characters per request
-
-
-def _no_window():
-    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
-
-
-def _ffmpeg():
-    import imageio_ffmpeg
-    return imageio_ffmpeg.get_ffmpeg_exe()
+CHUNK_LIMIT = 2400
+PCM_RATE = 22050                          # pcm_22050 -> 16-bit mono
 
 
 def _key(cfg):
     return (cfg.get("elevenlabs_api_key") or "").strip()
+
+
+def log_error(where, exc):
+    """Record a failure so we can always see what went wrong."""
+    try:
+        from .config import app_data_dir
+        path = app_data_dir() / "tts_error.log"
+        with open(path, "a", encoding="utf-8") as f:
+            import datetime
+            f.write(f"\n===== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} "
+                    f"[{where}] =====\n")
+            if isinstance(exc, BaseException):
+                f.write("".join(traceback.format_exception(
+                    type(exc), exc, exc.__traceback__)))
+            else:
+                f.write(str(exc) + "\n")
+    except Exception:
+        pass
 
 
 def list_voices(cfg):
@@ -41,9 +49,8 @@ def list_voices(cfg):
                      headers={"xi-api-key": key}, timeout=30)
     if r.status_code != 200:
         raise RuntimeError(_friendly(r))
-    data = r.json()
     return [(v.get("name", ""), v.get("voice_id", ""))
-            for v in data.get("voices", []) if v.get("voice_id")]
+            for v in r.json().get("voices", []) if v.get("voice_id")]
 
 
 def _chunks(text, limit=CHUNK_LIMIT):
@@ -52,7 +59,7 @@ def _chunks(text, limit=CHUNK_LIMIT):
         return [text] if text else []
     parts, cur = [], ""
     for sent in re.split(r'(?<=[.!?])\s+', text):
-        if len(sent) > limit:                      # hard-split a huge sentence
+        if len(sent) > limit:
             if cur:
                 parts.append(cur.strip()); cur = ""
             for i in range(0, len(sent), limit):
@@ -66,76 +73,65 @@ def _chunks(text, limit=CHUNK_LIMIT):
     return parts
 
 
-def _synth_chunk(text, cfg, voice_id, out_path):
+def _synth_bytes(text, cfg, voice_id, output_format):
+    """Raw audio bytes for one chunk in the requested output_format."""
     import requests
-    model = cfg.get("tts_model_id") or DEFAULT_MODEL
     body = {
         "text": text,
-        "model_id": model,
+        "model_id": cfg.get("tts_model_id") or DEFAULT_MODEL,
         "voice_settings": {
             "stability": float(cfg.get("tts_stability", 0.5) or 0.5),
             "similarity_boost": float(cfg.get("tts_similarity", 0.75) or 0.75),
         },
     }
-    url = f"{ELEVEN_BASE}/text-to-speech/{voice_id}?output_format=mp3_44100_128"
+    url = f"{ELEVEN_BASE}/text-to-speech/{voice_id}?output_format={output_format}"
     r = requests.post(url, headers={"xi-api-key": _key(cfg),
-                                    "accept": "audio/mpeg",
                                     "content-type": "application/json"},
                       json=body, timeout=180)
     if r.status_code != 200:
         raise RuntimeError(_friendly(r))
-    with open(out_path, "wb") as f:
-        f.write(r.content)
+    return r.content
 
 
-def synthesize_to_mp3(text, cfg, voice_id, out_mp3, status_cb=None):
-    """Turn text into one mp3 file at out_mp3 (chunking + concat as needed)."""
+def _prep(text, cfg, voice_id):
     if not _key(cfg):
         raise RuntimeError("Add your ElevenLabs API key first.")
-    voice_id = voice_id or cfg.get("tts_voice_id") or DEFAULT_VOICE
     parts = _chunks(text)
     if not parts:
         raise RuntimeError("Nothing to read - the text is empty.")
-    tmpd = tempfile.mkdtemp(prefix="eq_tts_")
-    files = []
-    try:
+    return parts, (voice_id or cfg.get("tts_voice_id") or DEFAULT_VOICE)
+
+
+def synth_pcm(text, cfg, voice_id, status_cb=None):
+    """Return raw 16-bit mono PCM (22050 Hz) for the whole text."""
+    parts, voice_id = _prep(text, cfg, voice_id)
+    pcm = bytearray()
+    for i, p in enumerate(parts):
+        if status_cb and len(parts) > 1:
+            status_cb(f"Generating audio… ({i + 1}/{len(parts)})")
+        pcm += _synth_bytes(p, cfg, voice_id, "pcm_22050")
+    return bytes(pcm)
+
+
+def pcm_to_wav(pcm, wav_path, rate=PCM_RATE):
+    import wave
+    with wave.open(wav_path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return wav_path
+
+
+def synthesize_to_mp3(text, cfg, voice_id, out_mp3, status_cb=None):
+    """Write the whole text to one mp3 (chunks concatenated as a stream)."""
+    parts, voice_id = _prep(text, cfg, voice_id)
+    with open(out_mp3, "wb") as out:
         for i, p in enumerate(parts):
             if status_cb and len(parts) > 1:
                 status_cb(f"Generating audio… ({i + 1}/{len(parts)})")
-            fp = os.path.join(tmpd, f"part{i:03d}.mp3")
-            _synth_chunk(p, cfg, voice_id, fp)
-            files.append(fp)
-        if len(files) == 1:
-            import shutil
-            shutil.copy2(files[0], out_mp3)
-        else:
-            _concat(files, out_mp3)
-    finally:
-        import shutil
-        shutil.rmtree(tmpd, ignore_errors=True)
+            out.write(_synth_bytes(p, cfg, voice_id, "mp3_44100_128"))
     return out_mp3
-
-
-def _concat(mp3_files, out_mp3):
-    listf = out_mp3 + ".list.txt"
-    with open(listf, "w", encoding="utf-8") as f:
-        for p in mp3_files:
-            f.write("file '" + p.replace("'", "'\\''") + "'\n")
-    subprocess.run([_ffmpeg(), "-y", "-f", "concat", "-safe", "0",
-                    "-i", listf, "-c", "copy", out_mp3],
-                   check=True, capture_output=True, creationflags=_no_window())
-    try:
-        os.remove(listf)
-    except Exception:
-        pass
-
-
-def mp3_to_wav(mp3_path):
-    """Convert an mp3 to a temp wav so winsound can play it. Returns wav path."""
-    wav = mp3_path + ".play.wav"
-    subprocess.run([_ffmpeg(), "-y", "-i", mp3_path, wav],
-                   check=True, capture_output=True, creationflags=_no_window())
-    return wav
 
 
 def read_document(path):
@@ -149,35 +145,30 @@ def read_document(path):
             import docx
         except Exception:
             raise RuntimeError("Reading .docx files needs the python-docx library.")
-        d = docx.Document(path)
-        return "\n".join(p.text for p in d.paragraphs)
+        return "\n".join(p.text for p in docx.Document(path).paragraphs)
     if ext == ".pdf":
-        reader = None
         try:
             from pypdf import PdfReader
-            reader = PdfReader(path)
         except Exception:
             try:
                 from PyPDF2 import PdfReader
-                reader = PdfReader(path)
             except Exception:
                 raise RuntimeError("Reading .pdf files needs the pypdf library.")
-        return "\n".join((pg.extract_text() or "") for pg in reader.pages)
+        return "\n".join((pg.extract_text() or "") for pg in PdfReader(path).pages)
     raise RuntimeError(f"Unsupported file type: {ext or 'unknown'}")
 
 
 def _friendly(r):
     try:
-        j = r.json()
-        detail = j.get("detail")
+        detail = r.json().get("detail")
         if isinstance(detail, dict):
             msg = detail.get("message") or detail.get("status") or str(detail)
         else:
             msg = str(detail)
     except Exception:
-        msg = (r.text or "")[:200]
+        msg = (r.text or "")[:300]
     if r.status_code in (401, 403):
-        return "ElevenLabs rejected the API key - check it and try again."
+        return "ElevenLabs rejected the request (key or plan permission). " + str(msg)
     if r.status_code == 422:
         return f"ElevenLabs couldn't process that: {msg}"
     if r.status_code == 429:
