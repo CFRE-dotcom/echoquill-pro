@@ -420,9 +420,17 @@ class SettingsWindow:
         _lv = ttk.Button(vrow, text="Load voices", command=self._ra_load_voices)
         _lv.pack(side="left")
         helptip.tip(_lv, "Fetch the voices on your ElevenLabs account.")
-        _od = ttk.Button(vrow, text="Open a document\u2026", command=self._ra_open_doc)
-        _od.pack(side="right")
+
+        drow = ttk.Frame(f); drow.pack(fill="x", pady=(8, 0))
+        _od = ttk.Button(drow, text="\U0001f4c4 Open a document\u2026",
+                         command=self._ra_open_doc)
+        _od.pack(side="left")
         helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
+        _conv = ttk.Button(drow, text="\U0001f399 Convert to audio",
+                           style="Accent.TButton", command=self._ra_do_play)
+        _conv.pack(side="left", padx=(8, 0))
+        helptip.tip(_conv, "Turn the text into audio. Then use the player to "
+                    "listen, or Save as MP3.")
 
         _trow = ttk.Frame(f); _trow.pack(fill="x", pady=(8, 0))
         ttk.Label(_trow, text="Text to read:").pack(side="left")
@@ -438,11 +446,6 @@ class SettingsWindow:
         helptip.tip(self._ra_player.play_btn, "Play/pause the converted audio. "
                     "Drag the bar to scrub; replays are free.")
         arow = ttk.Frame(f); arow.pack(fill="x", pady=(2, 4))
-        _conv = ttk.Button(arow, text="\U0001f399 Convert to audio",
-                           style="Accent.TButton", command=self._ra_do_play)
-        _conv.pack(side="left", padx=(0, 12))
-        helptip.tip(_conv, "Turn the text into audio. Then use the player to "
-                    "listen, or Save as MP3.")
         _save = ttk.Button(arow, text="Save as MP3\u2026", command=self._ra_do_save)
         _save.pack(side="left")
         helptip.tip(_save, "Generate the audio and save it as an MP3 file.")
