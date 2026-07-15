@@ -14,8 +14,8 @@ from . import theme
 
 class SettingsWindow:
     SECTIONS = ["General", "AI Enhancement", "Clipboard", "Dictation",
-                "Dictionary", "Meeting", "Transcription", "History", "Stats",
-                "License", "Help", "Feedback", "About"]
+                "Dictionary", "Meeting", "Read aloud", "Transcription",
+                "History", "Stats", "License", "Help", "Feedback", "About"]
 
     def __init__(self, root: tk.Tk, cfg: dict, dictionary, on_save,
                  on_media=None, on_clips=None, on_history=None,
@@ -84,6 +84,7 @@ class SettingsWindow:
                 "Dictation": self._build_dictation,
                 "Transcription": self._build_transcription,
                 "Meeting": self._build_meeting,
+                "Read aloud": self._build_read_aloud,
                 "Clipboard": self._build_clipboard,
                 "Dictionary": self._build_dictionary,
                 "AI Enhancement": self._build_ai,
@@ -374,6 +375,237 @@ class SettingsWindow:
         ttk.Button(crow2, text="Clear", command=_clear_cookies).pack(side="left", padx=6)
         self.cookie_status.pack(side="left", padx=8)
 
+
+    def _build_read_aloud(self, f):
+        ttk.Label(f, text="Read aloud (Text-to-speech)",
+                  style="Title.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Dim.TLabel", wraplength=560, text=(
+            "Paste text or open a document, pick a voice, then Play or Save as "
+            "MP3 (saved in your EchoQuill\\Narration folder). Uses your own "
+            "ElevenLabs account - the key is kept in Windows Credential Manager."
+            )).pack(anchor="w", pady=(2, 8))
+
+        self._ra_voice_id = self.cfg.get("tts_voice_id", "") or ""
+        self._ra_voices = []
+        self._ra_busy = False
+
+        krow = ttk.Frame(f); krow.pack(fill="x", pady=(2, 2))
+        ttk.Label(krow, text="ElevenLabs API key:").pack(side="left")
+        self._ra_key = tk.StringVar(value=self.cfg.get("elevenlabs_api_key", ""))
+        ttk.Entry(krow, textvariable=self._ra_key, show="\u2022").pack(
+            side="left", fill="x", expand=True, padx=(8, 8), ipady=2)
+        _ks = ttk.Button(krow, text="Save key", command=self._ra_save_key)
+        _ks.pack(side="left")
+        helptip.tip(_ks, "Store your ElevenLabs key (kept in Windows Credential "
+                    "Manager) and load your voices.")
+
+        vrow = ttk.Frame(f); vrow.pack(fill="x", pady=(6, 2))
+        ttk.Label(vrow, text="Voice:").pack(side="left")
+        self._ra_voice = tk.StringVar(value="(add key, then Load voices)")
+        self._ra_menu = ttk.OptionMenu(vrow, self._ra_voice,
+                                       "(add key, then Load voices)")
+        self._ra_menu.configure(width=24)
+        self._ra_menu.pack(side="left", padx=(6, 6))
+        _lv = ttk.Button(vrow, text="Load voices", command=self._ra_load_voices)
+        _lv.pack(side="left")
+        helptip.tip(_lv, "Fetch the voices on your ElevenLabs account.")
+        _od = ttk.Button(vrow, text="Open a document\u2026", command=self._ra_open_doc)
+        _od.pack(side="right")
+        helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
+
+        ttk.Label(f, text="Text to read:").pack(anchor="w", pady=(8, 0))
+        self._ra_box = theme.dark_text(f, wrap="word", height=10)
+        self._ra_box.pack(fill="both", expand=True, pady=(2, 6))
+
+        arow = ttk.Frame(f); arow.pack(fill="x", pady=(0, 4))
+        self._ra_play = ttk.Button(arow, text="\u25b6 Play",
+                                   style="Accent.TButton", command=self._ra_do_play)
+        self._ra_play.pack(side="left")
+        helptip.tip(self._ra_play, "Read the text aloud.")
+        _stop = ttk.Button(arow, text="\u25a0 Stop", command=self._ra_stop)
+        _stop.pack(side="left", padx=8)
+        helptip.tip(_stop, "Stop playback.")
+        _save = ttk.Button(arow, text="Save as MP3\u2026", command=self._ra_do_save)
+        _save.pack(side="left")
+        helptip.tip(_save, "Generate the audio and save it as an MP3 file.")
+        _open = ttk.Button(arow, text="Open folder", command=self._ra_open_folder)
+        _open.pack(side="left", padx=8)
+        helptip.tip(_open, "Open your EchoQuill\\Narration folder.")
+        _clear = ttk.Button(arow, text="Clear", command=self._ra_clear)
+        _clear.pack(side="left")
+        helptip.tip(_clear, "Clear the text box.")
+        self._ra_status = ttk.Label(arow, text="", style="Dim.TLabel")
+        self._ra_status.pack(side="left", padx=12)
+
+        if self.cfg.get("elevenlabs_api_key"):
+            self._ra_load_voices()
+
+    # ----- Read aloud handlers -----
+
+    def _ra_set(self, msg):
+        try:
+            self.win.after(0, lambda: self._ra_status.configure(text=msg))
+        except Exception:
+            pass
+
+    def _ra_open_folder(self):
+        import os
+        from .media_gui import narration_dir
+        try:
+            os.startfile(narration_dir(self.cfg))
+        except Exception:
+            self._ra_set("Could not open folder")
+
+    def _ra_clear(self):
+        self._ra_box.delete("1.0", "end")
+        self._ra_status.configure(text="")
+
+    def _ra_save_key(self):
+        self.cfg["elevenlabs_api_key"] = self._ra_key.get().strip()
+        try:
+            cfgmod.save(self.cfg)
+        except Exception:
+            pass
+        self._ra_set("Key saved \u2713")
+        self._ra_load_voices()
+
+    def _ra_open_doc(self):
+        import threading
+        from tkinter import filedialog
+        from . import tts
+        path = filedialog.askopenfilename(
+            parent=self.win, title="Open a document to read",
+            filetypes=[("Documents", "*.txt *.md *.docx *.pdf"),
+                       ("All files", "*.*")])
+        if not path:
+            return
+        self._ra_set("Reading document\u2026")
+
+        def run():
+            import os
+            try:
+                text = tts.read_document(path)
+            except Exception as e:
+                self._ra_set(str(e)); return
+
+            def show():
+                self._ra_box.delete("1.0", "end")
+                self._ra_box.insert("1.0", text)
+                self._ra_status.configure(text=f"Loaded {os.path.basename(path)} \u2713")
+            self.win.after(0, show)
+        threading.Thread(target=run, daemon=True).start()
+
+    def _ra_load_voices(self):
+        import threading
+        from . import tts
+        self.cfg["elevenlabs_api_key"] = self._ra_key.get().strip()
+        if not self.cfg["elevenlabs_api_key"]:
+            self._ra_set("Add your ElevenLabs API key first."); return
+        self._ra_set("Loading voices\u2026")
+
+        def run():
+            try:
+                voices = tts.list_voices(self.cfg)
+            except Exception as e:
+                self._ra_set(str(e)); return
+            self.win.after(0, lambda: self._ra_fill_voices(voices))
+        threading.Thread(target=run, daemon=True).start()
+
+    def _ra_fill_voices(self, voices):
+        self._ra_voices = voices
+        menu = self._ra_menu["menu"]
+        menu.delete(0, "end")
+        if not voices:
+            self._ra_voice.set("(no voices found)")
+            self._ra_set("No voices on this account."); return
+        for name, vid in voices:
+            menu.add_command(label=name,
+                             command=lambda n=name, i=vid: self._ra_pick(n, i))
+        cur = next((n for n, i in voices if i == self._ra_voice_id), None)
+        if cur:
+            self._ra_voice.set(cur)
+        else:
+            self._ra_pick(voices[0][0], voices[0][1])
+        self._ra_set(f"Loaded {len(voices)} voice"
+                     f"{'s' if len(voices) != 1 else ''} \u2713")
+
+    def _ra_pick(self, name, vid):
+        self._ra_voice.set(name)
+        self._ra_voice_id = vid
+        self.cfg["tts_voice_id"] = vid
+
+    def _ra_guard(self):
+        if self._ra_busy:
+            self._ra_set("Still working on the last one\u2026"); return False
+        if not self._ra_key.get().strip():
+            self._ra_set("Add your ElevenLabs API key first."); return False
+        if not self._ra_box.get("1.0", "end").strip():
+            self._ra_set("Nothing to read - paste or open some text."); return False
+        self.cfg["elevenlabs_api_key"] = self._ra_key.get().strip()
+        return True
+
+    def _ra_do_play(self):
+        import threading, os, tempfile
+        from . import tts
+        if not self._ra_guard():
+            return
+        text = self._ra_box.get("1.0", "end").strip()
+        self._ra_busy = True
+        self._ra_play.configure(state="disabled")
+        self._ra_set("Generating audio\u2026")
+
+        def run():
+            tmp = os.path.join(tempfile.gettempdir(), "echoquill_readaloud.mp3")
+            try:
+                tts.synthesize_to_mp3(text, self.cfg, self._ra_voice_id, tmp,
+                                      status_cb=self._ra_set)
+                wav = tts.mp3_to_wav(tmp)
+                import winsound
+                winsound.PlaySound(wav, winsound.SND_FILENAME | winsound.SND_ASYNC
+                                   | winsound.SND_NODEFAULT)
+                self._ra_set("Playing \u25b6")
+            except Exception as e:
+                self._ra_set(str(e))
+            finally:
+                self._ra_busy = False
+                self.win.after(0, lambda: self._ra_play.configure(state="normal"))
+        threading.Thread(target=run, daemon=True).start()
+
+    def _ra_stop(self):
+        try:
+            import winsound
+            winsound.PlaySound(None, winsound.SND_PURGE)
+            self._ra_set("Stopped.")
+        except Exception:
+            pass
+
+    def _ra_do_save(self):
+        import threading, os
+        from tkinter import filedialog
+        from . import tts
+        from .media_gui import narration_dir
+        if not self._ra_guard():
+            return
+        text = self._ra_box.get("1.0", "end").strip()
+        path = filedialog.asksaveasfilename(
+            parent=self.win, title="Save narration as MP3",
+            initialdir=narration_dir(self.cfg), defaultextension=".mp3",
+            filetypes=[("MP3 audio", "*.mp3")])
+        if not path:
+            return
+        self._ra_busy = True
+        self._ra_set("Generating audio\u2026")
+
+        def run():
+            try:
+                tts.synthesize_to_mp3(text, self.cfg, self._ra_voice_id, path,
+                                      status_cb=self._ra_set)
+                self._ra_set(f"Saved \u2713  {os.path.basename(path)}")
+            except Exception as e:
+                self._ra_set(str(e))
+            finally:
+                self._ra_busy = False
+        threading.Thread(target=run, daemon=True).start()
 
     def _build_clipboard(self, f):
         self._title(f, "Clipboard",
