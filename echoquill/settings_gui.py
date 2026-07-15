@@ -94,10 +94,19 @@ class SettingsWindow:
                 "Help": self._build_help,
                 "Feedback": self._build_feedback,
                 "About": self._build_about}
+        # Sections dominated by a big text box lay the box out to fill and scroll
+        # internally (like the standalone windows) - NO outer scroll pane, so
+        # there's never a second scrollbar stacked next to the text box's own.
+        _noscroll = {"Meeting", "Read aloud"}
         for name, builder in body.items():
-            sc = theme.Scrollable(self.content)
-            builder(sc.inner)
-            self._frames[name] = sc
+            if name in _noscroll:
+                fr = ttk.Frame(self.content)
+                builder(fr)
+                self._frames[name] = fr
+            else:
+                sc = theme.Scrollable(self.content)
+                builder(sc.inner)
+                self._frames[name] = sc
 
         self._show(initial_section if initial_section in self.SECTIONS
                    else "General")
