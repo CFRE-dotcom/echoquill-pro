@@ -40,6 +40,11 @@ class ReadAloudWindow:
         # file-actions row (packed first so it sits at the very bottom)
         bar = ttk.Frame(self.win)
         bar.pack(side="bottom", fill="x", padx=18, pady=(0, 10))
+        self.convert_btn = ttk.Button(bar, text="🎙 Convert to audio",
+                                      style="Accent.TButton", command=self._play)
+        self.convert_btn.pack(side="left", padx=(0, 12))
+        helptip.tip(self.convert_btn, "Turn the text into audio. Then use the "
+                    "player to listen, or Save as MP3.")
         _save = ttk.Button(bar, text="Save as MP3…", command=self._save)
         _save.pack(side="left")
         helptip.tip(_save, "Generate the audio and save it as an MP3 file.")
@@ -55,10 +60,10 @@ class ReadAloudWindow:
         # player transport (Play/Pause, Stop, seekable timeline) above it
         prow = ttk.Frame(self.win)
         prow.pack(side="bottom", fill="x", padx=18, pady=(4, 2))
-        self.player = player.AudioPlayer(prow, self.win, on_generate=self._play)
+        self.player = player.AudioPlayer(prow, self.win)
         self.player.pack(fill="x")
-        helptip.tip(self.player.play_btn, "Generate the audio (first time), then "
-                    "play/pause. Drag the bar to scrub; replays are free.")
+        helptip.tip(self.player.play_btn, "Play/pause the converted audio. Drag "
+                    "the bar to scrub; replays are free.")
 
         # ---- title ----
         trow = ttk.Frame(self.win)

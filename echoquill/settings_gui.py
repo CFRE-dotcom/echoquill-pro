@@ -423,12 +423,16 @@ class SettingsWindow:
         self._ra_box.bind("<KeyRelease>", lambda e: (self._ra_count(), self._ra_player.invalidate()))
 
         prow = ttk.Frame(f); prow.pack(fill="x", pady=(0, 4))
-        self._ra_player = player.AudioPlayer(prow, self.win,
-                                             on_generate=self._ra_do_play)
+        self._ra_player = player.AudioPlayer(prow, self.win)
         self._ra_player.pack(fill="x")
-        helptip.tip(self._ra_player.play_btn, "Generate the audio (first time), "
-                    "then play/pause. Drag the bar to scrub; replays are free.")
+        helptip.tip(self._ra_player.play_btn, "Play/pause the converted audio. "
+                    "Drag the bar to scrub; replays are free.")
         arow = ttk.Frame(f); arow.pack(fill="x", pady=(2, 4))
+        _conv = ttk.Button(arow, text="\U0001f399 Convert to audio",
+                           style="Accent.TButton", command=self._ra_do_play)
+        _conv.pack(side="left", padx=(0, 12))
+        helptip.tip(_conv, "Turn the text into audio. Then use the player to "
+                    "listen, or Save as MP3.")
         _save = ttk.Button(arow, text="Save as MP3\u2026", command=self._ra_do_save)
         _save.pack(side="left")
         helptip.tip(_save, "Generate the audio and save it as an MP3 file.")
