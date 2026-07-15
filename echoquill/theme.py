@@ -81,8 +81,35 @@ def apply(win) -> ttk.Style:
     win.option_add("*TCombobox*Listbox.background", FIELD)
     win.option_add("*TCombobox*Listbox.foreground", FG)
     win.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
-    style.configure("Vertical.TScrollbar", background=FIELD, troughcolor=BG,
-                    bordercolor=BG, arrowcolor=DIM)
+    # One clean, always-visible scrollbar app-wide: no arrow buttons (one piece),
+    # a medium-gray thumb that auto-sizes to the content (responsive) and shows
+    # the accent colour while you drag it. Visible on both light and dark.
+    def _is_light(hexcol):
+        try:
+            r = int(hexcol[1:3], 16); g = int(hexcol[3:5], 16); b = int(hexcol[5:7], 16)
+            return (0.299 * r + 0.587 * g + 0.114 * b) > 150
+        except Exception:
+            return False
+    _light = _is_light(BG)
+    _thumb = "#8e8e93" if _light else "#6d6d72"
+    _trough = "#e5e5ea" if _light else "#242426"
+    for _o in ("Vertical", "Horizontal"):
+        _stick = "ns" if _o == "Vertical" else "we"
+        try:
+            style.layout(f"{_o}.TScrollbar", [
+                (f"{_o}.Scrollbar.trough", {"sticky": "nswe", "children": [
+                    (f"{_o}.Scrollbar.thumb",
+                     {"expand": "1", "sticky": "nswe"})]})])
+        except Exception:
+            pass
+    style.configure("Vertical.TScrollbar", troughcolor=_trough, background=_thumb,
+                    bordercolor=_trough, lightcolor=_thumb, darkcolor=_thumb,
+                    arrowcolor=_thumb, relief="flat", width=13)
+    style.configure("Horizontal.TScrollbar", troughcolor=_trough, background=_thumb,
+                    bordercolor=_trough, lightcolor=_thumb, darkcolor=_thumb,
+                    arrowcolor=_thumb, relief="flat")
+    for _o in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
+        style.map(_o, background=[("pressed", ACCENT), ("active", ACCENT)])
     _install_context_menus(win)
     return style
 
