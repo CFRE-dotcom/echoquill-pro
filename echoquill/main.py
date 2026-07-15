@@ -58,6 +58,7 @@ class App:
             on_command=lambda: self.events.put("toggle_command"),
             on_help=lambda: self.events.put("help"),
             on_meeting=lambda: self.events.put("meeting"),
+            on_read_aloud=lambda: self.events.put("read_aloud"),
             level_provider=lambda: (self.recorder.level if self.recorder else 0.0),
         )
 
@@ -167,6 +168,7 @@ class App:
                 pystray.MenuItem("Voice command", lambda: self.events.put("toggle_command")),
                 pystray.MenuItem("Settings…", lambda: self.events.put("settings")),
                 pystray.MenuItem("Meeting / Record", lambda: self.events.put("meeting")),
+                pystray.MenuItem("Read aloud (Text-to-speech)", lambda: self.events.put("read_aloud")),
                 pystray.MenuItem("Today's stats", lambda: self.events.put("stats")),
                 pystray.MenuItem("Help", lambda: self.events.put("help")),
                 pystray.MenuItem("Quit", lambda: self.events.put("quit")),
@@ -230,6 +232,9 @@ class App:
                 elif ev == "media":
                     from .media_gui import MediaWindow
                     MediaWindow(self.root, self.transcriber, self.cfg)
+                elif ev == "read_aloud":
+                    from .tts_gui import ReadAloudWindow
+                    ReadAloudWindow(self.root, self.cfg)
                 elif ev == "quit":
                     self._quit()
                     return

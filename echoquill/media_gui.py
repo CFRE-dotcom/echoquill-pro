@@ -219,6 +219,10 @@ def clips_dir(cfg) -> str:
     return _subfolder(cfg, "Clips")
 
 
+def narration_dir(cfg) -> str:
+    return _subfolder(cfg, "Narration")
+
+
 class MediaWindow:
     def __init__(self, root: tk.Tk, transcriber, cfg: dict):
         self.transcriber = transcriber

@@ -141,6 +141,12 @@ DEFAULTS = {
     "yt_cookies_browser": "",
     "yt_cookies_file": "",   # path to an exported cookies.txt (most reliable for YouTube)
     "custom_prompts": [],   # "" off, else chrome/edge/firefox/brave for member-only videos
+    # Read aloud (Text-to-speech) - Pro. Bring your own ElevenLabs key.
+    "elevenlabs_api_key": "",
+    "tts_voice_id": "",
+    "tts_model_id": "eleven_multilingual_v2",
+    "tts_stability": 0.5,
+    "tts_similarity": 0.75,
     # How text is inserted: "type" (keystrokes), "paste" (Ctrl+V),
     # "clipboard" (copy only - community-requested clipboard-only mode)
     "insertion_mode": "paste",
@@ -272,7 +278,7 @@ def api_model(name: str) -> str:
 
 
 KEYRING_MARK = "__stored_in_credential_manager__"
-_SECRET_KEYS = ("ai_api_key", "pro_license_key")
+_SECRET_KEYS = ("ai_api_key", "pro_license_key", "elevenlabs_api_key")
 
 
 def _kr_backend():
