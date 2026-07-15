@@ -235,7 +235,11 @@ def _install_context_menus(win):
                 pass
             clip_paste(w)
 
-        m = tk.Menu(win, tearoff=0, bg=FIELD, fg=FG,
+        try:
+            _parent = w.winfo_toplevel()
+        except Exception:
+            _parent = w
+        m = tk.Menu(_parent, tearoff=0, bg=FIELD, fg=FG,
                     activebackground=ACCENT, activeforeground="#ffffff", bd=0)
         m.add_command(label="Cut", command=_cut,
                       state=("normal" if has_sel else "disabled"))

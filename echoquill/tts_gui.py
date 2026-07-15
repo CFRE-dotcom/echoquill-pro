@@ -262,8 +262,8 @@ class ReadAloudWindow:
             try:
                 pcm = tts.synth_pcm(text, self.cfg, self._voice_id,
                                     status_cb=self._set_status)
-                wav = os.path.join(tempfile.gettempdir(),
-                                   "echoquill_readaloud.wav")
+                fd, wav = tempfile.mkstemp(prefix="eq_ra_", suffix=".wav")
+                os.close(fd)
                 tts.pcm_to_wav(pcm, wav)
 
                 def go():

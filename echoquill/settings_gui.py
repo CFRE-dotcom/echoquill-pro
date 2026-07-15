@@ -596,10 +596,11 @@ class SettingsWindow:
         self._ra_set("Generating audio\u2026")
 
         def run():
-            wav = os.path.join(tempfile.gettempdir(), "echoquill_readaloud_s.wav")
             try:
                 pcm = tts.synth_pcm(text, self.cfg, self._ra_voice_id,
                                     status_cb=self._ra_set)
+                fd, wav = tempfile.mkstemp(prefix="eq_ras_", suffix=".wav")
+                os.close(fd)
                 tts.pcm_to_wav(pcm, wav)
 
                 def go():

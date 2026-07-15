@@ -32,11 +32,19 @@ class MCIPlayer:
     def __init__(self):
         self.alias = f"eq{id(self)}"
         self.loaded = False
+        self._path = None
 
     def load(self, path):
-        self.close()
+        self.close()                         # releases the previous file lock
+        if self._path and self._path != path:
+            try:
+                import os
+                os.remove(self._path)        # clean up the old temp wav
+            except Exception:
+                pass
         _cmd(f'open "{path}" type waveaudio alias {self.alias}')
         _cmd(f'set {self.alias} time format milliseconds')
+        self._path = path
         self.loaded = True
 
     def play(self, from_ms=None):
