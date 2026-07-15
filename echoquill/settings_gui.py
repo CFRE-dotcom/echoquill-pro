@@ -377,6 +377,7 @@ class SettingsWindow:
 
 
     def _build_read_aloud(self, f):
+        from . import helptip
         ttk.Label(f, text="Read aloud (Text-to-speech)",
                   style="Title.TLabel").pack(anchor="w")
         ttk.Label(f, style="Dim.TLabel", wraplength=560, text=(
