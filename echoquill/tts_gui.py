@@ -7,7 +7,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from . import theme, helptip, tts
+from . import theme, helptip, tts, player
 from .media_gui import narration_dir
 
 READ_HELP = (
@@ -34,17 +34,12 @@ class ReadAloudWindow:
         self.win.minsize(540, 480)
         self.win.attributes("-topmost", True)
         theme.apply(self.win)
+        self.win.protocol("WM_DELETE_WINDOW", self._close)
 
         # ---- bottom action bar first (never pushed off-screen) ----
+        # file-actions row (packed first so it sits at the very bottom)
         bar = ttk.Frame(self.win)
-        bar.pack(side="bottom", fill="x", padx=18, pady=(2, 12))
-        self.play_btn = ttk.Button(bar, text="▶ Play", style="Accent.TButton",
-                                   command=self._play)
-        self.play_btn.pack(side="left")
-        helptip.tip(self.play_btn, "Read the text aloud.")
-        self.stop_btn = ttk.Button(bar, text="■ Stop", command=self._stop)
-        self.stop_btn.pack(side="left", padx=8)
-        helptip.tip(self.stop_btn, "Stop playback.")
+        bar.pack(side="bottom", fill="x", padx=18, pady=(0, 10))
         _save = ttk.Button(bar, text="Save as MP3…", command=self._save)
         _save.pack(side="left")
         helptip.tip(_save, "Generate the audio and save it as an MP3 file.")
@@ -57,6 +52,13 @@ class ReadAloudWindow:
         helptip.tip(_clear, "Clear the text box.")
         self.status = ttk.Label(bar, text="", style="Dim.TLabel")
         self.status.pack(side="left", padx=12)
+        # player transport (Play/Pause, Stop, seekable timeline) above it
+        prow = ttk.Frame(self.win)
+        prow.pack(side="bottom", fill="x", padx=18, pady=(4, 2))
+        self.player = player.AudioPlayer(prow, self.win, on_generate=self._play)
+        self.player.pack(fill="x")
+        helptip.tip(self.player.play_btn, "Generate the audio (first time), then "
+                    "play/pause. Drag the bar to scrub; replays are free.")
 
         # ---- title ----
         trow = ttk.Frame(self.win)
@@ -102,7 +104,7 @@ class ReadAloudWindow:
         self.char_lbl.pack(side="right")
         self.box = theme.dark_text(self.win, wrap="word")
         self.box.pack(fill="both", expand=True, padx=18, pady=(2, 6))
-        self.box.bind("<KeyRelease>", lambda e: self._update_count())
+        self.box.bind("<KeyRelease>", lambda e: (self._update_count(), self.player.invalidate()))
 
         if self.cfg.get("elevenlabs_api_key"):
             self._load_voices()
@@ -130,6 +132,10 @@ class ReadAloudWindow:
         self.box.delete("1.0", "end")
         self.status.configure(text="")
         self._update_count()
+        try:
+            self.player.invalidate()
+        except Exception:
+            pass
 
     def _update_count(self):
         try:
@@ -178,6 +184,10 @@ class ReadAloudWindow:
                 self.status.configure(
                     text=f"Loaded {os.path.basename(path)} ✓")
                 self._update_count()
+                try:
+                    self.player.invalidate()
+                except Exception:
+                    pass
             self.win.after(0, show)
         threading.Thread(target=run, daemon=True).start()
 
@@ -245,7 +255,6 @@ class ReadAloudWindow:
             return
         text = self.box.get("1.0", "end").strip()
         self._busy = True
-        self.play_btn.configure(state="disabled")
         self._set_status("Generating audio…")
 
         def run():
@@ -256,26 +265,23 @@ class ReadAloudWindow:
                 wav = os.path.join(tempfile.gettempdir(),
                                    "echoquill_readaloud.wav")
                 tts.pcm_to_wav(pcm, wav)
-                self._play_wav = wav
-                import winsound
-                winsound.PlaySound(
-                    wav, winsound.SND_FILENAME | winsound.SND_ASYNC
-                    | winsound.SND_NODEFAULT)
-                self._set_status("Playing ▶")
+
+                def go():
+                    self.player.load_and_play(wav)
+                    self._set_status("Playing ▶")
+                self.win.after(0, go)
             except Exception as e:
                 self._error("play", e)
             finally:
                 self._busy = False
-                self.win.after(0, lambda: self.play_btn.configure(state="normal"))
         threading.Thread(target=run, daemon=True).start()
 
-    def _stop(self):
+    def _close(self):
         try:
-            import winsound
-            winsound.PlaySound(None, winsound.SND_PURGE)
-            self._set_status("Stopped.")
+            self.player.shutdown()
         except Exception:
             pass
+        self.win.destroy()
 
     def _save(self):
         if not self._guard():

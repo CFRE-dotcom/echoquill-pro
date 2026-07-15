@@ -377,7 +377,7 @@ class SettingsWindow:
 
 
     def _build_read_aloud(self, f):
-        from . import helptip
+        from . import helptip, player
         ttk.Label(f, text="Read aloud (Text-to-speech)",
                   style="Title.TLabel").pack(anchor="w")
         ttk.Label(f, style="Dim.TLabel", wraplength=560, text=(
@@ -420,16 +420,15 @@ class SettingsWindow:
         self._ra_charlbl.pack(side="right")
         self._ra_box = theme.dark_text(f, wrap="word", height=10)
         self._ra_box.pack(fill="both", expand=True, pady=(2, 6))
-        self._ra_box.bind("<KeyRelease>", lambda e: self._ra_count())
+        self._ra_box.bind("<KeyRelease>", lambda e: (self._ra_count(), self._ra_player.invalidate()))
 
-        arow = ttk.Frame(f); arow.pack(fill="x", pady=(0, 4))
-        self._ra_play = ttk.Button(arow, text="\u25b6 Play",
-                                   style="Accent.TButton", command=self._ra_do_play)
-        self._ra_play.pack(side="left")
-        helptip.tip(self._ra_play, "Read the text aloud.")
-        _stop = ttk.Button(arow, text="\u25a0 Stop", command=self._ra_stop)
-        _stop.pack(side="left", padx=8)
-        helptip.tip(_stop, "Stop playback.")
+        prow = ttk.Frame(f); prow.pack(fill="x", pady=(0, 4))
+        self._ra_player = player.AudioPlayer(prow, self.win,
+                                             on_generate=self._ra_do_play)
+        self._ra_player.pack(fill="x")
+        helptip.tip(self._ra_player.play_btn, "Generate the audio (first time), "
+                    "then play/pause. Drag the bar to scrub; replays are free.")
+        arow = ttk.Frame(f); arow.pack(fill="x", pady=(2, 4))
         _save = ttk.Button(arow, text="Save as MP3\u2026", command=self._ra_do_save)
         _save.pack(side="left")
         helptip.tip(_save, "Generate the audio and save it as an MP3 file.")
@@ -474,6 +473,10 @@ class SettingsWindow:
         self._ra_box.delete("1.0", "end")
         self._ra_status.configure(text="")
         self._ra_count()
+        try:
+            self._ra_player.invalidate()
+        except Exception:
+            pass
 
     def _ra_count(self):
         try:
@@ -523,6 +526,10 @@ class SettingsWindow:
                 self._ra_box.delete("1.0", "end")
                 self._ra_box.insert("1.0", text)
                 self._ra_count()
+                try:
+                    self._ra_player.invalidate()
+                except Exception:
+                    pass
                 self._ra_status.configure(text=f"Loaded {os.path.basename(path)} \u2713")
             self.win.after(0, show)
         threading.Thread(target=run, daemon=True).start()
@@ -586,33 +593,24 @@ class SettingsWindow:
             return
         text = self._ra_box.get("1.0", "end").strip()
         self._ra_busy = True
-        self._ra_play.configure(state="disabled")
         self._ra_set("Generating audio\u2026")
 
         def run():
-            wav = os.path.join(tempfile.gettempdir(), "echoquill_readaloud.wav")
+            wav = os.path.join(tempfile.gettempdir(), "echoquill_readaloud_s.wav")
             try:
                 pcm = tts.synth_pcm(text, self.cfg, self._ra_voice_id,
                                     status_cb=self._ra_set)
                 tts.pcm_to_wav(pcm, wav)
-                import winsound
-                winsound.PlaySound(wav, winsound.SND_FILENAME | winsound.SND_ASYNC
-                                   | winsound.SND_NODEFAULT)
-                self._ra_set("Playing \u25b6")
+
+                def go():
+                    self._ra_player.load_and_play(wav)
+                    self._ra_set("Playing \u25b6")
+                self.win.after(0, go)
             except Exception as e:
                 self._ra_error("play", e)
             finally:
                 self._ra_busy = False
-                self.win.after(0, lambda: self._ra_play.configure(state="normal"))
         threading.Thread(target=run, daemon=True).start()
-
-    def _ra_stop(self):
-        try:
-            import winsound
-            winsound.PlaySound(None, winsound.SND_PURGE)
-            self._ra_set("Stopped.")
-        except Exception:
-            pass
 
     def _ra_do_save(self):
         import threading, os
@@ -1720,6 +1718,10 @@ class SettingsWindow:
         return tuple(vals)
 
     def _on_close(self):
+        try:
+            self._ra_player.shutdown()
+        except Exception:
+            pass
         try:
             dirty = self._collect_state() != self._snapshot
         except Exception:
