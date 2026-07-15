@@ -789,6 +789,8 @@ class AskWindow:
         self.out = theme.dark_text(self.win, wrap="word")
         self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))
         self._preset_refresh()
+        helptip.menu_hover(self._pmenu["menu"],
+                           lambda: _pr.menu_items(self.cfg))
 
     def _set_bound_label(self):
         name = (self.title or "this transcript").strip()
