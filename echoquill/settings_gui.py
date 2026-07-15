@@ -386,6 +386,16 @@ class SettingsWindow:
             "ElevenLabs account - the key is kept in Windows Credential Manager."
             )).pack(anchor="w", pady=(2, 8))
 
+        frow = ttk.Frame(f); frow.pack(fill="x", pady=(0, 6))
+        ttk.Label(frow, text="Save narrations to:").pack(side="left")
+        ttk.Button(frow, text="Change\u2026",
+                   command=self._ra_choose_folder).pack(side="right")
+        ttk.Button(frow, text="Use default",
+                   command=self._ra_default_folder).pack(side="right", padx=(0, 6))
+        self._ra_folderlbl = ttk.Label(frow, style="Dim.TLabel",
+                                       text=self._ra_folder_text())
+        self._ra_folderlbl.pack(side="left", padx=(6, 6))
+
         self._ra_voice_id = self.cfg.get("tts_voice_id", "") or ""
         self._ra_voices = []
         self._ra_busy = False
@@ -472,6 +482,35 @@ class SettingsWindow:
             os.startfile(narration_dir(self.cfg))
         except Exception:
             self._ra_set("Could not open folder")
+
+    def _ra_folder_text(self):
+        from .media_gui import narration_dir
+        p = narration_dir(self.cfg)
+        return p if len(p) <= 46 else "\u2026" + p[-45:]
+
+    def _ra_choose_folder(self):
+        from tkinter import filedialog
+        d = filedialog.askdirectory(
+            parent=self.win, title="Choose a folder to save narrations in "
+            "(e.g. your OneDrive / Google Drive / Dropbox folder)")
+        if not d:
+            return
+        self.cfg["narration_dir"] = d
+        try:
+            cfgmod.save(self.cfg)
+        except Exception:
+            pass
+        self._ra_folderlbl.configure(text=self._ra_folder_text())
+        self._ra_set("Narrations now save to your chosen folder \u2713")
+
+    def _ra_default_folder(self):
+        self.cfg["narration_dir"] = ""
+        try:
+            cfgmod.save(self.cfg)
+        except Exception:
+            pass
+        self._ra_folderlbl.configure(text=self._ra_folder_text())
+        self._ra_set("Back to the default Narration folder")
 
     def _ra_clear(self):
         self._ra_box.delete("1.0", "end")

@@ -220,6 +220,13 @@ def clips_dir(cfg) -> str:
 
 
 def narration_dir(cfg) -> str:
+    override = (cfg or {}).get("narration_dir")
+    if override:
+        try:
+            os.makedirs(override, exist_ok=True)
+            return override
+        except Exception:
+            pass                      # fall back to default if the folder is gone
     return _subfolder(cfg, "Narration")
 
 

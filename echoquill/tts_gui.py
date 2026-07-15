@@ -87,6 +87,16 @@ class ReadAloudWindow:
         helptip.tip(_ks, "Store your ElevenLabs API key (kept in Windows "
                     "Credential Manager) and load your voices.")
 
+        frow = ttk.Frame(self.win); frow.pack(fill="x", padx=18, pady=(6, 0))
+        ttk.Label(frow, text="Save narrations to:").pack(side="left")
+        ttk.Button(frow, text="Change\u2026",
+                   command=self._choose_folder).pack(side="right")
+        ttk.Button(frow, text="Use default",
+                   command=self._default_folder).pack(side="right", padx=(0, 6))
+        self.folder_lbl = ttk.Label(frow, style="Dim.TLabel",
+                                    text=self._folder_text())
+        self.folder_lbl.pack(side="left", padx=(6, 6))
+
         # ---- voice + open-document row ----
         vrow = ttk.Frame(self.win)
         vrow.pack(fill="x", padx=18, pady=(6, 2))
@@ -132,6 +142,35 @@ class ReadAloudWindow:
             os.startfile(narration_dir(self.cfg))
         except Exception:
             self._set_status("Could not open folder")
+
+    def _folder_text(self):
+        p = narration_dir(self.cfg)
+        return p if len(p) <= 46 else "\u2026" + p[-45:]
+
+    def _choose_folder(self):
+        d = filedialog.askdirectory(
+            parent=self.win, title="Choose a folder to save narrations in "
+            "(e.g. your OneDrive / Google Drive / Dropbox folder)")
+        if not d:
+            return
+        self.cfg["narration_dir"] = d
+        try:
+            from . import config as _cfg
+            _cfg.save(self.cfg)
+        except Exception:
+            pass
+        self.folder_lbl.configure(text=self._folder_text())
+        self._set_status("Narrations now save to your chosen folder ✓")
+
+    def _default_folder(self):
+        self.cfg["narration_dir"] = ""
+        try:
+            from . import config as _cfg
+            _cfg.save(self.cfg)
+        except Exception:
+            pass
+        self.folder_lbl.configure(text=self._folder_text())
+        self._set_status("Back to the default Narration folder")
 
     def _clear(self):
         self.box.delete("1.0", "end")

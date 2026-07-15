@@ -147,6 +147,7 @@ DEFAULTS = {
     "tts_model_id": "eleven_multilingual_v2",
     "tts_stability": 0.5,
     "tts_similarity": 0.75,
+    "narration_dir": "",   # custom save folder (e.g. a OneDrive/Drive/Dropbox folder); "" = default
     # How text is inserted: "type" (keystrokes), "paste" (Ctrl+V),
     # "clipboard" (copy only - community-requested clipboard-only mode)
     "insertion_mode": "paste",
