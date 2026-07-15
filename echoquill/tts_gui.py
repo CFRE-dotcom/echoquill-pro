@@ -96,10 +96,13 @@ class ReadAloudWindow:
         _od.pack(side="right")
         helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
 
-        ttk.Label(self.win, style="Dim.TLabel",
-                  text="Text to read:").pack(anchor="w", padx=18, pady=(8, 0))
+        _trow = ttk.Frame(self.win); _trow.pack(fill="x", padx=18, pady=(8, 0))
+        ttk.Label(_trow, style="Dim.TLabel", text="Text to read:").pack(side="left")
+        self.char_lbl = ttk.Label(_trow, style="Dim.TLabel", text="0 characters")
+        self.char_lbl.pack(side="right")
         self.box = theme.dark_text(self.win, wrap="word")
         self.box.pack(fill="both", expand=True, padx=18, pady=(2, 6))
+        self.box.bind("<KeyRelease>", lambda e: self._update_count())
 
         if self.cfg.get("elevenlabs_api_key"):
             self._load_voices()
@@ -126,6 +129,23 @@ class ReadAloudWindow:
     def _clear(self):
         self.box.delete("1.0", "end")
         self.status.configure(text="")
+        self._update_count()
+
+    def _update_count(self):
+        try:
+            n = len(self.box.get("1.0", "end").strip())
+            self.char_lbl.configure(text=f"{n:,} characters")
+        except Exception:
+            pass
+
+    def _confirm_cost(self, n):
+        if n <= 5000:
+            return True
+        return messagebox.askyesno(
+            "Read aloud - heads up",
+            f"This is {n:,} characters, which will use about {n:,} ElevenLabs "
+            f"credits (ElevenLabs bills per character).\n\nGenerate anyway?",
+            parent=self.win)
 
     def _save_key(self):
         from . import config as _cfg
@@ -157,6 +177,7 @@ class ReadAloudWindow:
                 self.box.insert("1.0", text)
                 self.status.configure(
                     text=f"Loaded {os.path.basename(path)} ✓")
+                self._update_count()
             self.win.after(0, show)
         threading.Thread(target=run, daemon=True).start()
 
@@ -209,8 +230,12 @@ class ReadAloudWindow:
         if not self.key_var.get().strip():
             self._set_status("Add your ElevenLabs API key first.")
             return False
-        if not self.box.get("1.0", "end").strip():
+        text = self.box.get("1.0", "end").strip()
+        if not text:
             self._set_status("Nothing to read - paste or open some text.")
+            return False
+        if not self._confirm_cost(len(text)):
+            self._set_status("Cancelled.")
             return False
         self.cfg["elevenlabs_api_key"] = self.key_var.get().strip()
         return True

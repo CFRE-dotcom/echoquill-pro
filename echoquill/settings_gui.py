@@ -414,9 +414,13 @@ class SettingsWindow:
         _od.pack(side="right")
         helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
 
-        ttk.Label(f, text="Text to read:").pack(anchor="w", pady=(8, 0))
+        _trow = ttk.Frame(f); _trow.pack(fill="x", pady=(8, 0))
+        ttk.Label(_trow, text="Text to read:").pack(side="left")
+        self._ra_charlbl = ttk.Label(_trow, style="Dim.TLabel", text="0 characters")
+        self._ra_charlbl.pack(side="right")
         self._ra_box = theme.dark_text(f, wrap="word", height=10)
         self._ra_box.pack(fill="both", expand=True, pady=(2, 6))
+        self._ra_box.bind("<KeyRelease>", lambda e: self._ra_count())
 
         arow = ttk.Frame(f); arow.pack(fill="x", pady=(0, 4))
         self._ra_play = ttk.Button(arow, text="\u25b6 Play",
@@ -469,6 +473,23 @@ class SettingsWindow:
     def _ra_clear(self):
         self._ra_box.delete("1.0", "end")
         self._ra_status.configure(text="")
+        self._ra_count()
+
+    def _ra_count(self):
+        try:
+            n = len(self._ra_box.get("1.0", "end").strip())
+            self._ra_charlbl.configure(text=f"{n:,} characters")
+        except Exception:
+            pass
+
+    def _ra_confirm_cost(self, n):
+        if n <= 5000:
+            return True
+        return messagebox.askyesno(
+            "Read aloud - heads up",
+            f"This is {n:,} characters, which will use about {n:,} ElevenLabs "
+            f"credits (ElevenLabs bills per character).\n\nGenerate anyway?",
+            parent=self.win)
 
     def _ra_save_key(self):
         self.cfg["elevenlabs_api_key"] = self._ra_key.get().strip()
@@ -501,6 +522,7 @@ class SettingsWindow:
             def show():
                 self._ra_box.delete("1.0", "end")
                 self._ra_box.insert("1.0", text)
+                self._ra_count()
                 self._ra_status.configure(text=f"Loaded {os.path.basename(path)} \u2713")
             self.win.after(0, show)
         threading.Thread(target=run, daemon=True).start()
@@ -549,8 +571,11 @@ class SettingsWindow:
             self._ra_set("Still working on the last one\u2026"); return False
         if not self._ra_key.get().strip():
             self._ra_set("Add your ElevenLabs API key first."); return False
-        if not self._ra_box.get("1.0", "end").strip():
+        text = self._ra_box.get("1.0", "end").strip()
+        if not text:
             self._ra_set("Nothing to read - paste or open some text."); return False
+        if not self._ra_confirm_cost(len(text)):
+            self._ra_set("Cancelled."); return False
         self.cfg["elevenlabs_api_key"] = self._ra_key.get().strip()
         return True
 
