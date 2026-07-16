@@ -111,9 +111,18 @@ class ReadAloudWindow:
         _lv = ttk.Button(vrow, text="Load voices", command=self._load_voices)
         _lv.pack(side="left")
         helptip.tip(_lv, "Fetch the voices on your ElevenLabs account.")
-        _od = ttk.Button(vrow, text="Open a document…", command=self._open_doc)
-        _od.pack(side="right")
-        helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
+
+        # Load-document + Convert sit together, right above the text box
+        drow = ttk.Frame(self.win); drow.pack(fill="x", padx=18, pady=(8, 0))
+        _od = ttk.Button(drow, text="📄 Load a document…", command=self._open_doc)
+        _od.pack(side="left")
+        helptip.tip(_od, "Pull the text out of a .txt, .md, .docx or .pdf into "
+                    "the box, so you can convert it to audio.")
+        self.convert_btn = ttk.Button(drow, text="🎙 Convert to audio",
+                                      style="Accent.TButton", command=self._play)
+        self.convert_btn.pack(side="left", padx=(8, 0))
+        helptip.tip(self.convert_btn, "Turn the text into audio. Then use the "
+                    "player to listen, or Save as MP3.")
 
         _trow = ttk.Frame(self.win); _trow.pack(fill="x", padx=18, pady=(8, 0))
         ttk.Label(_trow, style="Dim.TLabel", text="Text to convert to audio:").pack(side="left")
