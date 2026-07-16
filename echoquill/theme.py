@@ -130,6 +130,25 @@ class Scrollable(ttk.Frame):
         self.canvas.configure(yscrollcommand=vsb.set)
         self.canvas.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
+        # auto-hide: only show the scrollbar when the content actually overflows
+        self._vsb = vsb
+        self._vsb_shown = True
+
+        def _autohide(_e=None):
+            try:
+                need = self.inner.winfo_reqheight() > self.canvas.winfo_height() + 1
+            except Exception:
+                return
+            if need and not self._vsb_shown:
+                vsb.pack(side="right", fill="y")
+                self._vsb_shown = True
+            elif not need and self._vsb_shown:
+                vsb.pack_forget()
+                self._vsb_shown = False
+        self._autohide = _autohide
+        self.inner.bind("<Configure>", lambda e: (self.canvas.configure(
+            scrollregion=self.canvas.bbox("all")), _autohide()), add="+")
+        self.canvas.bind("<Configure>", lambda e: _autohide(), add="+")
         self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all(
             "<MouseWheel>", self._wheel))
         self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))

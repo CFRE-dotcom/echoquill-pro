@@ -15,7 +15,8 @@ from . import theme
 class SettingsWindow:
     SECTIONS = ["General", "AI Enhancement", "Clipboard", "Dictation",
                 "Dictionary", "Meeting", "Read aloud", "Transcription",
-                "History", "Stats", "License", "Help", "Feedback", "About"]
+                "History", "Stats", "License", "Help", "Feedback", "About",
+                "What\u2019s New"]
 
     def __init__(self, root: tk.Tk, cfg: dict, dictionary, on_save,
                  on_media=None, on_clips=None, on_history=None,
@@ -93,11 +94,13 @@ class SettingsWindow:
                 "License": self._build_license,
                 "Help": self._build_help,
                 "Feedback": self._build_feedback,
-                "About": self._build_about}
+                "About": self._build_about,
+                "What\u2019s New": self._build_whatsnew}
         # Sections dominated by a big text box lay the box out to fill and scroll
         # internally (like the standalone windows) - NO outer scroll pane, so
         # there's never a second scrollbar stacked next to the text box's own.
-        _noscroll = {"Meeting", "Read aloud"}
+        _noscroll = {"Meeting", "Read aloud", "Transcription", "History",
+                     "Help", "Feedback", "Dictionary", "What\u2019s New"}
         for name, builder in body.items():
             if name in _noscroll:
                 fr = ttk.Frame(self.content)
@@ -707,6 +710,17 @@ class SettingsWindow:
                 self._ra_busy = False
         threading.Thread(target=run, daemon=True).start()
 
+    def _build_whatsnew(self, f):
+        from . import changelog
+        ttk.Label(f, text="What\u2019s New", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Dim.TLabel", wraplength=560, text=(
+            "Every update to EchoQuill, newest first \u2014 Pro and Free."
+            )).pack(anchor="w", pady=(2, 8))
+        box = theme.dark_text(f, wrap="word")
+        box.pack(fill="both", expand=True, pady=(2, 6))
+        box.insert("1.0", changelog.TEXT)
+        box.configure(state="disabled")
+
     def _build_clipboard(self, f):
         self._title(f, "Clipboard",
                     "Your recent transcriptions, always within reach.")
@@ -1001,7 +1015,32 @@ class SettingsWindow:
             "• Drag the tray by its header to park it anywhere.\n"
             "• Search box: type a word to highlight the clips containing it.\n"
             "• ✕ deletes a clip; Settings → History clears everything.\n"
-            "• Every dictation is also on the Windows clipboard: Ctrl+V works immediately."),
+            "• Every dictation is also on the Windows clipboard: Ctrl+V works immediately.\n"
+            "• RECENT TRANSCRIPTIONS (Settings → History) works the same way: DRAG a "
+            "line onto any text box to drop it, or CLICK to paste into your last app."),
+        "Meeting / Record": (
+            "RECORD & TRANSCRIBE WHAT YOU HEAR\n\n"
+            "1. Settings → Meeting, or right-click the mic pill → Meeting / Record.\n"
+            "2. (Optional) tick 'record my microphone' for two-way calls, and/or "
+            "'capture the screen' to also save an MP4 video.\n"
+            "3. Name it, click Start recording. Play your call / webinar / video.\n"
+            "4. Click Stop & transcribe - it runs locally, no link or URL needed.\n\n"
+            "Great for Skool, Zoom, Teams, webinars, or any playing video.\n"
+            "Ask AI: pick a preset or type a question about the recording.\n"
+            "Everything saves to Documents\\EchoQuill\\Meetings."),
+        "Read aloud & phone": (
+            "TURN TEXT INTO SPOKEN AUDIO (TEXT-TO-SPEECH)\n\n"
+            "1. Settings → Read aloud, or right-click the mic pill → Read aloud.\n"
+            "2. Paste text, or click 'Load a document' (.txt/.md/.docx/.pdf).\n"
+            "3. Add your ElevenLabs API key once (Save key → Load voices) and pick "
+            "a voice.\n"
+            "4. Click 'Convert to audio'. Then Play/pause/scrub on the timeline, or "
+            "'Save as MP3'. Audio is generated once - replays are free.\n\n"
+            "SAVE ANYWHERE: 'Save narrations to...' can point at a OneDrive / Google "
+            "Drive / Dropbox folder so files sync automatically.\n\n"
+            "LISTEN ON YOUR PHONE: click 'Listen on my phone' for a QR code. On a "
+            "phone on the SAME WiFi, scan it to open a page of your narrations - tap "
+            "to play or download. No accounts, no cloud; it stays on your network."),
     }
 
     def _build_license(self, f):
