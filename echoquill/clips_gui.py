@@ -369,9 +369,17 @@ class ClipsTray:
         def _save(new_text):
             history.update(ts, new_text)
             self.refresh()
+
+        def _del():
+            try:
+                history.delete(ts)
+                favorites.remove(text)
+            except Exception:
+                pass
+            self.refresh()
         cfg = getattr(self, "cfg", None)
         edit_dialog.open_editor(self.win, text, _save, cfg=cfg,
-                                title="Edit clip", anchor=self.win)
+                                title="Edit clip", anchor=self.win, on_delete=_del)
 
     # ---------- click vs drag ----------
 
