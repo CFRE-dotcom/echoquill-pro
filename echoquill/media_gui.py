@@ -764,6 +764,18 @@ class AskWindow:
         self._pmenu.pack(side="left", padx=(6, 0))
         helptip.tip(self._pmenu, "Pick a ready-made question, or the bottom "
                     "item to add / edit your own.")
+        self.autosave_var = tk.BooleanVar(value=self.cfg.get("ask_autosave", True))
+        _asv = ttk.Checkbutton(prow, text="Auto-save answers",
+                               variable=self.autosave_var,
+                               command=self._toggle_autosave)
+        _asv.pack(side="right")
+        helptip.tip(_asv, "When on, every answer is appended to this video's "
+                    "Q&A file automatically - no need to click Save.")
+        _batch = ttk.Button(prow, text="\u2630 Ask several\u2026",
+                            command=self._ask_batch)
+        _batch.pack(side="right", padx=(0, 10))
+        helptip.tip(_batch, "Tick several preset questions (or load a saved set) "
+                    "and run them all in a row, each saved to the Q&A file.")
         ttk.Label(self.win, style="Dim.TLabel",
                   text="Type your question below, then click Ask:"
                   ).pack(anchor="w", padx=18, pady=(6, 0))
@@ -872,6 +884,12 @@ class AskWindow:
                 self.out.delete("1.0", "end")
                 self.out.insert("1.0", answer)
                 self.ask_btn.configure(state="normal", text="Ask")
+                if self.autosave_var.get():
+                    saved = self._append_qa(q, answer)
+                    if saved:
+                        self.copy_status.configure(text=f"Saved to {saved} \u2713")
+                        self.win.after(2500,
+                                       lambda: self.copy_status.configure(text=""))
             self.win.after(0, show)
         threading.Thread(target=run, daemon=True).start()
 
@@ -884,21 +902,142 @@ class AskWindow:
         except Exception:
             self.copy_status.configure(text="Copy failed")
 
+    def _append_qa(self, q, answer):
+        """Append one Q&A block to this video's Q&A file. Returns the filename."""
+        if not (answer or "").strip():
+            return None
+        out = os.path.join(transcripts_dir(self.cfg),
+                           safe_filename(f"{self.title} - Q&A"))
+        sep = "*" * 50
+        block = f"{sep}\n{sep}\nQ: {q}\n\nA: {answer}\n\n"
+        try:
+            with open(out, "a", encoding="utf-8") as f:
+                f.write(block)
+            return os.path.basename(out)
+        except Exception:
+            return None
+
     def _save_answer(self):
         answer = self.out.get("1.0", "end").strip()
         if not answer:
             return
-        folder = transcripts_dir(self.cfg)
-        fname = safe_filename(f"{self.title} - Q&A")
-        out = os.path.join(folder, fname)
-        sep = "*" * 50
-        block = (f"{sep}\n{sep}\n"
-                 f"Q: {self._last_q}\n\n"
-                 f"A: {answer}\n\n")
-        try:
-            with open(out, "a", encoding="utf-8") as f:
-                f.write(block)
-            self.copy_status.configure(text=f"Saved to {os.path.basename(out)} ✓")
-        except Exception as e:
-            self.copy_status.configure(text=f"Save failed: {e}")
+        saved = self._append_qa(self._last_q, answer)
+        self.copy_status.configure(
+            text=(f"Saved to {saved} ✓" if saved else "Save failed"))
         self.win.after(2500, lambda: self.copy_status.configure(text=""))
+
+    def _toggle_autosave(self):
+        self.cfg["ask_autosave"] = bool(self.autosave_var.get())
+        try:
+            from . import config as _cfg
+            _cfg.save(self.cfg)
+        except Exception:
+            pass
+
+    def _ask_batch(self):
+        import threading
+        from . import prompts as _pr
+        if not getattr(self, "segments", None):
+            self.copy_status.configure(text="Transcribe a video first.")
+            return
+        d = tk.Toplevel(self.win); d.title("Ask several questions")
+        d.geometry("560x520"); d.attributes("-topmost", True); theme.apply(d)
+        ttk.Label(d, text="Ask several questions", style="Title.TLabel").pack(
+            anchor="w", padx=16, pady=(12, 2))
+        ttk.Label(d, style="Dim.TLabel", wraplength=520, text=(
+            "Tick the questions to run. They run in order and each answer is "
+            "saved to this video's Q&A file. Load or save a set below.")).pack(
+            anchor="w", padx=16)
+
+        srow = ttk.Frame(d); srow.pack(fill="x", padx=16, pady=(8, 4))
+        ttk.Label(srow, text="Set:").pack(side="left")
+        setvar = tk.StringVar(value="\u2014")
+        setmenu = ttk.OptionMenu(srow, setvar, "\u2014")
+        setmenu.configure(width=22)
+        setmenu.pack(side="left", padx=(6, 6))
+
+        vars_by_q = {}
+        sc = theme.Scrollable(d); sc.pack(fill="both", expand=True, padx=16, pady=4)
+
+        def _all_questions():
+            qs = [q for q in _pr.all_prompts(self.cfg)]
+            return qs
+
+        def _rebuild_list():
+            for w in sc.inner.winfo_children():
+                w.destroy()
+            vars_by_q.clear()
+            for q in _all_questions():
+                v = tk.BooleanVar(value=False)
+                vars_by_q[q] = v
+                cb = ttk.Checkbutton(sc.inner, text=q, variable=v)
+                cb.pack(anchor="w", pady=1)
+
+        def _load_set(name):
+            setvar.set("\u2014")
+            if name in ("\u2014", ""):
+                return
+            chosen = set(_pr.get_set(self.cfg, name))
+            for q, v in vars_by_q.items():
+                v.set(q in chosen)
+
+        def _refresh_sets():
+            names = _pr.set_names(self.cfg)
+            m = setmenu["menu"]; m.delete(0, "end")
+            m.add_command(label="\u2014", command=lambda: _load_set("\u2014"))
+            for n in names:
+                m.add_command(label=n, command=lambda n=n: _load_set(n))
+
+        _rebuild_list(); _refresh_sets()
+
+        def _checked():
+            return [q for q in _all_questions() if vars_by_q.get(q)
+                    and vars_by_q[q].get()]
+
+        status = ttk.Label(d, text="", style="Dim.TLabel")
+        status.pack(anchor="w", padx=16)
+
+        def _save_set():
+            picks = _checked()
+            if not picks:
+                status.configure(text="Tick at least one question first."); return
+            from tkinter import simpledialog
+            name = simpledialog.askstring("Save set", "Name this set:", parent=d)
+            if name and name.strip():
+                _pr.save_set(self.cfg, name.strip(), picks)
+                _refresh_sets()
+                status.configure(text=f"Saved set '{name.strip()}' \u2713")
+
+        def _run():
+            picks = _checked()
+            if not picks:
+                status.configure(text="Tick at least one question first."); return
+            run_btn.configure(state="disabled")
+
+            def worker():
+                from . import ask_ai
+                fname = None
+                for i, q in enumerate(picks, 1):
+                    self.win.after(0, lambda i=i: status.configure(
+                        text=f"Running {i}/{len(picks)}\u2026"))
+                    ans = ask_ai.ask(q, self.segments, self.cfg,
+                                     title=self.title, url=self.url)
+                    fname = self._append_qa(q, ans) or fname
+
+                    def show(q=q, ans=ans):
+                        self.out.insert("end", f"\n\nQ: {q}\n\n{ans}\n")
+                        self.out.see("end")
+                    self.win.after(0, show)
+                self.win.after(0, lambda: status.configure(
+                    text=f"Done \u2713  {len(picks)} saved"
+                         + (f" to {fname}" if fname else "")))
+                self.win.after(0, lambda: run_btn.configure(state="normal"))
+            threading.Thread(target=worker, daemon=True).start()
+
+        bar = ttk.Frame(d); bar.pack(fill="x", padx=16, pady=(6, 12))
+        run_btn = ttk.Button(bar, text="Run checked", style="Accent.TButton",
+                             command=_run)
+        run_btn.pack(side="right")
+        ttk.Button(bar, text="Save checked as set\u2026",
+                   command=_save_set).pack(side="left")
+        ttk.Button(bar, text="Close", command=d.destroy).pack(side="right", padx=8)

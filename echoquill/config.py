@@ -147,6 +147,8 @@ DEFAULTS = {
     "tts_model_id": "eleven_multilingual_v2",
     "tts_stability": 0.5,
     "tts_similarity": 0.75,
+    "ask_autosave": True,        # Ask AI: auto-append each answer to the Q&A file
+    "prompt_sets": [],           # saved named sets of preset questions
     "narration_dir": "",   # custom save folder (e.g. a OneDrive/Drive/Dropbox folder); "" = default
     # How text is inserted: "type" (keystrokes), "paste" (Ctrl+V),
     # "clipboard" (copy only - community-requested clipboard-only mode)
