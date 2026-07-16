@@ -390,9 +390,10 @@ class SettingsWindow:
         ttk.Label(f, text="Read aloud (Text-to-speech)",
                   style="Title.TLabel").pack(anchor="w")
         ttk.Label(f, style="Dim.TLabel", wraplength=560, text=(
-            "Paste text or open a document, pick a voice, then Play or Save as "
-            "MP3 (saved in your EchoQuill\\Narration folder). Uses your own "
-            "ElevenLabs account - the key is kept in Windows Credential Manager."
+            "Turn text into spoken audio.  1) Paste text below, or load a "
+            "document.  2) Pick a voice.  3) Click \u201cConvert to audio.\u201d  "
+            "Then play it, save an MP3, or send it to your phone. Uses your own "
+            "ElevenLabs account (key kept in Windows Credential Manager)."
             )).pack(anchor="w", pady=(2, 8))
 
         frow = ttk.Frame(f); frow.pack(fill="x", pady=(0, 6))
@@ -431,10 +432,11 @@ class SettingsWindow:
         helptip.tip(_lv, "Fetch the voices on your ElevenLabs account.")
 
         drow = ttk.Frame(f); drow.pack(fill="x", pady=(8, 0))
-        _od = ttk.Button(drow, text="\U0001f4c4 Open a document\u2026",
+        _od = ttk.Button(drow, text="\U0001f4c4 Load a document\u2026",
                          command=self._ra_open_doc)
         _od.pack(side="left")
-        helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
+        helptip.tip(_od, "Pull the text out of a .txt, .md, .docx or .pdf into "
+                    "the box, so you can convert it to audio.")
         _conv = ttk.Button(drow, text="\U0001f399 Convert to audio",
                            style="Accent.TButton", command=self._ra_do_play)
         _conv.pack(side="left", padx=(8, 0))
@@ -442,7 +444,7 @@ class SettingsWindow:
                     "listen, or Save as MP3.")
 
         _trow = ttk.Frame(f); _trow.pack(fill="x", pady=(8, 0))
-        ttk.Label(_trow, text="Text to read:").pack(side="left")
+        ttk.Label(_trow, text="Text to convert to audio:").pack(side="left")
         self._ra_charlbl = ttk.Label(_trow, style="Dim.TLabel", text="0 characters")
         self._ra_charlbl.pack(side="right")
         self._ra_box = theme.dark_text(f, wrap="word", height=10)

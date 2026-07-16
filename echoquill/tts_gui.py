@@ -72,8 +72,10 @@ class ReadAloudWindow:
         helptip.attach(self.win, trow, "Read aloud — help", READ_HELP).pack(
             side="left", padx=8)
         ttk.Label(self.win, style="Dim.TLabel", wraplength=590, text=(
-            "Paste text or open a document, pick a voice, then Play or Save as "
-            "MP3. Uses your ElevenLabs account.")).pack(anchor="w", padx=18)
+            "Turn text into spoken audio.  1) Paste text below, or load a "
+            "document.  2) Pick a voice.  3) Click \u201cConvert to audio.\u201d  "
+            "Then play it, save an MP3, or send it to your phone \u2014 no cloud."
+            )).pack(anchor="w", padx=18)
 
         # ---- API key row ----
         krow = ttk.Frame(self.win)
@@ -114,7 +116,7 @@ class ReadAloudWindow:
         helptip.tip(_od, "Load a .txt, .md, .docx or .pdf to read aloud.")
 
         _trow = ttk.Frame(self.win); _trow.pack(fill="x", padx=18, pady=(8, 0))
-        ttk.Label(_trow, style="Dim.TLabel", text="Text to read:").pack(side="left")
+        ttk.Label(_trow, style="Dim.TLabel", text="Text to convert to audio:").pack(side="left")
         self.char_lbl = ttk.Label(_trow, style="Dim.TLabel", text="0 characters")
         self.char_lbl.pack(side="right")
         self.box = theme.dark_text(self.win, wrap="word")
