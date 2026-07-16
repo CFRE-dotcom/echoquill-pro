@@ -50,6 +50,11 @@ class ReadAloudWindow:
         _clear = ttk.Button(bar, text="Clear", command=self._clear)
         _clear.pack(side="left")
         helptip.tip(_clear, "Clear the text box.")
+        _phone = ttk.Button(bar, text="📱 Listen on my phone",
+                            command=self._listen_phone)
+        _phone.pack(side="left", padx=(12, 0))
+        helptip.tip(_phone, "Show a QR code to open your narrations on your "
+                    "phone over WiFi - no accounts, no cloud.")
         self.status = ttk.Label(bar, text="", style="Dim.TLabel")
         self.status.pack(side="left", padx=12)
         # player transport (Play/Pause, Stop, seekable timeline) above it
@@ -137,6 +142,10 @@ class ReadAloudWindow:
             os.startfile(narration_dir(self.cfg))
         except Exception:
             self._set_status("Could not open folder")
+
+    def _listen_phone(self):
+        from . import phone_share
+        phone_share.open_phone_window(self.win, self.cfg)
 
     def _folder_text(self):
         p = narration_dir(self.cfg)

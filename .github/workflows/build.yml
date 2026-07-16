@@ -55,6 +55,8 @@ jobs:
           --hidden-import imageio_ffmpeg
           --collect-all docx
           --hidden-import pypdf
+          --hidden-import qrcode
+          --hidden-import PIL.ImageTk
           --collect-all keyring
           --hidden-import keyring.backends.Windows
           --hidden-import win32ctypes.core

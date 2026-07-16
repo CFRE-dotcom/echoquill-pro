@@ -464,6 +464,11 @@ class SettingsWindow:
         _clear = ttk.Button(arow, text="Clear", command=self._ra_clear)
         _clear.pack(side="left")
         helptip.tip(_clear, "Clear the text box.")
+        _phone = ttk.Button(arow, text="\U0001f4f1 Listen on my phone",
+                            command=self._ra_listen_phone)
+        _phone.pack(side="left", padx=(12, 0))
+        helptip.tip(_phone, "Show a QR code to open your narrations on your "
+                    "phone over WiFi - no accounts, no cloud.")
         self._ra_status = ttk.Label(arow, text="", style="Dim.TLabel")
         self._ra_status.pack(side="left", padx=12)
 
@@ -494,6 +499,10 @@ class SettingsWindow:
             os.startfile(narration_dir(self.cfg))
         except Exception:
             self._ra_set("Could not open folder")
+
+    def _ra_listen_phone(self):
+        from . import phone_share
+        phone_share.open_phone_window(self.win, self.cfg)
 
     def _ra_folder_text(self):
         from .media_gui import narration_dir
