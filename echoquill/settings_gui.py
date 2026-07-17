@@ -1438,6 +1438,12 @@ class SettingsWindow:
         _b5 = ttk.Button(arow, text="Clear", command=self._meeting_clear)
         _b5.pack(side="left", padx=6)
         helptip.tip(_b5, "Clear the text area.")
+        _b6 = ttk.Button(arow, text="☰ Ask several…",
+                         command=self._meeting_ask_batch)
+        _b6.pack(side="left", padx=6)
+        helptip.tip(_b6, "Tick several preset questions and run them in a row - "
+                    "each answer drops into the recording box. Save the checked "
+                    "group as a named set to reuse.")
 
         ttk.Label(f, text="Transcript", style="Section.TLabel").pack(
             anchor="w", pady=(6, 0))
@@ -1609,6 +1615,110 @@ class SettingsWindow:
                     self._meeting_set(res)
             self.win.after(0, show)
         threading.Thread(target=run, daemon=True).start()
+
+    def _meeting_ask_batch(self):
+        import threading
+        from . import prompts as _pr
+        base = self._mt_out.get("1.0", "end").strip()
+        if not base:
+            self._meeting_set("Transcribe something first."); return
+        d = tk.Toplevel(self.win); d.title("Ask several questions")
+        d.geometry("560x520"); d.attributes("-topmost", True); theme.apply(d)
+        ttk.Label(d, text="Ask several questions", style="Title.TLabel").pack(
+            anchor="w", padx=16, pady=(12, 2))
+        ttk.Label(d, style="Dim.TLabel", wraplength=520, text=(
+            "Tick the questions to run. They run in order and each answer drops "
+            "into the recording box. Load or save a set below.")).pack(
+            anchor="w", padx=16)
+
+        srow = ttk.Frame(d); srow.pack(fill="x", padx=16, pady=(8, 4))
+        ttk.Label(srow, text="Set:").pack(side="left")
+        setvar = tk.StringVar(value="—")
+        setmenu = ttk.OptionMenu(srow, setvar, "—")
+        setmenu.configure(width=22)
+        setmenu.pack(side="left", padx=(6, 6))
+
+        vars_by_q = {}
+        sc = theme.Scrollable(d); sc.pack(fill="both", expand=True, padx=16, pady=4)
+
+        def _all_q():
+            return [q for q in _pr.all_prompts(self.cfg)]
+
+        def _rebuild():
+            for w in sc.inner.winfo_children():
+                w.destroy()
+            vars_by_q.clear()
+            for q in _all_q():
+                v = tk.BooleanVar(value=False)
+                vars_by_q[q] = v
+                ttk.Checkbutton(sc.inner, text=q, variable=v).pack(
+                    anchor="w", pady=1)
+
+        def _load_set(name):
+            setvar.set("—")
+            if name in ("—", ""):
+                return
+            chosen = set(_pr.get_set(self.cfg, name))
+            for q, v in vars_by_q.items():
+                v.set(q in chosen)
+
+        def _refresh_sets():
+            m = setmenu["menu"]; m.delete(0, "end")
+            m.add_command(label="—", command=lambda: _load_set("—"))
+            for n in _pr.set_names(self.cfg):
+                m.add_command(label=n, command=lambda n=n: _load_set(n))
+
+        _rebuild(); _refresh_sets()
+
+        def _checked():
+            return [q for q in _all_q() if vars_by_q.get(q)
+                    and vars_by_q[q].get()]
+
+        status = ttk.Label(d, text="", style="Dim.TLabel")
+        status.pack(anchor="w", padx=16)
+
+        def _save_set():
+            picks = _checked()
+            if not picks:
+                status.configure(text="Tick at least one question first."); return
+            from tkinter import simpledialog
+            name = simpledialog.askstring("Save set", "Name this set:", parent=d)
+            if name and name.strip():
+                _pr.save_set(self.cfg, name.strip(), picks)
+                _refresh_sets()
+                status.configure(text=f"Saved set '{name.strip()}' ✓")
+
+        def _run():
+            picks = _checked()
+            if not picks:
+                status.configure(text="Tick at least one question first."); return
+            run_btn.configure(state="disabled")
+
+            def worker():
+                from . import ai_edit
+                parts = []
+                for i, q in enumerate(picks, 1):
+                    self.win.after(0, lambda i=i: status.configure(
+                        text=f"Running {i}/{len(picks)}…"))
+                    ok, res = ai_edit.transform(base, q, self.cfg)
+                    head = f"=== AI — {q} ===" if ok else \
+                           f"=== AI — {q} (failed) ==="
+                    parts.append(f"{head}\n{res}\n")
+                block = "\n".join(parts) + "\n"
+                self.win.after(0, lambda: (self._mt_out.insert("1.0", block),
+                                           self._mt_out.see("1.0")))
+                self.win.after(0, lambda: status.configure(
+                    text=f"Done ✓  {len(picks)} answered"))
+                self.win.after(0, lambda: run_btn.configure(state="normal"))
+            threading.Thread(target=worker, daemon=True).start()
+
+        bar = ttk.Frame(d); bar.pack(fill="x", padx=16, pady=(6, 12))
+        run_btn = ttk.Button(bar, text="Run checked", style="Accent.TButton",
+                             command=_run)
+        run_btn.pack(side="right")
+        ttk.Button(bar, text="Close", command=d.destroy).pack(side="right", padx=8)
+        ttk.Button(bar, text="Save checked as set…",
+                   command=_save_set).pack(side="left")
 
     def _mt_preset_pick(self, v):
         from . import prompts as _pr

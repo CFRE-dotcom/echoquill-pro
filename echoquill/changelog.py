@@ -8,6 +8,27 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.16.2  (2026-07-16)
+    Meeting tab gets the same power presets as the video Ask AI: an "Ask several..." batch dialog - tick multiple preset questions, run them in a row, each answer drops into the recording box. Save a checked group as a named SET and reload it anytime.
+
+v2.16.1  (2026-07-16)
+    FIX - installers were not publishing. The CI "create release" step got a 404 (the workflow token could not create releases). Added contents:write permission + an explicit token so releases publish and the in-app updater sees new versions again.
+
+v2.16.0  (2026-07-16)
+    Ask AI power presets (video transcriber): (1) "Auto-save answers" checkbox (default on). (2) "Ask several..." batch dialog - tick multiple preset questions and run them in a row, each saved to the Q&A file. (3) Saved question SETS - save a checked group as a named set and reload it anytime.
+
+v2.15.10  (2026-07-16)
+    Ask-AI preset manager: Add and Edit now use a wide multi-line block box (was a cramped field). Applies to the video transcriber Ask AI and Meeting presets.
+
+v2.15.9  (2026-07-16)
+    Left-menu scrollbar is now a SMALL fixed ~40px blue thumb that slides as you scroll. Draggable, always visible.
+
+v2.15.8  (2026-07-16)
+    Left menu now has an ALWAYS-visible blue scrollbar (no more auto-hide). Any mode.
+
+v2.15.7  (2026-07-16)
+    All scrollbars now accent-blue (light + dark); right-click pill menu dismisses on click-away; phone-share token lengthened.
+
 v2.15.0  (2026-07-16)
     Settings cleanup + What's New. Scroll panes auto-hide when content fits (no more pointless bars on Stats/License/About); the text-box sections (Transcription, History, Help, Feedback, Dictionary) drop the outer pane so only the box's own scrollbar shows - no more double bars. Help updated with Meeting, Read aloud & phone. New 'What's New' section shows the full changelog (Pro + Free) in a scrollable box; CHANGELOG.md added.
 
