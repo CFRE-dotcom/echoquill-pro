@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.16.3  (2026-07-16)
+    Save dialogs now default to the correct folder. Transcript "Save as .txt" opens in your Transcriptions folder, pre-filled with the video's title; Export and Export-audio default to your EchoQuill folder. (Meeting and Read-aloud saves already did.) Verified every "Open folder" button opens its own feature's folder.
+
 v2.16.2  (2026-07-16)
     Meeting tab gets the same power presets as the video Ask AI: an "Ask several..." batch dialog - tick multiple preset questions, run them in a row, each answer drops into the recording box. Save a checked group as a named SET and reload it anytime.
 
