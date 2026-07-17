@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.17.0  (2026-07-16)
+    Auto-batch + Ask AI (new). Paste a block of videos, one per line as "URL | Title | folder\subfolder" (title and folder optional; blank title uses the video's own title). For each video in turn, EchoQuill downloads and SAVES the video and the audio, transcribes and saves the transcript, then runs one of your saved question SETS against that video and saves the answers as a "<name> - Q&A.txt" - all into that line's folder, created as deep as you type (each backslash = a nested level). Live progress line + Stop button; each video's answers come only from its own transcript. Opens from the new "Auto-batch + Ask AI..." button next to Batch in the video transcriber.
+
 v2.16.3  (2026-07-16)
     Save dialogs now default to the correct folder. Transcript "Save as .txt" opens in your Transcriptions folder, pre-filled with the video's title; Export and Export-audio default to your EchoQuill folder. (Meeting and Read-aloud saves already did.) Verified every "Open folder" button opens its own feature's folder.
 

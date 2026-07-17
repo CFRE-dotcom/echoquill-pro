@@ -293,6 +293,11 @@ class MediaWindow:
         helptip.tip(_b_file, "Pick an audio or video file on your computer to transcribe.")
         _b_batch = ttk.Button(row2, text="Batch: many URLs…",
                    command=self._open_batch); _b_batch.pack(side="left", padx=8)
+        _b_auto = ttk.Button(row2, text="Auto-batch + Ask AI…",
+                   command=self._open_autobatch); _b_auto.pack(side="left", padx=8)
+        helptip.tip(_b_auto, "Paste many URLs, each with an optional title and "
+                    "folder; every video is downloaded and saved, transcribed, "
+                    "then run through a saved question set - all automatic.")
         helptip.tip(_b_batch, "Transcribe a whole list of URLs, one after another.")
         self.stop_btn = ttk.Button(row2, text="Stop", command=self._stop, state="disabled")
         self.stop_btn.pack(side="left", padx=(8, 0))
@@ -349,6 +354,10 @@ class MediaWindow:
 
     def _open_batch(self):
         BatchWindow(self.win, self.transcriber, self.cfg)
+
+    def _open_autobatch(self):
+        from .auto_batch import AutoBatchWindow
+        AutoBatchWindow(self.win, self.cfg)
 
     def _go_url(self):
         url = normalize_url(self.url_var.get())
