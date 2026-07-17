@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.18.0  (2026-07-16)
+    AI providers leveled up. (1) New "OpenAI Codex (subscription)" provider - use GPT-5.5 on your ChatGPT plan with NO API key, through the local Codex CLI (install Codex and run "codex login" once; works on this PC only). (2) OpenRouter added as a first-class provider - one key, hundreds of models. (3) "Refresh" button pulls the provider's live model list straight into the dropdown, so you never type a model name. (4) "Test" button fires one tiny call and shows a check or the exact error - for any provider, Codex included.
+
 v2.17.0  (2026-07-16)
     Auto-batch + Ask AI (new). Paste a block of videos, one per line as "URL | Title | folder\subfolder" (title and folder optional; blank title uses the video's own title). For each video in turn, EchoQuill downloads and SAVES the video and the audio, transcribes and saves the transcript, then runs one of your saved question SETS against that video and saves the answers as a "<name> - Q&A.txt" - all into that line's folder, created as deep as you type (each backslash = a nested level). Live progress line + Stop button; each video's answers come only from its own transcript. Opens from the new "Auto-batch + Ask AI..." button next to Batch in the video transcriber.
 
