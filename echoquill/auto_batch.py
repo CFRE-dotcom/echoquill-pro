@@ -236,8 +236,9 @@ class AutoBatchWindow:
         self.count.configure(text=f"{n} video{'s' if n != 1 else ''}")
 
     def _clear_all(self):
-        self.box.delete("1.0", "end")
-        self.log.delete("1.0", "end")
+        self.box.delete("1.0", "end")          # the one-line-per-video list
+        self.log.delete("1.0", "end")          # the progress log
+        self.setvar.set("—")                   # question set back to none
         self.status.configure(text="")
         self._recount()
 

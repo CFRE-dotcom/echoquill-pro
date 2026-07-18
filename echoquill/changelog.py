@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.6  (2026-07-16)
+    Auto-batch "Clear all" now resets all three areas in one click: the one-line-per-video list at the top, the Question set dropdown (back to none), and the progress log at the bottom.
+
 v2.19.5  (2026-07-16)
     Auto-batch: added a "Clear all" button that wipes both the URL list and the progress log in one click, so you can line up and run another batch without closing the window or stopping anything.
 
