@@ -42,6 +42,25 @@ def _segments(raw):
     return [p.strip() for p in re.split(r"[\\/]+", raw.strip()) if p.strip()]
 
 
+def normalize_name(s):
+    """Clean a title/folder-segment so it's a safe, tidy file/folder name.
+    Never used on the URL. Colon -> ' -', parentheses dropped, other illegal
+    filename characters -> '-'. Whitespace/dashes collapsed."""
+    s = (s or "").strip()
+    s = s.replace(":", " -")
+    s = re.sub(r"[()]", "", s)
+    s = re.sub(r'[<>"/\\|?*]', "-", s)
+    s = re.sub(r"\s{2,}", " ", s)
+    s = re.sub(r"-{2,}", "-", s)
+    return s.strip(" -").strip()
+
+
+def normalize_folder(s):
+    """Normalize each level of a (possibly nested) folder path, keep backslashes."""
+    segs = [normalize_name(x) for x in _segments(s or "")]
+    return "\\".join(x for x in segs if x)
+
+
 def resolve_folder(cfg, raw):
     """Return an existing directory for this line's folder field (created)."""
     from .media_gui import transcripts_dir
@@ -51,10 +70,13 @@ def resolve_folder(cfg, raw):
     m = re.match(r"^([A-Za-z]:[\\/]|\\\\|/)", raw)
     if m:                                   # absolute path
         root = m.group(1)
-        rest = _segments(raw[len(root):])
+        rest = [normalize_name(x) for x in _segments(raw[len(root):])]
+        rest = [x for x in rest if x]
         d = root + os.sep.join(rest) if rest else root
     else:                                   # relative -> nest under Transcriptions
-        d = os.path.join(transcripts_dir(cfg), *_segments(raw))
+        rel = [normalize_name(x) for x in _segments(raw)]
+        rel = [x for x in rel if x]
+        d = os.path.join(transcripts_dir(cfg), *rel) if rel else transcripts_dir(cfg)
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -260,7 +282,8 @@ class AutoBatchWindow:
                     self._set(f"Video {i}/{total}: downloading audio…")
                     apath, atitle = fetch_audio_info(url, self._set, self.cfg)
                     tmpdir = os.path.dirname(apath)
-                    name = (ttl or real_title or atitle or "video").strip()
+                    name = normalize_name(ttl or real_title or atitle
+                                          or "video") or "video"
                     if self.save_audio.get() and apath and os.path.exists(apath):
                         try:
                             ext = os.path.splitext(apath)[1] or ".m4a"
@@ -462,9 +485,14 @@ class AutoBatchGrid:
         hs.grid(row=1, column=0, sticky="ew")
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
-        txt.bind("<KeyRelease>", lambda e: self._recount())
-        txt.bind("<<Paste>>", lambda e: self.win.after(20, self._recount))
+        txt.edit_modified(False)
+        txt.bind("<<Modified>>", lambda e, w=txt: self._on_modified(w))
         return txt
+
+    def _on_modified(self, t):
+        if t.edit_modified():
+            t.edit_modified(False)      # reset so it fires again next change
+            self._recount()
 
     def _boxes(self):
         return {"URL": self.url_txt, "Title": self.title_txt,
@@ -508,7 +536,7 @@ class AutoBatchGrid:
                 continue
             t = ts[i].strip() if i < len(ts) else ""
             f = fs[i].strip() if i < len(fs) else ""
-            out.append((u, t, f))
+            out.append((u, normalize_name(t), normalize_folder(f)))
         return out
 
     def _fill_cols(self, data):
@@ -556,6 +584,7 @@ class AutoBatchGrid:
         except Exception as e:
             self.status.configure(text=f"Save failed: {e}")
             return
+        self._fill_cols(data)           # show the cleaned/normalized values
         self._saved = True
         self._saved_path = path
         self.status.configure(

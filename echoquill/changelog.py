@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.2  (2026-07-16)
+    Column builder polish. (1) Pasted columns now count INSTANTLY - the URL/Title/Folder counts update the moment you paste, no keystroke needed (switched to the text box's own change event). (2) Auto-normalizer cleans Title and Folder names (never the URL): a colon becomes " -", parentheses are dropped, and characters that break Windows files/folders (/ \ * ? " < > |) become "-", applied to each folder level. It runs automatically on Save/Start, and the cleaned values fill back into the boxes so what you see is exactly what gets saved and used.
+
 v2.19.1  (2026-07-16)
     Rebuilt the Auto-batch column builder the way it should work: THREE tall paste boxes side by side - URLs, Titles, Folders - each with its own horizontal AND vertical scrollbar. Paste a whole column at once (10 URLs, then 10 titles, then 10 folders); line N of each box lines up as video N. Live counts under the boxes flag if a column is uneven. A small ✕ clears one column; "Clear all" wipes everything. Separate "Save" (writes the .xlsx backup) and "Start" (still gated - only after a save). Same window size as Auto-batch.
 
