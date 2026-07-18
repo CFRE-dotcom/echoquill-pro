@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.1  (2026-07-16)
+    Rebuilt the Auto-batch column builder the way it should work: THREE tall paste boxes side by side - URLs, Titles, Folders - each with its own horizontal AND vertical scrollbar. Paste a whole column at once (10 URLs, then 10 titles, then 10 folders); line N of each box lines up as video N. Live counts under the boxes flag if a column is uneven. A small ✕ clears one column; "Clear all" wipes everything. Separate "Save" (writes the .xlsx backup) and "Start" (still gated - only after a save). Same window size as Auto-batch.
+
 v2.19.0  (2026-07-16)
     Auto-batch upgrades. (1) New "Build from columns" button (top-right of Auto-batch) opens a bigger pop-up with an editable 3-column grid - URL, Title, Folder - that scrolls both ways so you can check long URLs and lots of rows. Paste three columns straight out of Excel/Sheets to fill it instantly. Save (pick a folder and type a name - no extension needed) writes a real .xlsx backup AND loads the rows into Auto-batch ready to Start; "Load .xlsx" reopens a saved list to re-run. (2) Memory: after each video and after the question loop the finished transcript/audio are dropped and garbage-collected, and the Whisper model is unloaded when the whole batch finishes - lighter RAM with no speed cost.
 
