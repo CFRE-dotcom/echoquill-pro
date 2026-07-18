@@ -163,6 +163,8 @@ class AutoBatchWindow:
         self.stop_btn = ttk.Button(bar, text="Stop", command=self._stop,
                                    state="disabled")
         self.stop_btn.pack(side="left", padx=8)
+        ttk.Button(bar, text="Clear all",
+                   command=self._clear_all).pack(side="left", padx=8)
         ttk.Button(bar, text="Close", command=self.win.destroy).pack(side="right")
 
         self.status = ttk.Label(self.win, text="", style="Dim.TLabel")
@@ -232,6 +234,12 @@ class AutoBatchWindow:
     def _recount(self):
         n = len(parse_lines(self.box.get("1.0", "end")))
         self.count.configure(text=f"{n} video{'s' if n != 1 else ''}")
+
+    def _clear_all(self):
+        self.box.delete("1.0", "end")
+        self.log.delete("1.0", "end")
+        self.status.configure(text="")
+        self._recount()
 
     def _set(self, msg):
         try:

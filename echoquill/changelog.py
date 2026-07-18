@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.5  (2026-07-16)
+    Auto-batch: added a "Clear all" button that wipes both the URL list and the progress log in one click, so you can line up and run another batch without closing the window or stopping anything.
+
 v2.19.4  (2026-07-16)
     Window behavior. (1) The column builder ("Build your list") now closes automatically when you press Start - nothing left open behind you; the list is already carried into Auto-batch. (2) "Auto-batch + Ask AI" and the column builder now open IN FRONT of the transcriber instead of behind it (brought to the front and focused on open).
 
