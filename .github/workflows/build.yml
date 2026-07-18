@@ -59,6 +59,8 @@ jobs:
           --collect-all docx
           --hidden-import pypdf
           --hidden-import qrcode
+          --collect-all openpyxl
+          --hidden-import et_xmlfile
           --hidden-import PIL.ImageTk
           --collect-all keyring
           --hidden-import keyring.backends.Windows

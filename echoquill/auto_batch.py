@@ -10,6 +10,7 @@ for a line lands in that line's folder, which is created as deep as you type
 """
 
 import os
+import gc
 import re
 import shutil
 import threading
@@ -95,6 +96,8 @@ class AutoBatchWindow:
                   style="Title.TLabel").pack(side="left")
         helptip.attach(self.win, top, "Auto-batch - help", HELP).pack(
             side="left", padx=8)
+        ttk.Button(top, text="▦ Build from columns…",
+                   command=self._open_grid).pack(side="right")
 
         ttk.Label(self.win, style="Dim.TLabel", wraplength=700, text=(
             "One line per video:   URL | Title | folder\\subfolder      "
@@ -144,8 +147,26 @@ class AutoBatchWindow:
             anchor="w", padx=18, pady=(4, 0))
         self.log = theme.dark_text(self.win, wrap="word", height=8)
         self.log.pack(fill="both", expand=True, padx=18, pady=(2, 12))
+        self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ---------- helpers ----------
+    def _open_grid(self):
+        AutoBatchGrid(self.win, self.cfg, self._apply_grid)
+
+    def _apply_grid(self, text):
+        self.box.delete("1.0", "end")
+        self.box.insert("1.0", text)
+        self._recount()
+
+    def _on_close(self):
+        self._cancel = True
+        try:
+            self._eng = None
+            gc.collect()
+        except Exception:
+            pass
+        self.win.destroy()
+
     def _refresh_sets(self):
         m = self.setmenu["menu"]
         m.delete(0, "end")
@@ -295,8 +316,12 @@ class AutoBatchWindow:
                 finally:
                     if tmpdir:
                         shutil.rmtree(tmpdir, ignore_errors=True)
+                    segs = parts = text = None   # drop this video's data
+                    gc.collect()                 # quick between-video cleanup
         finally:
             _keep_awake(False)
+            self._eng = None      # unload the Whisper model when the batch ends
+            gc.collect()
         msg = (f"Stopped — {done}/{total} finished."
                if self._cancel else
                f"Done ✓ — {done}/{total} videos processed.")
@@ -308,3 +333,208 @@ class AutoBatchWindow:
                                        self.stop_btn.configure(state="disabled")))
         except Exception:
             pass
+
+
+# ============================================================================
+# Column builder — a bigger pop-up with a 3-column editable grid that saves to
+# a real .xlsx, then loads the rows straight into the Auto-batch box.
+# ============================================================================
+
+GRID_HELP = (
+    "Fill three columns — URL, Title, Folder — one video per row.\n\n"
+    "- Title and Folder are optional; blank Title uses the video's own title.\n"
+    "- Folder nests under Transcriptions; each backslash is a deeper folder.\n"
+    "- Scroll sideways to check long URLs, down for lots of rows.\n"
+    "- Paste from clipboard: copy three columns out of Excel/Sheets and click\n"
+    "  'Paste from clipboard' to fill the grid instantly.\n\n"
+    "Save is required: pick a folder and type a file name (no extension needed —\n"
+    "it's saved as .xlsx). The list then loads into Auto-batch, ready to Start,\n"
+    "and the .xlsx stays as your reusable backup. 'Load .xlsx' reopens one."
+)
+
+
+def _to_line(u, t, f):
+    """Build a 'URL | Title | Folder' line, trimming only trailing blanks."""
+    parts = [u, t, f]
+    while len(parts) > 1 and not parts[-1]:
+        parts.pop()
+    return " | ".join(parts)
+
+
+def _grid_dir(cfg):
+    from .media_gui import transcripts_dir
+    return transcripts_dir(cfg)
+
+
+def save_xlsx(path, rows):
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "videos"
+    ws.append(["URL", "Title", "Folder"])
+    for u, t, f in rows:
+        ws.append([u, t, f])
+    wb.save(path)
+
+
+def load_xlsx(path):
+    from openpyxl import load_workbook
+    wb = load_workbook(path, read_only=True, data_only=True)
+    ws = wb.active
+    out = []
+    for i, row in enumerate(ws.iter_rows(values_only=True)):
+        vals = [("" if c is None else str(c)).strip() for c in row]
+        vals = (vals + ["", "", ""])[:3]
+        if i == 0 and vals[0].lower() in ("url", "link"):
+            continue
+        if vals[0]:
+            out.append((vals[0], vals[1], vals[2]))
+    return out
+
+
+class AutoBatchGrid:
+    """A 3-column (URL | Title | Folder) editable grid that scrolls both ways.
+    Save writes an .xlsx (folder + name required) and pushes the rows into the
+    Auto-batch box; Load reopens a saved .xlsx."""
+
+    COLS = ("URL", "Title", "Folder")
+    WIDTHS = (78, 34, 46)
+
+    def __init__(self, parent, cfg, on_apply):
+        self.cfg = cfg
+        self.on_apply = on_apply
+        self.rows = []      # list of (url_entry, title_entry, folder_entry)
+
+        self.win = tk.Toplevel(parent)
+        self.win.title("EchoQuill — Build video list (columns)")
+        self.win.geometry("1040x680")
+        theme.apply(self.win)
+
+        top = ttk.Frame(self.win)
+        top.pack(fill="x", padx=16, pady=(12, 4))
+        ttk.Label(top, text="Build your list — three columns",
+                  style="Title.TLabel").pack(side="left")
+        helptip.attach(self.win, top, "Columns - help", GRID_HELP).pack(
+            side="left", padx=8)
+
+        wrap = ttk.Frame(self.win)
+        wrap.pack(fill="both", expand=True, padx=16, pady=4)
+        self.canvas = tk.Canvas(wrap, bg=theme.PANEL, highlightthickness=0)
+        vs = ttk.Scrollbar(wrap, orient="vertical", command=self.canvas.yview)
+        hs = ttk.Scrollbar(wrap, orient="horizontal", command=self.canvas.xview)
+        self.canvas.configure(yscrollcommand=vs.set, xscrollcommand=hs.set)
+        self.inner = ttk.Frame(self.canvas)
+        self.inner.bind("<Configure>", lambda e: self.canvas.configure(
+            scrollregion=self.canvas.bbox("all")))
+        self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        vs.grid(row=0, column=1, sticky="ns")
+        hs.grid(row=1, column=0, sticky="ew")
+        wrap.rowconfigure(0, weight=1)
+        wrap.columnconfigure(0, weight=1)
+
+        for c, name in enumerate(self.COLS):
+            ttk.Label(self.inner, text=name, style="Section.TLabel").grid(
+                row=0, column=c, sticky="w", padx=4, pady=(0, 2))
+        self._add_rows(14)
+
+        bar = ttk.Frame(self.win)
+        bar.pack(fill="x", padx=16, pady=(2, 4))
+        ttk.Button(bar, text="+ Add 10 rows",
+                   command=lambda: self._add_rows(10)).pack(side="left")
+        ttk.Button(bar, text="Paste from clipboard",
+                   command=self._paste).pack(side="left", padx=6)
+        ttk.Button(bar, text="Load .xlsx…",
+                   command=self._load).pack(side="left", padx=6)
+        ttk.Button(bar, text="Save + use ▸", style="Accent.TButton",
+                   command=self._save).pack(side="right")
+        ttk.Button(bar, text="Close",
+                   command=self.win.destroy).pack(side="right", padx=8)
+        self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
+        self.status.pack(anchor="w", padx=16, pady=(0, 10))
+
+    def _add_rows(self, n):
+        start = len(self.rows) + 1     # row 0 is the header
+        for i in range(n):
+            ents = []
+            for c, w in enumerate(self.WIDTHS):
+                e = tk.Entry(self.inner, width=w, bg=theme.FIELD, fg=theme.FG,
+                             insertbackground=theme.FG, relief="solid",
+                             borderwidth=1)
+                e.grid(row=start + i, column=c, sticky="w", padx=2, pady=1)
+                ents.append(e)
+            self.rows.append(tuple(ents))
+
+    def _collect(self):
+        out = []
+        for u, t, f in self.rows:
+            url = u.get().strip()
+            if url:
+                out.append((url, t.get().strip(), f.get().strip()))
+        return out
+
+    def _fill(self, data):
+        while len(self.rows) < len(data):
+            self._add_rows(10)
+        for i, (u, t, f) in enumerate(data):
+            for e, v in zip(self.rows[i], (u, t, f)):
+                e.delete(0, "end")
+                e.insert(0, v)
+
+    def _paste(self):
+        try:
+            data = self.win.clipboard_get()
+        except Exception:
+            self.status.configure(text="Clipboard is empty."); return
+        parsed = []
+        for ln in data.splitlines():
+            if not ln.strip():
+                continue
+            cells = [c.strip() for c in ln.split("\t")]
+            if cells and cells[0].lower() in ("url", "link"):
+                continue
+            cells = cells + ["", "", ""]
+            parsed.append((cells[0], cells[1], cells[2]))
+        if not parsed:
+            self.status.configure(text="Nothing to paste."); return
+        self._fill(parsed)
+        self.status.configure(text=f"Pasted {len(parsed)} rows.")
+
+    def _load(self):
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            parent=self.win, title="Open a saved video list",
+            initialdir=_grid_dir(self.cfg),
+            filetypes=[("Excel", "*.xlsx"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            data = load_xlsx(path)
+        except Exception as e:
+            self.status.configure(text=f"Couldn't open: {e}"); return
+        self._fill(data)
+        self.status.configure(text=f"Loaded {len(data)} rows from "
+                              f"{os.path.basename(path)}.")
+
+    def _save(self):
+        from tkinter import filedialog
+        data = self._collect()
+        if not data:
+            self.status.configure(text="Add at least one URL first."); return
+        path = filedialog.asksaveasfilename(
+            parent=self.win, title="Save this list — pick a folder and name",
+            initialdir=_grid_dir(self.cfg), defaultextension=".xlsx",
+            initialfile="video-list", filetypes=[("Excel", "*.xlsx")])
+        if not path:
+            self.status.configure(
+                text="Save is required before you can run it."); return
+        if not path.lower().endswith(".xlsx"):
+            path += ".xlsx"
+        try:
+            save_xlsx(path, data)
+        except Exception as e:
+            self.status.configure(text=f"Save failed: {e}"); return
+        self.on_apply("\n".join(_to_line(u, t, f) for (u, t, f) in data))
+        self.status.configure(
+            text=f"Saved ✓ and loaded {len(data)} into Auto-batch — Start now.")
+        self.win.after(700, self.win.destroy)

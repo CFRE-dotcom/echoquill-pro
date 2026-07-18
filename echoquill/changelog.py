@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.0  (2026-07-16)
+    Auto-batch upgrades. (1) New "Build from columns" button (top-right of Auto-batch) opens a bigger pop-up with an editable 3-column grid - URL, Title, Folder - that scrolls both ways so you can check long URLs and lots of rows. Paste three columns straight out of Excel/Sheets to fill it instantly. Save (pick a folder and type a name - no extension needed) writes a real .xlsx backup AND loads the rows into Auto-batch ready to Start; "Load .xlsx" reopens a saved list to re-run. (2) Memory: after each video and after the question loop the finished transcript/audio are dropped and garbage-collected, and the Whisper model is unloaded when the whole batch finishes - lighter RAM with no speed cost.
+
 v2.18.0  (2026-07-16)
     AI providers leveled up. (1) New "OpenAI Codex (subscription)" provider - use GPT-5.5 on your ChatGPT plan with NO API key, through the local Codex CLI (install Codex and run "codex login" once; works on this PC only). (2) OpenRouter added as a first-class provider - one key, hundreds of models. (3) "Refresh" button pulls the provider's live model list straight into the dropdown, so you never type a model name. (4) "Test" button fires one tiny call and shows a check or the exact error - for any provider, Codex included.
 

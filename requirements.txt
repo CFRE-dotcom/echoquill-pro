@@ -21,3 +21,5 @@ python-docx>=1.1.0
 pypdf>=4.0
 # Listen on my phone: QR code
 qrcode>=7.4
+# Column builder: Excel export
+openpyxl>=3.1
