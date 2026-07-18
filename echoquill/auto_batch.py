@@ -120,6 +120,8 @@ class AutoBatchWindow:
             side="left", padx=8)
         ttk.Button(top, text="▦ Build from columns…",
                    command=self._open_grid).pack(side="right")
+        ttk.Button(top, text="⭱ Load .xlsx…",
+                   command=self._load_xlsx).pack(side="right", padx=(0, 6))
 
         ttk.Label(self.win, style="Dim.TLabel", wraplength=700, text=(
             "One line per video:   URL | Title | folder\\subfolder      "
@@ -175,10 +177,36 @@ class AutoBatchWindow:
     def _open_grid(self):
         AutoBatchGrid(self.win, self.cfg, self._apply_grid)
 
+    def _load_xlsx(self):
+        from tkinter import filedialog
+        from .media_gui import transcripts_dir
+        path = filedialog.askopenfilename(
+            parent=self.win, title="Open a saved video list (.xlsx)",
+            initialdir=transcripts_dir(self.cfg),
+            filetypes=[("Excel", "*.xlsx"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            data = load_xlsx(path)
+        except Exception as e:
+            self._set(f"Couldn't open: {e}")
+            return
+        self.box.delete("1.0", "end")
+        self.box.insert("1.0",
+                        "\n".join(_to_line(u, t, f) for (u, t, f) in data))
+        self._recount()
+        self._set(f"Loaded {len(data)} videos from {os.path.basename(path)}.")
+
     def _apply_grid(self, text, run=False):
         self.box.delete("1.0", "end")
         self.box.insert("1.0", text)
         self._recount()
+        try:
+            self.win.deiconify()
+            self.win.lift()
+            self.win.focus_force()
+        except Exception:
+            pass
         if run:
             self._start()
 
@@ -595,9 +623,6 @@ class AutoBatchGrid:
         data = self._rows()
         if not data:
             self.status.configure(text="Add at least one URL first.")
-            return
-        if not self._saved:
-            self.status.configure(text="Save first — it's required before Start.")
             return
         self.on_apply("\n".join(_to_line(u, t, f) for (u, t, f) in data),
                       run=True)

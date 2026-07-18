@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.3  (2026-07-16)
+    Column builder / Auto-batch fixes. (1) Start no longer requires saving first - that gate is removed (a stray auto-event was also silently un-marking the save, which is why Start seemed dead even after you saved). (2) Start now reliably carries the list over: it fills the Auto-batch box, brings that window to the front, and starts the run (pick a question set there first if you haven't). (3) Added a "Load .xlsx" button on the Auto-batch window itself, so you can upload a saved list straight into it - no need to go through the column builder.
+
 v2.19.2  (2026-07-16)
     Column builder polish. (1) Pasted columns now count INSTANTLY - the URL/Title/Folder counts update the moment you paste, no keystroke needed (switched to the text box's own change event). (2) Auto-normalizer cleans Title and Folder names (never the URL): a colon becomes " -", parentheses are dropped, and characters that break Windows files/folders (/ \ * ? " < > |) become "-", applied to each folder level. It runs automatically on Save/Start, and the cleaned values fill back into the boxes so what you see is exactly what gets saved and used.
 
