@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.19.4  (2026-07-16)
+    Window behavior. (1) The column builder ("Build your list") now closes automatically when you press Start - nothing left open behind you; the list is already carried into Auto-batch. (2) "Auto-batch + Ask AI" and the column builder now open IN FRONT of the transcriber instead of behind it (brought to the front and focused on open).
+
 v2.19.3  (2026-07-16)
     Column builder / Auto-batch fixes. (1) Start no longer requires saving first - that gate is removed (a stray auto-event was also silently un-marking the save, which is why Start seemed dead even after you saved). (2) Start now reliably carries the list over: it fills the Auto-batch box, brings that window to the front, and starts the run (pick a question set there first if you haven't). (3) Added a "Load .xlsx" button on the Auto-batch window itself, so you can upload a saved list straight into it - no need to go through the column builder.
 

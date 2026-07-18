@@ -172,6 +172,9 @@ class AutoBatchWindow:
         self.log = theme.dark_text(self.win, wrap="word", height=8)
         self.log.pack(fill="both", expand=True, padx=18, pady=(2, 12))
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.win.transient(parent)
+        self.win.lift()
+        self.win.focus_force()
 
     # ---------- helpers ----------
     def _open_grid(self):
@@ -491,6 +494,9 @@ class AutoBatchGrid:
                    command=self.win.destroy).pack(side="right", padx=(0, 8))
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16, pady=(0, 8))
+        self.win.transient(parent)
+        self.win.lift()
+        self.win.focus_force()
 
     def _column(self, parent, name):
         col = ttk.Frame(parent)
