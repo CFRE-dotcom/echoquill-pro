@@ -183,140 +183,51 @@ def delete_set(cfg, name):
         pass
 
 
-def manage_hub(parent, cfg, on_change=lambda: None):
-    """One place: (1) add/edit/delete questions in the MASTER list, and
-    (2) optionally group questions into named SETS for Auto-batch."""
+def manage_sets(parent, cfg, on_change=lambda: None):
+    """Simple, single-purpose SET builder: tick questions, name it, Save set."""
     import tkinter as tk
-    from tkinter import ttk, messagebox
+    from tkinter import ttk
     from . import theme
 
     dlg = tk.Toplevel(parent)
-    dlg.title("Ask-AI questions & sets")
-    dlg.geometry("580x700")
+    dlg.title("Question sets")
+    dlg.geometry("520x560")
     dlg.attributes("-topmost", True)
     theme.apply(dlg)
 
-    # ===================== SECTION 1: master question list =====================
-    ttk.Label(dlg, text="Your questions", style="Title.TLabel").pack(
+    ttk.Label(dlg, text="Question sets", style="Title.TLabel").pack(
         anchor="w", padx=14, pady=(12, 2))
-    ttk.Label(dlg, style="Dim.TLabel", wraplength=540, text=(
-        "This is your master list. Type a question and click Add question. "
-        "(default) ones are built in; edit or delete the ones you add.")).pack(
-        anchor="w", padx=14)
+    ttk.Label(dlg, style="Dim.TLabel", wraplength=480, text=(
+        "Tick the questions for this set, type a name, click Save set. "
+        "Load an existing set to change it. Auto-batch runs the set you pick.")
+        ).pack(anchor="w", padx=14)
 
-    lb = theme.dark_listbox(dlg, height=7)
-    lb.pack(fill="both", expand=True, padx=14, pady=6)
-
-    addrow = ttk.Frame(dlg); addrow.pack(fill="x", padx=14, pady=(0, 2))
-    ttk.Label(addrow, text="New question:").pack(side="left")
-    addbox = tk.Entry(addrow, bg=theme.FIELD, fg=theme.FG,
-                      insertbackground=theme.FG, relief="solid", borderwidth=1)
-    addbox.pack(side="left", fill="x", expand=True, padx=(6, 6), ipady=3)
-    ttk.Button(addrow, text="Add question", style="Accent.TButton",
-               command=lambda: _add()).pack(side="left")
-
-    qbtns = ttk.Frame(dlg); qbtns.pack(fill="x", padx=14, pady=(0, 8))
-    ttk.Button(qbtns, text="Edit selected", command=lambda: _edit()).pack(side="left")
-    ttk.Button(qbtns, text="Delete selected", command=lambda: _del_q()).pack(
-        side="left", padx=6)
-
-    ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=14, pady=(2, 4))
-
-    # ===================== SECTION 2: question sets (optional) =================
-    ttk.Label(dlg, text="Question sets (optional)", style="Title.TLabel").pack(
-        anchor="w", padx=14, pady=(2, 2))
-    ttk.Label(dlg, style="Dim.TLabel", wraplength=540, text=(
-        "A set is a named group of questions Auto-batch runs against each video. "
-        "Tick the ones you want, type a set name, click Save set.")).pack(
-        anchor="w", padx=14)
-
-    srow = ttk.Frame(dlg); srow.pack(fill="x", padx=14, pady=(6, 2))
-    ttk.Label(srow, text="Load set:").pack(side="left")
+    top = ttk.Frame(dlg); top.pack(fill="x", padx=14, pady=(8, 2))
+    ttk.Label(top, text="Load set:").pack(side="left")
     setvar = tk.StringVar(value="—")
-    setmenu = ttk.OptionMenu(srow, setvar, "—")
-    setmenu.configure(width=20)
+    setmenu = ttk.OptionMenu(top, setvar, "—")
+    setmenu.configure(width=18)
     setmenu.pack(side="left", padx=(6, 8))
-    ttk.Button(srow, text="Delete set", command=lambda: _del_set()).pack(side="left")
+    ttk.Button(top, text="Delete set", command=lambda: _del()).pack(side="left")
+    ttk.Button(top, text="＋ Add/edit questions…",
+               command=lambda: manage_dialog(dlg, cfg, _rebuild)).pack(side="right")
 
     sc = theme.Scrollable(dlg)
-    sc.pack(fill="both", expand=True, padx=14, pady=4)
+    sc.pack(fill="both", expand=True, padx=14, pady=6)
     vars_by_q = {}
 
-    nrow = ttk.Frame(dlg); nrow.pack(fill="x", padx=14, pady=(2, 2))
+    nrow = ttk.Frame(dlg); nrow.pack(fill="x", padx=14, pady=(4, 4))
     ttk.Label(nrow, text="Set name:").pack(side="left")
     namevar = tk.StringVar()
-    tk.Entry(nrow, bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
-             relief="solid", borderwidth=1, textvariable=namevar,
-             width=22).pack(side="left", padx=(6, 8), ipady=2)
+    tk.Entry(nrow, textvariable=namevar, width=22, bg=theme.FIELD, fg=theme.FG,
+             insertbackground=theme.FG, relief="solid", borderwidth=1).pack(
+             side="left", padx=(6, 8), ipady=2)
     ttk.Button(nrow, text="Save set", style="Accent.TButton",
-               command=lambda: _save_set()).pack(side="left")
+               command=lambda: _save()).pack(side="left")
     status = ttk.Label(dlg, style="Dim.TLabel", text="")
     status.pack(anchor="w", padx=14)
     ttk.Button(dlg, text="Done", command=dlg.destroy).pack(
         anchor="e", padx=14, pady=(4, 12))
-
-    # ------------------------------- logic -----------------------------------
-    def _reload_list():
-        lb.delete(0, "end")
-        for q in DEFAULTS:
-            lb.insert("end", "  (default)  " + q)
-        for q in (cfg.get("custom_prompts") or []):
-            lb.insert("end", "  (mine)  " + q)
-
-    def _mine():
-        sel = lb.curselection()
-        if not sel:
-            return None
-        label = lb.get(sel[0])
-        return label.split("(mine)", 1)[1].strip() if "(mine)" in label else None
-
-    def _add():
-        t = addbox.get().strip()
-        if not t:
-            status.configure(text="Type a question first."); return
-        add_prompt(cfg, t)
-        addbox.delete(0, "end")
-        _reload_list(); _rebuild_checks(); on_change()
-        status.configure(text="Question added ✓")
-
-    def _ask_block(title, initial=""):
-        d = tk.Toplevel(dlg); d.title(title); d.attributes("-topmost", True)
-        d.geometry("540x260"); theme.apply(d)
-        box = theme.dark_text(d, wrap="word", height=6)
-        box.pack(fill="both", expand=True, padx=14, pady=(12, 8))
-        box.insert("1.0", initial); box.focus_set()
-        out = {"v": None}
-        bar = ttk.Frame(d); bar.pack(fill="x", padx=14, pady=(0, 12))
-
-        def _ok():
-            out["v"] = box.get("1.0", "end").strip(); d.destroy()
-        ttk.Button(bar, text="Save", style="Accent.TButton",
-                   command=_ok).pack(side="right")
-        ttk.Button(bar, text="Cancel", command=d.destroy).pack(side="right", padx=8)
-        try:
-            d.grab_set()
-        except Exception:
-            pass
-        dlg.wait_window(d)
-        return out["v"]
-
-    def _edit():
-        q = _mine()
-        if not q:
-            messagebox.showinfo("Edit", "Select one of YOUR questions "
-                                "(defaults are locked).", parent=dlg); return
-        new = _ask_block("Edit question", q)
-        if new and new.strip():
-            remove_prompt(cfg, q); add_prompt(cfg, new.strip())
-            _reload_list(); _rebuild_checks(); on_change()
-
-    def _del_q():
-        q = _mine()
-        if not q:
-            messagebox.showinfo("Delete", "Select one of YOUR questions "
-                                "(defaults can't be deleted).", parent=dlg); return
-        remove_prompt(cfg, q)
-        _reload_list(); _rebuild_checks(); on_change()
 
     def _refresh_menu():
         m = setmenu["menu"]; m.delete(0, "end")
@@ -324,7 +235,7 @@ def manage_hub(parent, cfg, on_change=lambda: None):
         for n in set_names(cfg):
             m.add_command(label=n, command=lambda n=n: _load(n))
 
-    def _rebuild_checks():
+    def _rebuild():
         for w in sc.inner.winfo_children():
             w.destroy()
         vars_by_q.clear()
@@ -345,22 +256,21 @@ def manage_hub(parent, cfg, on_change=lambda: None):
             v.set(q in chosen)
         namevar.set(name)
 
-    def _save_set():
+    def _save():
         picks = [q for q, v in vars_by_q.items() if v.get()]
         nm = namevar.get().strip()
         if not nm:
-            status.configure(text="Name the set first."); return
+            status.configure(text="Type a set name first."); return
         if not picks:
             status.configure(text="Tick at least one question."); return
         save_set(cfg, nm, picks); _refresh_menu(); on_change()
         status.configure(text=f"Saved set '{nm}' ({len(picks)} questions) ✓")
 
-    def _del_set():
+    def _del():
         n = setvar.get()
         if n in ("—", ""):
             status.configure(text="Pick a set to delete."); return
         delete_set(cfg, n); _refresh_menu(); _load("—"); on_change()
         status.configure(text=f"Deleted set '{n}'.")
 
-    _reload_list()
-    _rebuild_checks()
+    _rebuild()

@@ -186,7 +186,7 @@ class AutoBatchWindow:
 
     def _manage_sets(self):
         from . import prompts as _pr
-        _pr.manage_hub(self.win, self.cfg, self._refresh_sets)
+        _pr.manage_sets(self.win, self.cfg, self._refresh_sets)
 
     def _load_xlsx(self):
         from tkinter import filedialog

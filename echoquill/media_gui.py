@@ -378,7 +378,7 @@ class MediaWindow:
 
     def _open_presets(self):
         from . import prompts as _pr
-        _pr.manage_hub(self.win, self.cfg)
+        _pr.manage_dialog(self.win, self.cfg)
 
     def _open_autobatch(self):
         from .auto_batch import AutoBatchWindow
