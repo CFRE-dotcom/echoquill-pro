@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.5  (2026-07-16)
+    Fixed the presets/sets windows. Buttons no longer get cut off - Add, Edit, Delete, Done (and Save set) are pinned to the bottom of the window and always visible, no matter the size. The questions list now has real vertical AND horizontal scrollbars. And you can HOVER any question - in both the questions list and the set checklist - to read the full text in a popup. Everything fits inside the window without resizing it.
+
 v2.20.4  (2026-07-16)
     Split the presets UI so nothing is crowded. The "Presets" button by the transcriber now opens JUST your questions (add / edit / delete) - the same simple screen as elsewhere. "Manage sets" in Auto-batch opens JUST the sets: tick questions, type a name, and "Save set" sits right next to the name box. A small "Add/edit questions" link is on the sets window too. Two small single-purpose windows instead of one busy combined one.
 
