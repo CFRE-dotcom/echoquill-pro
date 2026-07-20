@@ -103,6 +103,8 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
         "format": "bestaudio/best",
         "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
         "quiet": True, "no_warnings": True, "noplaylist": True,
+        "socket_timeout": 30, "retries": 2,
+        "progress_hooks": [_progress_hook(status_cb, "Downloading audio")],
     }
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
@@ -151,9 +153,22 @@ def _unique_path(p: str) -> str:
     return q
 
 
+def _progress_hook(status_cb, label="Downloading"):
+    def hook(d):
+        st = d.get("status")
+        if st == "downloading":
+            pct = (d.get("_percent_str") or "").strip()
+            spd = (d.get("_speed_str") or "").strip()
+            status_cb(f"{label}\u2026 {pct}  {spd}".rstrip())
+        elif st == "finished":
+            status_cb("Download complete \u2014 preparing\u2026")
+    return hook
+
+
 def _media_opts(url, cfg, tmpl, fmt):
     opts = {"format": fmt, "outtmpl": tmpl,
-            "quiet": True, "no_warnings": True, "noplaylist": True}
+            "quiet": True, "no_warnings": True, "noplaylist": True,
+            "socket_timeout": 30, "retries": 2}
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
@@ -182,6 +197,7 @@ def download_video(url, cfg, dest_dir, status_cb=lambda s: None, name=None) -> s
     else:
         tmpl = os.path.join(dest_dir, "%(title).120B.%(ext)s")
     opts = _media_opts(url, cfg, tmpl, "best/bv*+ba/b")
+    opts["progress_hooks"] = [_progress_hook(status_cb, "Downloading video")]
     opts["merge_output_format"] = "mp4"
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -240,6 +256,7 @@ class MediaWindow:
         self.win.minsize(560, 480)
         self.win.attributes("-topmost", True)
         theme.apply(self.win)
+        self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # bottom action bar FIRST so it can never be pushed off-screen
         bar = ttk.Frame(self.win)
@@ -405,6 +422,17 @@ class MediaWindow:
             self._own_engine = Transcriber(self.cfg.get("model", "base"))
         return self._own_engine
 
+    def _on_close(self):
+        """Free this window's model when it closes, so its RAM is returned."""
+        try:
+            if hasattr(self, "_own_engine"):
+                self._own_engine.unload()
+            import gc
+            gc.collect()
+        except Exception:
+            pass
+        self.win.destroy()
+
     def _stop(self):
         """Cancel an in-progress transcription."""
         self._cancel = True
@@ -412,6 +440,7 @@ class MediaWindow:
 
     def _run(self, source, is_url):
         self._cancel = False
+        self._errored = False
         self.win.after(0, lambda: self.stop_btn.configure(state="normal"))
         if _allowance(self.cfg) <= 0:
             self._set_status(LIMIT_MSG)
@@ -494,6 +523,7 @@ class MediaWindow:
                 self._set_status(f"Done ✓ — saved automatically: {os.path.basename(out)}"
                                  f"  ({left} free transcription{'s' if left != 1 else ''} left)")
         except Exception as e:
+            self._errored = True
             self._set_status(friendly_dl_error(e))
         finally:
             _keep_awake(False)
@@ -503,6 +533,16 @@ class MediaWindow:
             if is_url and path:
                 import shutil
                 shutil.rmtree(os.path.dirname(path), ignore_errors=True)
+            # free the model + memory if this run was cancelled or failed, so a
+            # stuck/aborted download can't leave RAM tied up and slow the app
+            if getattr(self, "_cancel", False) or getattr(self, "_errored", False):
+                try:
+                    if hasattr(self, "_own_engine"):
+                        self._own_engine.unload()
+                    import gc
+                    gc.collect()
+                except Exception:
+                    pass
 
     def _time_at(self, char_offset: int):
         for start, end, sec in getattr(self, "_seg_map", []):

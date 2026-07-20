@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.1  (2026-07-16)
+    Reliability + feedback. (1) Downloads (URL transcribe, save video/audio, Auto-batch) now show LIVE progress - percent and speed - in the status line, instead of sitting silent. (2) A 30-second network timeout means a stalled download (e.g. a Vimeo link that won't respond) now fails with a clear message instead of hanging forever with no sign of life. (3) If a transcription is cancelled or errors - or you close the transcriber window - its Whisper model is unloaded and memory is reclaimed, so an aborted or stuck job can no longer leave RAM tied up and drag the whole app down.
+
 v2.20.0  (2026-07-16)
     Reach your Ask-AI presets and question SETS without transcribing a video first. (1) New "⚙ Presets" button next to the ? in Transcribe video/audio. (2) New "⚙ Manage sets…" button in Auto-batch, next to the Question set dropdown. Both open a standalone manager where you add/edit your questions AND build, load, edit, or delete named sets (the sets Auto-batch runs) - so you can tweak your batch questions any time, between runs.
 

@@ -28,6 +28,11 @@ class Transcriber:
                 )
         return self._model
 
+    def unload(self):
+        """Drop the loaded model from RAM (reloads lazily next time)."""
+        with self._lock:
+            self._model = None
+
     def set_model(self, model_size: str):
         if model_size != self.model_size:
             with self._lock:
