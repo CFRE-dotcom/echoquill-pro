@@ -214,13 +214,20 @@ def manage_hub(parent, cfg, on_change=lambda: None):
     setmenu.configure(width=22)
     setmenu.pack(side="left", padx=(6, 8))
     ttk.Button(srow, text="Delete set", command=lambda: _del()).pack(side="left")
-    ttk.Button(srow, text="Edit questions…",
+    ttk.Button(srow, text="Add / edit questions…",
                command=lambda: manage_dialog(dlg, cfg, _rebuild)).pack(side="right")
 
     ttk.Label(dlg, style="Dim.TLabel", text="Questions in this set:").pack(
         anchor="w", padx=14, pady=(6, 0))
     sc = theme.Scrollable(dlg)
     sc.pack(fill="both", expand=True, padx=14, pady=4)
+
+    arow = ttk.Frame(dlg); arow.pack(fill="x", padx=14, pady=(2, 2))
+    ttk.Label(arow, text="Add a new question:").pack(side="left")
+    addbox = theme.dark_text(arow, wrap="word", height=2)
+    addbox.pack(side="left", fill="x", expand=True, padx=(6, 6))
+    ttk.Button(arow, text="Add", command=lambda: _add_q()).pack(side="left")
+    addbox.bind("<Control-Return>", lambda e: (_add_q(), "break")[1])
 
     nrow = ttk.Frame(dlg); nrow.pack(fill="x", padx=14, pady=(4, 2))
     ttk.Label(nrow, text="Set name:").pack(side="left")
@@ -237,6 +244,14 @@ def manage_hub(parent, cfg, on_change=lambda: None):
         m.add_command(label="—", command=lambda: _load("—"))
         for n in set_names(cfg):
             m.add_command(label=n, command=lambda n=n: _load(n))
+
+    def _add_q():
+        t = addbox.get("1.0", "end").strip()
+        if t:
+            add_prompt(cfg, t)
+            addbox.delete("1.0", "end")
+            _rebuild()
+            on_change()
 
     def _rebuild():
         for w in sc.inner.winfo_children():
