@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.3  (2026-07-16)
+    Rebuilt the presets manager to be dead simple, in two clearly separated sections. TOP - "Your questions": your master list. Type a question, click "Add question" - done. Edit or delete the ones you added. BOTTOM - "Question sets (optional)": tick questions, type a set name, click "Save set". No more mixing up "add a question to the list" with "build a set" - each has its own obvious button.
+
 v2.20.2  (2026-07-16)
     Presets: you can ADD a new question directly inside the Presets & Sets manager - a dedicated "Add a new question" box (Ctrl+Enter or the Add button), and the button is now clearly labeled "Add / edit questions…". Adding works in every presets area now, not just editing.
 
