@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.0  (2026-07-16)
+    Reach your Ask-AI presets and question SETS without transcribing a video first. (1) New "⚙ Presets" button next to the ? in Transcribe video/audio. (2) New "⚙ Manage sets…" button in Auto-batch, next to the Question set dropdown. Both open a standalone manager where you add/edit your questions AND build, load, edit, or delete named sets (the sets Auto-batch runs) - so you can tweak your batch questions any time, between runs.
+
 v2.19.6  (2026-07-16)
     Auto-batch "Clear all" now resets all three areas in one click: the one-line-per-video list at the top, the Question set dropdown (back to none), and the progress log at the bottom.
 

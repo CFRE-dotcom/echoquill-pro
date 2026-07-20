@@ -181,3 +181,105 @@ def delete_set(cfg, name):
         _c.save(cfg)
     except Exception:
         pass
+
+
+def manage_hub(parent, cfg, on_change=lambda: None):
+    """Standalone manager (no video needed): build/edit question SETS and jump
+    to the question editor. Sets are what Auto-batch and 'Ask several' run."""
+    import tkinter as tk
+    from tkinter import ttk
+    from . import theme
+
+    dlg = tk.Toplevel(parent)
+    dlg.title("Ask-AI presets & question sets")
+    dlg.geometry("560x600")
+    dlg.attributes("-topmost", True)
+    theme.apply(dlg)
+
+    ttk.Label(dlg, text="Question sets (macros)", style="Title.TLabel").pack(
+        anchor="w", padx=14, pady=(12, 2))
+    ttk.Label(dlg, style="Dim.TLabel", wraplength=520, text=(
+        "A set is a named group of questions that Auto-batch (and 'Ask several') "
+        "runs against each video. Tick the questions, name the set, and Save. "
+        "Load a set to edit it, or delete it. To add a brand-new question first, "
+        "use 'Edit questions'.")).pack(anchor="w", padx=14)
+
+    setvar = tk.StringVar(value="—")
+    namevar = tk.StringVar()
+    vars_by_q = {}
+
+    srow = ttk.Frame(dlg); srow.pack(fill="x", padx=14, pady=(8, 4))
+    ttk.Label(srow, text="Existing set:").pack(side="left")
+    setmenu = ttk.OptionMenu(srow, setvar, "—")
+    setmenu.configure(width=22)
+    setmenu.pack(side="left", padx=(6, 8))
+    ttk.Button(srow, text="Delete set", command=lambda: _del()).pack(side="left")
+    ttk.Button(srow, text="Edit questions…",
+               command=lambda: manage_dialog(dlg, cfg, _rebuild)).pack(side="right")
+
+    ttk.Label(dlg, style="Dim.TLabel", text="Questions in this set:").pack(
+        anchor="w", padx=14, pady=(6, 0))
+    sc = theme.Scrollable(dlg)
+    sc.pack(fill="both", expand=True, padx=14, pady=4)
+
+    nrow = ttk.Frame(dlg); nrow.pack(fill="x", padx=14, pady=(4, 2))
+    ttk.Label(nrow, text="Set name:").pack(side="left")
+    ttk.Entry(nrow, textvariable=namevar, width=26).pack(side="left", padx=(6, 8))
+    ttk.Button(nrow, text="Save set", style="Accent.TButton",
+               command=lambda: _save()).pack(side="left")
+    status = ttk.Label(dlg, style="Dim.TLabel", text="")
+    status.pack(anchor="w", padx=14)
+    ttk.Button(dlg, text="Done", command=dlg.destroy).pack(
+        anchor="e", padx=14, pady=(4, 12))
+
+    def _refresh_menu():
+        m = setmenu["menu"]; m.delete(0, "end")
+        m.add_command(label="—", command=lambda: _load("—"))
+        for n in set_names(cfg):
+            m.add_command(label=n, command=lambda n=n: _load(n))
+
+    def _rebuild():
+        for w in sc.inner.winfo_children():
+            w.destroy()
+        vars_by_q.clear()
+        for q in all_prompts(cfg):
+            v = tk.BooleanVar(value=False)
+            vars_by_q[q] = v
+            ttk.Checkbutton(sc.inner, text=q, variable=v).pack(anchor="w", pady=1)
+        _refresh_menu()
+
+    def _load(name):
+        setvar.set(name if name else "—")
+        if name in ("—", ""):
+            for v in vars_by_q.values():
+                v.set(False)
+            namevar.set("")
+            return
+        chosen = set(get_set(cfg, name))
+        for q, v in vars_by_q.items():
+            v.set(q in chosen)
+        namevar.set(name)
+
+    def _save():
+        picks = [q for q, v in vars_by_q.items() if v.get()]
+        nm = namevar.get().strip()
+        if not nm:
+            status.configure(text="Name the set first."); return
+        if not picks:
+            status.configure(text="Tick at least one question."); return
+        save_set(cfg, nm, picks)
+        _refresh_menu()
+        on_change()
+        status.configure(text=f"Saved set '{nm}' ({len(picks)} questions) ✓")
+
+    def _del():
+        n = setvar.get()
+        if n in ("—", ""):
+            status.configure(text="Pick a set to delete."); return
+        delete_set(cfg, n)
+        _refresh_menu()
+        _load("—")
+        on_change()
+        status.configure(text=f"Deleted set '{n}'.")
+
+    _rebuild()

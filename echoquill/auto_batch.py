@@ -143,8 +143,10 @@ class AutoBatchWindow:
         self.setvar = tk.StringVar(value="—")
         self.setmenu = ttk.OptionMenu(opt, self.setvar, "—")
         self.setmenu.configure(width=24)
-        self.setmenu.pack(side="left", padx=(6, 12))
+        self.setmenu.pack(side="left", padx=(6, 8))
         self._refresh_sets()
+        ttk.Button(opt, text="⚙ Manage sets…",
+                   command=self._manage_sets).pack(side="left", padx=(0, 12))
         helptip.tip(self.setmenu, "The saved set of questions to ask every "
                     "video. Create sets in Ask AI → 'Ask several' → 'Save "
                     "checked as set'.")
@@ -181,6 +183,10 @@ class AutoBatchWindow:
     # ---------- helpers ----------
     def _open_grid(self):
         AutoBatchGrid(self.win, self.cfg, self._apply_grid)
+
+    def _manage_sets(self):
+        from . import prompts as _pr
+        _pr.manage_hub(self.win, self.cfg, self._refresh_sets)
 
     def _load_xlsx(self):
         from tkinter import filedialog

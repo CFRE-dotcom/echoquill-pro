@@ -268,6 +268,10 @@ class MediaWindow:
         ttk.Label(_title_row, text="Transcribe video / audio",
                   style="Title.TLabel").pack(side="left")
         helptip.attach(self.win, _title_row, "Transcriber - help", MEDIA_HELP).pack(side="left", padx=8)
+        _b_presets = ttk.Button(_title_row, text="⚙ Presets",
+                   command=self._open_presets); _b_presets.pack(side="left", padx=8)
+        helptip.tip(_b_presets, "Add/edit your Ask-AI questions and build question "
+                    "SETS - no video needed. Sets are what Auto-batch runs.")
         ttk.Label(self.win, style="Dim.TLabel", wraplength=580, text=(
             "Paste a video URL (YouTube and most sites), or pick a file from "
             "your computer. Runs on your PC with the same free engine — "
@@ -354,6 +358,10 @@ class MediaWindow:
 
     def _open_batch(self):
         BatchWindow(self.win, self.transcriber, self.cfg)
+
+    def _open_presets(self):
+        from . import prompts as _pr
+        _pr.manage_hub(self.win, self.cfg)
 
     def _open_autobatch(self):
         from .auto_batch import AutoBatchWindow
