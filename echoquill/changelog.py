@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.6  (2026-07-16)
+    FIX Vimeo downloads failing with "401 Unauthorized". A newer yt-dlp changed its default Vimeo client to "macos", which needs an OAuth token that unlisted videos reject. EchoQuill now forces the "web" client (viewer JWT) plus a vimeo.com Referer for any vimeo.com link, in both the audio and the video download paths - so unlisted Vimeo links (vimeo.com/ID/HASH) download again.
+
 v2.20.5  (2026-07-16)
     Fixed the presets/sets windows. Buttons no longer get cut off - Add, Edit, Delete, Done (and Save set) are pinned to the bottom of the window and always visible, no matter the size. The questions list now has real vertical AND horizontal scrollbars. And you can HOVER any question - in both the questions list and the set checklist - to read the full text in a popup. Everything fits inside the window without resizing it.
 

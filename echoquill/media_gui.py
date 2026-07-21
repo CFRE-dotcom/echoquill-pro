@@ -110,6 +110,9 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
+    if "vimeo.com" in low:
+        opts["extractor_args"] = {"vimeo": {"client": ["web"]}}
+        opts.setdefault("http_headers", {})["Referer"] = "https://vimeo.com/"
     # Optional: pull videos that require you to be logged in, using the cookies
     # from your browser (Settings > Transcription > "Sign in via browser").
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
@@ -173,6 +176,11 @@ def _media_opts(url, cfg, tmpl, fmt):
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
+    if "vimeo.com" in low:
+        # yt-dlp's default 'macos' Vimeo client 401s on unlisted videos; the
+        # 'web' client (viewer JWT) handles them.
+        opts["extractor_args"] = {"vimeo": {"client": ["web"]}}
+        opts.setdefault("http_headers", {})["Referer"] = "https://vimeo.com/"
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
