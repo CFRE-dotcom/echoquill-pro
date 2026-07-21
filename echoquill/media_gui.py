@@ -111,7 +111,6 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
     if "vimeo.com" in low:
-        opts["extractor_args"] = {"vimeo": {"client": ["web"]}}
         opts.setdefault("http_headers", {})["Referer"] = "https://vimeo.com/"
     # Optional: pull videos that require you to be logged in, using the cookies
     # from your browser (Settings > Transcription > "Sign in via browser").
@@ -124,8 +123,7 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+    info = _extract_with_fallback(opts, url)
     title = (info or {}).get("title") or "transcript"
     for name in os.listdir(tmpdir):
         return os.path.join(tmpdir, name), title
@@ -168,6 +166,28 @@ def _progress_hook(status_cb, label="Downloading"):
     return hook
 
 
+def _extract_with_fallback(opts, url):
+    """Download via yt-dlp. For Vimeo, the right player client varies per video
+    (default 'macos' 401s on unlisted; 'web' needs a login; the mobile clients
+    usually work for unlisted links without one) - so try each until one works.
+    Non-Vimeo URLs get a single normal attempt."""
+    import yt_dlp
+    low = (url or "").lower()
+    if "vimeo.com" not in low:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            return ydl.extract_info(url, download=True)
+    last = None
+    for client in ("android", "ios", "web", "macos"):
+        o = dict(opts)
+        o["extractor_args"] = {"vimeo": {"client": [client]}}
+        try:
+            with yt_dlp.YoutubeDL(o) as ydl:
+                return ydl.extract_info(url, download=True)
+        except Exception as e:
+            last = e
+    raise last
+
+
 def _media_opts(url, cfg, tmpl, fmt):
     opts = {"format": fmt, "outtmpl": tmpl,
             "quiet": True, "no_warnings": True, "noplaylist": True,
@@ -177,9 +197,6 @@ def _media_opts(url, cfg, tmpl, fmt):
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
     if "vimeo.com" in low:
-        # yt-dlp's default 'macos' Vimeo client 401s on unlisted videos; the
-        # 'web' client (viewer JWT) handles them.
-        opts["extractor_args"] = {"vimeo": {"client": ["web"]}}
         opts.setdefault("http_headers", {})["Referer"] = "https://vimeo.com/"
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
@@ -207,8 +224,7 @@ def download_video(url, cfg, dest_dir, status_cb=lambda s: None, name=None) -> s
     opts = _media_opts(url, cfg, tmpl, "best/bv*+ba/b")
     opts["progress_hooks"] = [_progress_hook(status_cb, "Downloading video")]
     opts["merge_output_format"] = "mp4"
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+    info = _extract_with_fallback(opts, url)
     return (info or {}).get("title") or "video"
 
 

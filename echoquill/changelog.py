@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.7  (2026-07-16)
+    Vimeo: don't force a single player client. EchoQuill now TRIES each client in turn - android, ios, web, macos - and uses the first that works. The mobile clients handle unlisted links without a login (how it downloaded before), so this restores the working behavior and fixes both the "macos 401" and the "web client needs login" errors from the last two builds.
+
 v2.20.6  (2026-07-16)
     FIX Vimeo downloads failing with "401 Unauthorized". A newer yt-dlp changed its default Vimeo client to "macos", which needs an OAuth token that unlisted videos reject. EchoQuill now forces the "web" client (viewer JWT) plus a vimeo.com Referer for any vimeo.com link, in both the audio and the video download paths - so unlisted Vimeo links (vimeo.com/ID/HASH) download again.
 
