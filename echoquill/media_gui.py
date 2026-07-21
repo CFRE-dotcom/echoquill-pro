@@ -103,15 +103,11 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
         "format": "bestaudio/best",
         "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
         "quiet": True, "no_warnings": True, "noplaylist": True,
-        "socket_timeout": 30, "retries": 2,
-        "progress_hooks": [_progress_hook(status_cb, "Downloading audio")],
     }
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
-    if "vimeo.com" in low:
-        opts.setdefault("http_headers", {})["Referer"] = "https://vimeo.com/"
     # Optional: pull videos that require you to be logged in, using the cookies
     # from your browser (Settings > Transcription > "Sign in via browser").
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
@@ -123,7 +119,8 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
-    info = _extract_with_fallback(opts, url)
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=True)
     title = (info or {}).get("title") or "transcript"
     for name in os.listdir(tmpdir):
         return os.path.join(tmpdir, name), title
@@ -154,50 +151,13 @@ def _unique_path(p: str) -> str:
     return q
 
 
-def _progress_hook(status_cb, label="Downloading"):
-    def hook(d):
-        st = d.get("status")
-        if st == "downloading":
-            pct = (d.get("_percent_str") or "").strip()
-            spd = (d.get("_speed_str") or "").strip()
-            status_cb(f"{label}\u2026 {pct}  {spd}".rstrip())
-        elif st == "finished":
-            status_cb("Download complete \u2014 preparing\u2026")
-    return hook
-
-
-def _extract_with_fallback(opts, url):
-    """Download via yt-dlp. For Vimeo, the right player client varies per video
-    (default 'macos' 401s on unlisted; 'web' needs a login; the mobile clients
-    usually work for unlisted links without one) - so try each until one works.
-    Non-Vimeo URLs get a single normal attempt."""
-    import yt_dlp
-    low = (url or "").lower()
-    if "vimeo.com" not in low:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            return ydl.extract_info(url, download=True)
-    last = None
-    for client in ("android", "ios", "web", "macos"):
-        o = dict(opts)
-        o["extractor_args"] = {"vimeo": {"client": [client]}}
-        try:
-            with yt_dlp.YoutubeDL(o) as ydl:
-                return ydl.extract_info(url, download=True)
-        except Exception as e:
-            last = e
-    raise last
-
-
 def _media_opts(url, cfg, tmpl, fmt):
     opts = {"format": fmt, "outtmpl": tmpl,
-            "quiet": True, "no_warnings": True, "noplaylist": True,
-            "socket_timeout": 30, "retries": 2}
+            "quiet": True, "no_warnings": True, "noplaylist": True}
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
-    if "vimeo.com" in low:
-        opts.setdefault("http_headers", {})["Referer"] = "https://vimeo.com/"
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
@@ -222,9 +182,9 @@ def download_video(url, cfg, dest_dir, status_cb=lambda s: None, name=None) -> s
     else:
         tmpl = os.path.join(dest_dir, "%(title).120B.%(ext)s")
     opts = _media_opts(url, cfg, tmpl, "best/bv*+ba/b")
-    opts["progress_hooks"] = [_progress_hook(status_cb, "Downloading video")]
     opts["merge_output_format"] = "mp4"
-    info = _extract_with_fallback(opts, url)
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=True)
     return (info or {}).get("title") or "video"
 
 
