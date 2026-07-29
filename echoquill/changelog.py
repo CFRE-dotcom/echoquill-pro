@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.21.0  (2026-07-16)
+    (1) Scrape a whole YouTube channel into your list. In "Build from columns" there's a new Channel row: paste a channel URL or @handle, pick Videos / Shorts / Lives and how many (5 / 10 / 15 / All / Other), hit Fetch, and it fills the URL and Title columns straight from the channel (metadata only - no downloads). Then Start as usual. (2) Throttling for long runs: in Auto-batch set "Pause every N videos for S seconds" (default 5 / 60; set 0 to disable). During each pause the Whisper model is unloaded and memory is released, so a big batch stays lean instead of bloating - not fast, but steady and clean.
+
 v2.20.9  (2026-07-16)
     (1) Auto-batch: new "Open folder" button that opens your Transcriptions folder. (2) New "Video Description" checkbox (OFF by default) in both Auto-batch and the single transcriber's keep-files row: when on, it saves each video's description as "<name> - Description.txt" (or "No video description" if the video has none). The Save video / Save audio / Video Description checkboxes now sit on their own row so nothing is crowded.
 

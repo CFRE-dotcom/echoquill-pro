@@ -100,6 +100,67 @@ def parse_lines(text):
     return rows
 
 
+def _channel_tab_url(channel, tab):
+    c = (channel or "").strip().rstrip("/")
+    low = c.lower()
+    for suff in ("/videos", "/shorts", "/streams", "/live", "/featured"):
+        if low.endswith(suff):
+            c = c[:-len(suff)]; break
+    low = c.lower()
+    if c.startswith("http://") or c.startswith("https://"):
+        pass
+    elif c.startswith("@"):
+        c = "https://www.youtube.com/" + c
+    elif low.startswith("youtube.com") or low.startswith("www.youtube.com"):
+        c = "https://" + c
+    else:
+        c = "https://www.youtube.com/@" + c
+    return c + "/" + tab
+
+
+def fetch_channel(channel, kind, limit, cfg):
+    """List a YouTube channel's Videos/Shorts/Lives (metadata only, no
+    download). Returns [(url, title), ...]."""
+    import yt_dlp
+    tab = {"Videos": "videos", "Shorts": "shorts",
+           "Lives": "streams"}.get(kind, "videos")
+    target = _channel_tab_url(channel, tab)
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+            "skip_download": True}
+    if limit:
+        opts["playlistend"] = int(limit)
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(target, download=False)
+    flat = []
+    for e in (info.get("entries") or []):
+        if e and e.get("entries"):
+            flat.extend(e["entries"])
+        elif e:
+            flat.append(e)
+    out = []
+    for e in flat:
+        if not e:
+            continue
+        u = e.get("url") or e.get("webpage_url")
+        if not u and e.get("id"):
+            u = "https://www.youtube.com/watch?v=" + e["id"]
+        t = (e.get("title") or "").strip()
+        if u:
+            out.append((u, t))
+    if limit:
+        out = out[:int(limit)]
+    return out
+
+
 class AutoBatchWindow:
     def __init__(self, parent, cfg):
         self.cfg = cfg
@@ -165,6 +226,21 @@ class AutoBatchWindow:
         helptip.tip(_cbd, "Also save each video's description as "
                     "'<name> - Description.txt' (off by default). Says "
                     "'No video description' if there is none.")
+
+        thr = ttk.Frame(self.win)
+        thr.pack(fill="x", padx=18, pady=(0, 2))
+        ttk.Label(thr, text="Pause every").pack(side="left")
+        self.thr_n = tk.StringVar(value="5")
+        tk.Entry(thr, textvariable=self.thr_n, width=4, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=4)
+        ttk.Label(thr, text="videos for").pack(side="left")
+        self.thr_s = tk.StringVar(value="60")
+        tk.Entry(thr, textvariable=self.thr_s, width=5, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=4)
+        ttk.Label(thr, text="seconds   (0 = no pause; memory is released "
+                  "during each pause)", style="Dim.TLabel").pack(side="left")
 
         bar = ttk.Frame(self.win)
         bar.pack(fill="x", padx=18, pady=(4, 2))
@@ -310,6 +386,23 @@ class AutoBatchWindow:
         threading.Thread(target=self._worker, args=(rows, questions),
                          daemon=True).start()
 
+    def _throttle_pause(self, done_count):
+        import time
+        try:
+            n = int((self.thr_n.get() or "0").strip() or 0)
+            sec = int((self.thr_s.get() or "0").strip() or 0)
+        except Exception:
+            return
+        if n <= 0 or sec <= 0 or (done_count % n) != 0:
+            return
+        self._eng = None          # release the Whisper model during the wait
+        gc.collect()
+        for rem in range(sec, 0, -1):
+            if self._cancel:
+                break
+            self._set(f"Cooling down {rem}s\u2026 (memory released)")
+            time.sleep(1)
+
     def _worker(self, rows, questions):
         from .media_gui import (download_video, fetch_audio_info, safe_filename,
                                 _safe_stem, _unique_path, _keep_awake,
@@ -363,6 +456,8 @@ class AutoBatchWindow:
                     if self._cancel:
                         break
                     self._set(f"Video {i}/{total}: transcribing…")
+                    if self._eng is None:
+                        self._eng = Transcriber(self.cfg.get("model", "base"))
                     model = self._eng.load()
                     lang = self.cfg.get("language", "auto")
                     lang = None if lang in ("", "auto") else lang
@@ -418,6 +513,8 @@ class AutoBatchWindow:
                         shutil.rmtree(tmpdir, ignore_errors=True)
                     segs = parts = text = None   # drop this video's data
                     gc.collect()                 # quick between-video cleanup
+                if not self._cancel and i < total:
+                    self._throttle_pause(i)      # release memory + pause
         finally:
             _keep_awake(False)
             self._eng = None      # unload the Whisper model when the batch ends
@@ -518,6 +615,25 @@ class AutoBatchGrid:
         ttk.Button(top, text="Clear all",
                    command=self._clear_all).pack(side="right")
 
+        chrow = ttk.Frame(self.win)
+        chrow.pack(fill="x", padx=16, pady=(2, 2))
+        ttk.Label(chrow, text="YouTube channel:").pack(side="left")
+        self.chan_var = tk.StringVar()
+        tk.Entry(chrow, textvariable=self.chan_var, width=28, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=(6, 6))
+        self.kind_var = tk.StringVar(value="Videos")
+        ttk.OptionMenu(chrow, self.kind_var, "Videos", "Videos", "Shorts",
+                       "Lives").pack(side="left")
+        self.count_var = tk.StringVar(value="10")
+        ttk.OptionMenu(chrow, self.count_var, "10", "5", "10", "15", "All",
+                       "Other\u2026", command=self._count_pick).pack(
+                       side="left", padx=(6, 0))
+        ttk.Button(chrow, text="Fetch", style="Accent.TButton",
+                   command=self._fetch_channel).pack(side="left", padx=(6, 0))
+        self.chan_status = ttk.Label(chrow, style="Dim.TLabel", text="")
+        self.chan_status.pack(side="left", padx=(8, 0))
+
         cols = ttk.Frame(self.win)
         cols.pack(fill="both", expand=True, padx=12, pady=(4, 2))
         self.url_txt = self._column(cols, "URL")
@@ -541,6 +657,49 @@ class AutoBatchGrid:
         self.win.transient(parent)
         self.win.lift()
         self.win.focus_force()
+
+    def _count_pick(self, v):
+        if v == "Other\u2026":
+            from tkinter import simpledialog
+            n = simpledialog.askstring("How many",
+                                       "How many videos?", parent=self.win)
+            self.count_var.set(n.strip() if (n and n.strip().isdigit())
+                               else "10")
+
+    def _fetch_channel(self):
+        import threading
+        ch = self.chan_var.get().strip()
+        if not ch:
+            self.chan_status.configure(
+                text="Paste a channel URL or @handle first."); return
+        kind = self.kind_var.get()
+        cv = self.count_var.get().strip().lower()
+        limit = None if cv == "all" else (int(cv) if cv.isdigit() else 10)
+        self.chan_status.configure(text=f"Fetching {kind}\u2026")
+
+        def run():
+            try:
+                items = fetch_channel(ch, kind, limit, self.cfg)
+            except Exception as e:
+                self.win.after(0, lambda e=e: self.chan_status.configure(
+                    text=f"Fetch failed: {str(e)[:70]}"))
+                return
+
+            def fill():
+                if not items:
+                    self.chan_status.configure(text="No videos found."); return
+                us = "\n".join(i[0] for i in items)
+                ts = "\n".join(i[1] for i in items)
+                if self.url_txt.get("1.0", "end").strip():
+                    self.url_txt.insert("end", "\n" + us)
+                    self.title_txt.insert("end", "\n" + ts)
+                else:
+                    self.url_txt.insert("1.0", us)
+                    self.title_txt.insert("1.0", ts)
+                self._recount()
+                self.chan_status.configure(text=f"Added {len(items)} {kind}.")
+            self.win.after(0, fill)
+        threading.Thread(target=run, daemon=True).start()
 
     def _column(self, parent, name):
         col = ttk.Frame(parent)
