@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.22.1  (2026-07-16)
+    FIX "Save video" failing on YouTube with "Requested format is not available". The video download now uses a robust mp4-first format chain (mp4 video + m4a audio -> best mp4 -> best video+audio merged -> best) and points yt-dlp at the bundled ffmpeg so it can actually merge the streams. Audio and transcription were never affected; this fixes saving the full video file.
+
 v2.22.0  (2026-07-16)
     (1) Column builder: new "Folder -> all rows" button - type one folder in the Folder column's first row, click it, and it is copied to every URL row (no typing it 50 times). (2) All auto-saved files are now date-stamped at the front, YYYY-MM-DD- (transcript, Q&A, kept video, kept audio), so they sort by day. (3) The video description now goes INSIDE the transcript file (when "Video Description" is on) instead of a second file - one file per video, with a clear divider: "===== VIDEO DESCRIPTION =====" then "===== TRANSCRIPTION =====". Applies to Auto-batch and the single transcriber.
 

@@ -215,8 +215,18 @@ def download_video(url, cfg, dest_dir, status_cb=lambda s: None, name=None) -> s
         tmpl = os.path.join(dest_dir, _safe_stem(name) + ".%(ext)s")
     else:
         tmpl = os.path.join(dest_dir, "%(title).120B.%(ext)s")
-    opts = _media_opts(url, cfg, tmpl, "best/bv*+ba/b")
+    opts = _media_opts(
+        url, cfg, tmpl,
+        "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b/best")
     opts["merge_output_format"] = "mp4"
+    # make sure yt-dlp can find ffmpeg (bundled) so it can merge video+audio;
+    # without this, videos that have no single progressive file fail with
+    # "Requested format is not available".
+    try:
+        import imageio_ffmpeg
+        opts["ffmpeg_location"] = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
     return (info or {}).get("title") or "video"
