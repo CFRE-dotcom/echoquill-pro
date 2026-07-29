@@ -100,6 +100,12 @@ def parse_lines(text):
     return rows
 
 
+def _dated(name):
+    """Prefix a file name with today's date, YYYY-MM-DD-, so files sort by day."""
+    import datetime
+    return datetime.date.today().strftime("%Y-%m-%d") + "-" + (name or "video")
+
+
 def _channel_tab_url(channel, tab):
     c = (channel or "").strip().rstrip("/")
     low = c.lower()
@@ -424,35 +430,35 @@ class AutoBatchWindow:
                     self._log(f"[{i}/{total}] {url}")
                     self._log(f"    folder: {dest}")
 
-                    # 1) full video file
-                    real_title = ttl
+                    # 1) audio (also used to transcribe) + dated file name
+                    self._set(f"Video {i}/{total}: downloading audio…")
+                    apath, atitle = fetch_audio_info(url, self._set, self.cfg)
+                    tmpdir = os.path.dirname(apath)
+                    name = normalize_name(ttl or atitle or "video") or "video"
+                    dname = _dated(name)
+
+                    # 2) full video file (dated)
                     if self.save_video.get():
                         self._set(f"Video {i}/{total}: downloading video…")
                         try:
-                            rt = download_video(url, self.cfg, dest, self._set,
-                                                name=(ttl or None))
-                            real_title = ttl or rt
+                            download_video(url, self.cfg, dest, self._set,
+                                           name=dname)
                             self._log("    video saved ✓")
                         except Exception as e:
                             self._log(f"    video save failed: {e}")
 
-                    # 2) audio (also used to transcribe)
-                    self._set(f"Video {i}/{total}: downloading audio…")
-                    apath, atitle = fetch_audio_info(url, self._set, self.cfg)
-                    tmpdir = os.path.dirname(apath)
-                    name = normalize_name(ttl or real_title or atitle
-                                          or "video") or "video"
+                    # 3) audio file (dated)
                     if self.save_audio.get() and apath and os.path.exists(apath):
                         try:
                             ext = os.path.splitext(apath)[1] or ".m4a"
                             adst = _unique_path(os.path.join(
-                                dest, _safe_stem(name) + ext))
+                                dest, _safe_stem(dname) + ext))
                             shutil.copy2(apath, adst)
                             self._log(f"    audio saved: {os.path.basename(adst)} ✓")
                         except Exception as e:
                             self._log(f"    audio save failed: {e}")
 
-                    # 3) transcribe + save transcript
+                    # 4) transcribe + save transcript (description merged in)
                     if self._cancel:
                         break
                     self._set(f"Video {i}/{total}: transcribing…")
@@ -472,22 +478,19 @@ class AutoBatchWindow:
                             segs.append((seg.start, t))
                             parts.append(t)
                     text = " ".join(parts).strip()
-                    tpath = _unique_path(os.path.join(dest, safe_filename(name)))
-                    with open(tpath, "w", encoding="utf-8") as f:
-                        f.write(f"{name}\n{url}\n\n{text}")
-                    self._log(f"    transcript saved: {os.path.basename(tpath)} ✓")
+                    body = text
                     if self.save_desc.get():
-                        try:
-                            desc = _video_description(url, self.cfg)
-                            dpath = _unique_path(os.path.join(
-                                dest, safe_filename(name + " - Description")))
-                            with open(dpath, "w", encoding="utf-8") as fd:
-                                fd.write(f"{name}\n{url}\n\n{desc}")
-                            self._log("    description saved ✓")
-                        except Exception as e:
-                            self._log(f"    description failed: {e}")
+                        desc = _video_description(url, self.cfg)
+                        body = ("========== VIDEO DESCRIPTION ==========\n"
+                                + desc +
+                                "\n\n========== TRANSCRIPTION ==========\n"
+                                + text)
+                    tpath = _unique_path(os.path.join(dest, safe_filename(dname)))
+                    with open(tpath, "w", encoding="utf-8") as f:
+                        f.write(f"{name}\n{url}\n\n{body}")
+                    self._log(f"    transcript saved: {os.path.basename(tpath)} ✓")
 
-                    # 4) run the question set, grounded in THIS transcript
+                    # 5) run the question set, grounded in THIS transcript
                     if self._cancel:
                         break
                     qa = []
@@ -500,7 +503,7 @@ class AutoBatchWindow:
                         qa.append(f"{'*' * 50}\n{'*' * 50}\nQ: {q}\n\nA: {ans}\n")
                     if qa:
                         qpath = _unique_path(os.path.join(
-                            dest, safe_filename(name + " - Q&A")))
+                            dest, safe_filename(dname + " - Q&A")))
                         with open(qpath, "w", encoding="utf-8") as f:
                             f.write(f"{name}\n{url}\n\n" + "\n".join(qa))
                         self._log(f"    Q&A saved: {os.path.basename(qpath)} ✓")
@@ -647,6 +650,8 @@ class AutoBatchGrid:
         bar = ttk.Frame(self.win)
         bar.pack(fill="x", padx=16, pady=(2, 8))
         ttk.Button(bar, text="Load .xlsx…", command=self._load).pack(side="left")
+        ttk.Button(bar, text="Folder \u2192 all rows",
+                   command=self._apply_folder).pack(side="left", padx=8)
         ttk.Button(bar, text="Start ▸", style="Accent.TButton",
                    command=self._start_run).pack(side="right")
         ttk.Button(bar, text="Save", command=self._save).pack(side="right", padx=8)
@@ -657,6 +662,26 @@ class AutoBatchGrid:
         self.win.transient(parent)
         self.win.lift()
         self.win.focus_force()
+
+    def _apply_folder(self):
+        """Take the first non-empty folder and put it on every URL row."""
+        folder = ""
+        for ln in self.folder_txt.get("1.0", "end").splitlines():
+            if ln.strip():
+                folder = ln.strip(); break
+        urls = [u for u in self.url_txt.get("1.0", "end").splitlines()
+                if u.strip()]
+        if not urls:
+            self.status.configure(text="Add URLs first."); return
+        if not folder:
+            self.status.configure(
+                text="Put a folder in the Folder column's first row first.")
+            return
+        self.folder_txt.delete("1.0", "end")
+        self.folder_txt.insert("1.0", "\n".join([folder] * len(urls)))
+        self._recount()
+        self.status.configure(
+            text=f"Applied '{folder}' to all {len(urls)} rows.")
 
     def _count_pick(self, v):
         if v == "Other\u2026":

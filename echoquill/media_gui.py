@@ -131,6 +131,12 @@ def fetch_audio(url: str, status_cb) -> str:
     return fetch_audio_info(url, status_cb)[0]
 
 
+def _dated(name):
+    """Prefix a file name with today's date (YYYY-MM-DD-) so files sort by day."""
+    import datetime
+    return datetime.date.today().strftime("%Y-%m-%d") + "-" + (name or "video")
+
+
 def _video_description(url, cfg):
     """Fetch just the video's description (no download). Returns the text, or
     'No video description' if there is none or it can't be fetched."""
@@ -488,7 +494,7 @@ class MediaWindow:
                     try:
                         self._set_status("Downloading video…")
                         download_video(source, self.cfg, keep_folder,
-                                       self._set_status, name=title)
+                                       self._set_status, name=_dated(title))
                         self._append("[Saved the video file ✓]\n\n")
                     except Exception as _ve:
                         self._append(f"[Could not save video: {_ve}]\n\n")
@@ -496,7 +502,7 @@ class MediaWindow:
                     try:
                         ext = os.path.splitext(path)[1] or ".m4a"
                         adst = _unique_path(os.path.join(
-                            keep_folder, _safe_stem(title) + ext))
+                            keep_folder, _safe_stem(_dated(title)) + ext))
                         import shutil as _sh
                         _sh.copy2(path, adst)
                         self._append(f"[Saved the audio file: "
@@ -527,22 +533,21 @@ class MediaWindow:
                     self._append(t + " ")
             # auto-save, named after the (cleaned) video title
             folder = transcripts_dir(self.cfg)
-            out = os.path.join(folder, safe_filename(title))
+            out = os.path.join(folder, safe_filename(_dated(title)))
             base, n = out, 2
             while os.path.exists(out):
                 out = base[:-4] + f" ({n}).txt"; n += 1
-            with open(out, "w", encoding="utf-8") as f:
-                f.write(header + " ".join(parts).strip())
+            body = " ".join(parts).strip()
             if is_url and getattr(self, "keep_desc_var", None) \
                     and self.keep_desc_var.get():
                 try:
                     desc = _video_description(source, self.cfg)
-                    dpath = os.path.join(folder,
-                                         safe_filename(title + " - Description"))
-                    with open(dpath, "w", encoding="utf-8") as fdesc:
-                        fdesc.write(f"{title}\n{source}\n\n{desc}")
+                    body = ("========== VIDEO DESCRIPTION ==========\n" + desc
+                            + "\n\n========== TRANSCRIPTION ==========\n" + body)
                 except Exception:
                     pass
+            with open(out, "w", encoding="utf-8") as f:
+                f.write(header + body)
             _use_one(self.cfg)
             from . import license as _lic
             if _lic.is_pro(self.cfg):
