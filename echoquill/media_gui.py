@@ -131,6 +131,34 @@ def fetch_audio(url: str, status_cb) -> str:
     return fetch_audio_info(url, status_cb)[0]
 
 
+def _video_description(url, cfg):
+    """Fetch just the video's description (no download). Returns the text, or
+    'No video description' if there is none or it can't be fetched."""
+    import yt_dlp
+    opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
+            "skip_download": True}
+    low = (url or "").lower()
+    if "skool.com" in low or ".m3u8" in low:
+        opts["http_headers"] = {"Referer": "https://www.skool.com/",
+                                "Origin": "https://www.skool.com"}
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        desc = ((info or {}).get("description") or "").strip()
+        return desc or "No video description"
+    except Exception:
+        return "No video description"
+
+
 def safe_filename(title: str) -> str:
     import re
     name = re.sub(r'[\\/:*?"<>|]+', "", title).strip()
@@ -324,12 +352,19 @@ class MediaWindow:
         keeprow.pack(fill="x", padx=18, pady=(4, 0))
         self.keep_audio_var = tk.BooleanVar(value=False)
         self.keep_video_var = tk.BooleanVar(value=False)
+        self.keep_desc_var = tk.BooleanVar(value=False)
         _ka = ttk.Checkbutton(keeprow, text="Keep audio file",
                               variable=self.keep_audio_var)
         _ka.pack(side="left")
         _kv = ttk.Checkbutton(keeprow, text="Keep video file",
                               variable=self.keep_video_var)
         _kv.pack(side="left", padx=(16, 0))
+        _kd = ttk.Checkbutton(keeprow, text="Video Description",
+                              variable=self.keep_desc_var)
+        _kd.pack(side="left", padx=(16, 0))
+        helptip.tip(_kd, "Also save the video's description as "
+                    "'<name> - Description.txt' (off by default). Says "
+                    "'No video description' if it has none.")
         helptip.tip(_ka, "Also save the downloaded audio next to the transcript "
                          "(off by default).")
         helptip.tip(_kv, "Also download and save the full video file "
@@ -498,6 +533,16 @@ class MediaWindow:
                 out = base[:-4] + f" ({n}).txt"; n += 1
             with open(out, "w", encoding="utf-8") as f:
                 f.write(header + " ".join(parts).strip())
+            if is_url and getattr(self, "keep_desc_var", None) \
+                    and self.keep_desc_var.get():
+                try:
+                    desc = _video_description(source, self.cfg)
+                    dpath = os.path.join(folder,
+                                         safe_filename(title + " - Description"))
+                    with open(dpath, "w", encoding="utf-8") as fdesc:
+                        fdesc.write(f"{title}\n{source}\n\n{desc}")
+                except Exception:
+                    pass
             _use_one(self.cfg)
             from . import license as _lic
             if _lic.is_pro(self.cfg):

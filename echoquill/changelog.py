@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.20.9  (2026-07-16)
+    (1) Auto-batch: new "Open folder" button that opens your Transcriptions folder. (2) New "Video Description" checkbox (OFF by default) in both Auto-batch and the single transcriber's keep-files row: when on, it saves each video's description as "<name> - Description.txt" (or "No video description" if the video has none). The Save video / Save audio / Video Description checkboxes now sit on their own row so nothing is crowded.
+
 v2.20.8  (2026-07-16)
     REVERT the video download engine to this morning's working state. (1) Removed today's download-path changes (the 30s socket timeout, retries, live progress hook, and the Vimeo client fallback) - the download code is now byte-for-byte identical to before I touched it. (2) Pinned yt-dlp to 2026.7.4, the exact engine version that downloaded the video at 11:44 AM, so a future build can't silently swap it. Everything else stays: presets, Ask AI, Auto-batch, the column builder, memory cleanup, etc.
 

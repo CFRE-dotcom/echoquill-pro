@@ -152,10 +152,19 @@ class AutoBatchWindow:
                     "checked as set'.")
         self.save_video = tk.BooleanVar(value=True)
         self.save_audio = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opt, text="Save video",
+        self.save_desc = tk.BooleanVar(value=False)
+        saverow = ttk.Frame(self.win)
+        saverow.pack(fill="x", padx=18, pady=(2, 2))
+        ttk.Checkbutton(saverow, text="Save video",
                         variable=self.save_video).pack(side="left")
-        ttk.Checkbutton(opt, text="Save audio",
-                        variable=self.save_audio).pack(side="left", padx=(10, 0))
+        ttk.Checkbutton(saverow, text="Save audio",
+                        variable=self.save_audio).pack(side="left", padx=(12, 0))
+        _cbd = ttk.Checkbutton(saverow, text="Video Description",
+                               variable=self.save_desc)
+        _cbd.pack(side="left", padx=(12, 0))
+        helptip.tip(_cbd, "Also save each video's description as "
+                    "'<name> - Description.txt' (off by default). Says "
+                    "'No video description' if there is none.")
 
         bar = ttk.Frame(self.win)
         bar.pack(fill="x", padx=18, pady=(4, 2))
@@ -167,6 +176,8 @@ class AutoBatchWindow:
         self.stop_btn.pack(side="left", padx=8)
         ttk.Button(bar, text="Clear all",
                    command=self._clear_all).pack(side="left", padx=8)
+        ttk.Button(bar, text="Open folder",
+                   command=self._open_folder).pack(side="left", padx=8)
         ttk.Button(bar, text="Close", command=self.win.destroy).pack(side="right")
 
         self.status = ttk.Label(self.win, text="", style="Dim.TLabel")
@@ -241,6 +252,13 @@ class AutoBatchWindow:
         n = len(parse_lines(self.box.get("1.0", "end")))
         self.count.configure(text=f"{n} video{'s' if n != 1 else ''}")
 
+    def _open_folder(self):
+        from .media_gui import transcripts_dir
+        try:
+            os.startfile(transcripts_dir(self.cfg))
+        except Exception as e:
+            self._set(str(e))
+
     def _clear_all(self):
         self.box.delete("1.0", "end")          # the one-line-per-video list
         self.log.delete("1.0", "end")          # the progress log
@@ -294,7 +312,8 @@ class AutoBatchWindow:
 
     def _worker(self, rows, questions):
         from .media_gui import (download_video, fetch_audio_info, safe_filename,
-                                _safe_stem, _unique_path, _keep_awake)
+                                _safe_stem, _unique_path, _keep_awake,
+                                _video_description)
         from .transcriber import Transcriber
         total = len(rows)
         done = 0
@@ -362,6 +381,16 @@ class AutoBatchWindow:
                     with open(tpath, "w", encoding="utf-8") as f:
                         f.write(f"{name}\n{url}\n\n{text}")
                     self._log(f"    transcript saved: {os.path.basename(tpath)} ✓")
+                    if self.save_desc.get():
+                        try:
+                            desc = _video_description(url, self.cfg)
+                            dpath = _unique_path(os.path.join(
+                                dest, safe_filename(name + " - Description")))
+                            with open(dpath, "w", encoding="utf-8") as fd:
+                                fd.write(f"{name}\n{url}\n\n{desc}")
+                            self._log("    description saved ✓")
+                        except Exception as e:
+                            self._log(f"    description failed: {e}")
 
                     # 4) run the question set, grounded in THIS transcript
                     if self._cancel:
