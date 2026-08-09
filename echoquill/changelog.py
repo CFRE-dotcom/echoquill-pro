@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.24.0  (2026-07-16)
+    Column builder "Add from" now has a Source dropdown - "YouTube channel" or "Search YouTube". (1) Keyword box: when fetching a channel, keep only videos whose TITLE contains your word(s) - it over-scans the channel to find enough matches. (2) Search YouTube: type any query, pick how many, and it fills the URL + Title columns with the top results. Both work the same as the channel fetch and respect your sign-in cookies.
+
 v2.23.0  (2026-07-16)
     Auto-batch: new "Comments" checkbox (OFF by default). When on, it saves the video's comments - author, like count, timestamp, and replies, top-sorted (~200) - to its own dated "<name> - Comments.txt". It's slow, so it's opt-in per run.
 

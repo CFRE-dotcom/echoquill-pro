@@ -167,6 +167,36 @@ def fetch_channel(channel, kind, limit, cfg):
     return out
 
 
+def fetch_search(query, n, cfg):
+    """YouTube search (metadata only). Returns [(url, title), ...]."""
+    import yt_dlp
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+            "skip_download": True}
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    target = f"ytsearch{int(n)}:{query}"
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(target, download=False)
+    out = []
+    for e in (info.get("entries") or []):
+        if not e:
+            continue
+        u = e.get("url") or e.get("webpage_url")
+        if not u and e.get("id"):
+            u = "https://www.youtube.com/watch?v=" + e["id"]
+        t = (e.get("title") or "").strip()
+        if u:
+            out.append((u, t))
+    return out
+
+
 class AutoBatchWindow:
     def __init__(self, parent, cfg):
         self.cfg = cfg
@@ -637,23 +667,37 @@ class AutoBatchGrid:
                    command=self._clear_all).pack(side="right")
 
         chrow = ttk.Frame(self.win)
-        chrow.pack(fill="x", padx=16, pady=(2, 2))
-        ttk.Label(chrow, text="YouTube channel:").pack(side="left")
+        chrow.pack(fill="x", padx=16, pady=(2, 1))
+        ttk.Label(chrow, text="Add from:").pack(side="left")
+        self.source_var = tk.StringVar(value="YouTube channel")
+        ttk.OptionMenu(chrow, self.source_var, "YouTube channel",
+                       "YouTube channel", "Search YouTube").pack(
+                       side="left", padx=(6, 6))
         self.chan_var = tk.StringVar()
-        tk.Entry(chrow, textvariable=self.chan_var, width=28, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=(6, 6))
-        self.kind_var = tk.StringVar(value="Videos")
-        ttk.OptionMenu(chrow, self.kind_var, "Videos", "Videos", "Shorts",
-                       "Lives").pack(side="left")
-        self.count_var = tk.StringVar(value="10")
-        ttk.OptionMenu(chrow, self.count_var, "10", "5", "10", "15", "All",
-                       "Other\u2026", command=self._count_pick).pack(
-                       side="left", padx=(6, 0))
+        tk.Entry(chrow, textvariable=self.chan_var, bg=theme.FIELD, fg=theme.FG,
+                 insertbackground=theme.FG, relief="solid", borderwidth=1).pack(
+                 side="left", fill="x", expand=True, padx=(0, 6))
         ttk.Button(chrow, text="Fetch", style="Accent.TButton",
-                   command=self._fetch_channel).pack(side="left", padx=(6, 0))
-        self.chan_status = ttk.Label(chrow, style="Dim.TLabel", text="")
-        self.chan_status.pack(side="left", padx=(8, 0))
+                   command=self._fetch_channel).pack(side="left")
+
+        chrow2 = ttk.Frame(self.win)
+        chrow2.pack(fill="x", padx=16, pady=(0, 2))
+        ttk.Label(chrow2, text="Type:").pack(side="left")
+        self.kind_var = tk.StringVar(value="Videos")
+        ttk.OptionMenu(chrow2, self.kind_var, "Videos", "Videos", "Shorts",
+                       "Lives").pack(side="left", padx=(4, 12))
+        ttk.Label(chrow2, text="Keyword:").pack(side="left")
+        self.keyword_var = tk.StringVar()
+        tk.Entry(chrow2, textvariable=self.keyword_var, width=16, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=(4, 12))
+        ttk.Label(chrow2, text="How many:").pack(side="left")
+        self.count_var = tk.StringVar(value="10")
+        ttk.OptionMenu(chrow2, self.count_var, "10", "5", "10", "15", "All",
+                       "Other\u2026", command=self._count_pick).pack(
+                       side="left", padx=(4, 10))
+        self.chan_status = ttk.Label(chrow2, style="Dim.TLabel", text="")
+        self.chan_status.pack(side="left", padx=(6, 0))
 
         cols = ttk.Frame(self.win)
         cols.pack(fill="both", expand=True, padx=12, pady=(4, 2))
@@ -711,18 +755,33 @@ class AutoBatchGrid:
 
     def _fetch_channel(self):
         import threading
-        ch = self.chan_var.get().strip()
-        if not ch:
+        q = self.chan_var.get().strip()
+        is_search = self.source_var.get().lower().startswith("search")
+        if not q:
             self.chan_status.configure(
-                text="Paste a channel URL or @handle first."); return
+                text=("Type a search term first." if is_search
+                      else "Paste a channel URL or @handle first."))
+            return
         kind = self.kind_var.get()
+        keyword = self.keyword_var.get().strip().lower()
         cv = self.count_var.get().strip().lower()
-        limit = None if cv == "all" else (int(cv) if cv.isdigit() else 10)
-        self.chan_status.configure(text=f"Fetching {kind}\u2026")
+        want = None if cv == "all" else (int(cv) if cv.isdigit() else 10)
+        self.chan_status.configure(
+            text=("Searching\u2026" if is_search else f"Fetching {kind}\u2026"))
 
         def run():
             try:
-                items = fetch_channel(ch, kind, limit, self.cfg)
+                if is_search:
+                    items = fetch_search(q, want or 25, self.cfg)
+                else:
+                    fetch_n = (min(want * 8, 300) if (want and keyword)
+                               else want)
+                    items = fetch_channel(q, kind, fetch_n, self.cfg)
+                    if keyword:
+                        items = [(u, t) for (u, t) in items
+                                 if keyword in (t or "").lower()]
+                    if want:
+                        items = items[:want]
             except Exception as e:
                 self.win.after(0, lambda e=e: self.chan_status.configure(
                     text=f"Fetch failed: {str(e)[:70]}"))
@@ -730,7 +789,9 @@ class AutoBatchGrid:
 
             def fill():
                 if not items:
-                    self.chan_status.configure(text="No videos found."); return
+                    self.chan_status.configure(
+                        text="No matches." if keyword else "Nothing found.")
+                    return
                 us = "\n".join(i[0] for i in items)
                 ts = "\n".join(i[1] for i in items)
                 if self.url_txt.get("1.0", "end").strip():
@@ -740,7 +801,8 @@ class AutoBatchGrid:
                     self.url_txt.insert("1.0", us)
                     self.title_txt.insert("1.0", ts)
                 self._recount()
-                self.chan_status.configure(text=f"Added {len(items)} {kind}.")
+                label = "search results" if is_search else kind
+                self.chan_status.configure(text=f"Added {len(items)} {label}.")
             self.win.after(0, fill)
         threading.Thread(target=run, daemon=True).start()
 
