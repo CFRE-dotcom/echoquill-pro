@@ -131,6 +131,49 @@ def fetch_audio(url: str, status_cb) -> str:
     return fetch_audio_info(url, status_cb)[0]
 
 
+def _video_comments(url, cfg, max_total=200):
+    """Fetch a video's comments (top-sorted). Returns formatted text, or a note
+    if there are none / it fails. Off by default because it is slow."""
+    import yt_dlp
+    opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
+            "skip_download": True, "getcomments": True,
+            "extractor_args": {"youtube": {
+                "max_comments": [str(max_total), "all", "all", "10"],
+                "comment_sort": ["top"]}}}
+    low = (url or "").lower()
+    if "skool.com" in low or ".m3u8" in low:
+        opts["http_headers"] = {"Referer": "https://www.skool.com/",
+                                "Origin": "https://www.skool.com"}
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        comments = info.get("comments") or []
+    except Exception as e:
+        return f"Could not fetch comments: {e}"
+    if not comments:
+        return "No comments (or comments are turned off for this video)."
+    out = []
+    for c in comments:
+        author = c.get("author") or "?"
+        text = (c.get("text") or "").strip()
+        likes = c.get("like_count")
+        when = c.get("_time_text") or ""
+        is_reply = c.get("parent") and c.get("parent") != "root"
+        prefix = "    \u21b3 " if is_reply else ""
+        lk = f"[{likes} likes] " if likes else ""
+        out.append(f"{prefix}{lk}{author} {when}: {text}".rstrip())
+    return f"{len(comments)} comments (top-sorted):\n\n" + "\n\n".join(out)
+
+
 def _dated(name):
     """Prefix a file name with today's date (YYYY-MM-DD-) so files sort by day."""
     import datetime

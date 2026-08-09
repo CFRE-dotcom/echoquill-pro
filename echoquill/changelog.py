@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.23.0  (2026-07-16)
+    Auto-batch: new "Comments" checkbox (OFF by default). When on, it saves the video's comments - author, like count, timestamp, and replies, top-sorted (~200) - to its own dated "<name> - Comments.txt". It's slow, so it's opt-in per run.
+
 v2.22.1  (2026-07-16)
     FIX "Save video" failing on YouTube with "Requested format is not available". The video download now uses a robust mp4-first format chain (mp4 video + m4a audio -> best mp4 -> best video+audio merged -> best) and points yt-dlp at the bundled ffmpeg so it can actually merge the streams. Audio and transcription were never affected; this fixes saving the full video file.
 

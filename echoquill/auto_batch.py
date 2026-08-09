@@ -229,6 +229,13 @@ class AutoBatchWindow:
         _cbd = ttk.Checkbutton(saverow, text="Video Description",
                                variable=self.save_desc)
         _cbd.pack(side="left", padx=(12, 0))
+        self.save_comments = tk.BooleanVar(value=False)
+        _cbc = ttk.Checkbutton(saverow, text="Comments",
+                               variable=self.save_comments)
+        _cbc.pack(side="left", padx=(12, 0))
+        helptip.tip(_cbc, "Also save the video's comments to its own "
+                    "'<name> - Comments.txt' (off by default; it's slow, so it "
+                    "grabs the top ~200).")
         helptip.tip(_cbd, "Also save each video's description as "
                     "'<name> - Description.txt' (off by default). Says "
                     "'No video description' if there is none.")
@@ -412,7 +419,7 @@ class AutoBatchWindow:
     def _worker(self, rows, questions):
         from .media_gui import (download_video, fetch_audio_info, safe_filename,
                                 _safe_stem, _unique_path, _keep_awake,
-                                _video_description)
+                                _video_description, _video_comments)
         from .transcriber import Transcriber
         total = len(rows)
         done = 0
@@ -489,6 +496,17 @@ class AutoBatchWindow:
                     with open(tpath, "w", encoding="utf-8") as f:
                         f.write(f"{name}\n{url}\n\n{body}")
                     self._log(f"    transcript saved: {os.path.basename(tpath)} ✓")
+                    if self.save_comments.get():
+                        try:
+                            self._set(f"Video {i}/{total}: fetching comments…")
+                            cmts = _video_comments(url, self.cfg)
+                            cpath = _unique_path(os.path.join(
+                                dest, safe_filename(dname + " - Comments")))
+                            with open(cpath, "w", encoding="utf-8") as fc:
+                                fc.write(f"{name}\n{url}\n\n{cmts}")
+                            self._log("    comments saved ✓")
+                        except Exception as e:
+                            self._log(f"    comments failed: {e}")
 
                     # 5) run the question set, grounded in THIS transcript
                     if self._cancel:
