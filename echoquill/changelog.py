@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.2  (2026-07-16)
+    Channel watcher: (1) added a "Watched channels..." button in the transcriber (row of Batch / Auto-batch buttons) - a second way in, not just the tray menu. (2) Auto-retry and check timing are now YOUR choice: set "Check for new every N hours" and "Retry failed every N minutes" right in the watcher window (defaults 6 h / 30 min). (3) Bundled the new watcher/pipeline/proxy modules explicitly in the build - if the tray item wasn't opening, a missing-module bundle was the likely cause; this ensures they ship.
+
 v2.27.1  (2026-07-16)
     Proxy/Transcription UI fixes. (1) The Transcription tab now SCROLLS - it was in the no-scroll list, so the proxy fields under the checkbox were cut off and invisible. (2) Moved the PROXY section up (right under "Open the transcriber"); SIGN IN / cookies now sits at the bottom. (3) The proxy's location targeting (country/state) is now OPTIONAL - hidden behind a "Target a specific location" checkbox. By default it just uses your country nationally, nothing to fiddle with.
 

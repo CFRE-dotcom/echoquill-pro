@@ -138,8 +138,8 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
             else:
                 item["status"] = "failed"
                 item["last_error"] = msg
-                item["next_try"] = time.time() + BACKOFF[
-                    min(item["attempts"], len(BACKOFF) - 1)]
+                mins = int((cfg or {}).get("watch_retry_minutes", 30) or 30)
+                item["next_try"] = time.time() + max(1, mins) * 60
                 log(f"    failed (will retry): {msg[:80]}")
             save(d)
         if done:

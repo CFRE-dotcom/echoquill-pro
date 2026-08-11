@@ -90,6 +90,23 @@ class WatcherWindow:
         ttk.Button(self.win, text="＋ Add channel", style="Accent.TButton",
                    command=self._add).pack(anchor="w", padx=16, pady=(4, 6))
 
+        sch = ttk.Frame(self.win); sch.pack(fill="x", padx=16, pady=(0, 4))
+        ttk.Label(sch, text="Check for new every").pack(side="left")
+        self.chk_hours = tk.StringVar(
+            value=str(self.cfg.get("watch_check_hours", 6)))
+        tk.Entry(sch, textvariable=self.chk_hours, width=4, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=4)
+        ttk.Label(sch, text="hours   ·   retry failed every").pack(side="left")
+        self.retry_min = tk.StringVar(
+            value=str(self.cfg.get("watch_retry_minutes", 30)))
+        tk.Entry(sch, textvariable=self.retry_min, width=5, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=4)
+        ttk.Label(sch, text="minutes").pack(side="left")
+        ttk.Button(sch, text="Save schedule",
+                   command=self._save_sched).pack(side="left", padx=10)
+
         # -------- watched list --------
         ttk.Label(self.win, text="Watched channels", style="Section.TLabel").pack(
             anchor="w", padx=16, pady=(4, 2))
@@ -120,6 +137,18 @@ class WatcherWindow:
         self._refresh()
 
     # ---------- helpers ----------
+    def _save_sched(self):
+        from . import config as _c
+        try:
+            self.cfg["watch_check_hours"] = max(1, int(
+                self.chk_hours.get().strip() or 6))
+            self.cfg["watch_retry_minutes"] = max(1, int(
+                self.retry_min.get().strip() or 30))
+        except Exception:
+            self._set_status("Enter whole numbers for hours/minutes."); return
+        _c.save(self.cfg)
+        self._set_status("Schedule saved. (Check interval applies next cycle.)")
+
     def _refresh_sets(self):
         m = self.set_menu["menu"]; m.delete(0, "end")
         m.add_command(label="—", command=lambda: self.set_var.set("—"))

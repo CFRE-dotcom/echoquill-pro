@@ -486,6 +486,10 @@ class MediaWindow:
         helptip.tip(_b_auto, "Paste many URLs, each with an optional title and "
                     "folder; every video is downloaded and saved, transcribed, "
                     "then run through a saved question set - all automatic.")
+        _b_watch = ttk.Button(row2, text="Watched channels…",
+                   command=self._open_watcher); _b_watch.pack(side="left", padx=8)
+        helptip.tip(_b_watch, "Watch channels for new uploads and auto-run "
+                    "each new video through the pipeline.")
         helptip.tip(_b_batch, "Transcribe a whole list of URLs, one after another.")
         self.stop_btn = ttk.Button(row2, text="Stop", command=self._stop, state="disabled")
         self.stop_btn.pack(side="left", padx=(8, 0))
@@ -553,6 +557,12 @@ class MediaWindow:
     def _open_presets(self):
         from . import prompts as _pr
         _pr.manage_dialog(self.win, self.cfg)
+
+    def _open_watcher(self):
+        from .watcher_gui import WatcherWindow
+        from . import watcher as _w
+        _w.clear_new_ready()
+        WatcherWindow(self.win, self.cfg)
 
     def _open_autobatch(self):
         from .auto_batch import AutoBatchWindow

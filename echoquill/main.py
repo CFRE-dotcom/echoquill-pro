@@ -210,7 +210,8 @@ class App:
                 pass
         threading.Thread(target=run, daemon=True).start()
         try:
-            self.root.after(6 * 3600 * 1000, self._watcher_tick)   # every 6h
+            hrs = int(self.cfg.get("watch_check_hours", 6) or 6)
+            self.root.after(max(1, hrs) * 3600 * 1000, self._watcher_tick)
         except Exception:
             pass
 

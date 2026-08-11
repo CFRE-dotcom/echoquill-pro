@@ -61,6 +61,10 @@ jobs:
           --hidden-import qrcode
           --collect-all openpyxl
           --hidden-import et_xmlfile
+          --hidden-import echoquill.watcher
+          --hidden-import echoquill.watcher_gui
+          --hidden-import echoquill.pipeline
+          --hidden-import echoquill.proxy
           --hidden-import PIL.ImageTk
           --collect-all keyring
           --hidden-import keyring.backends.Windows
