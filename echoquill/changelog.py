@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.4  (2026-08-11)
+    Channel watcher pacing + controls. (1) Multi-video runs are now PACED so YouTube doesn't bot-flag the batch: default 600 sec (10 min) between each video, and at most 5 per cycle - both editable in the watcher window. (Before, it fired every queued video at once, which got them all flagged.) (2) "Run downloads through the proxy" checkbox right in the watcher - toggles your residential/mobile IP without leaving the window; lets you safely shorten the gap. (3) "Stop" button halts after the current video. (4) "Clear queue" empties everything waiting (keeps your channels), so you can wipe a bad batch. (5) If the watcher fails to open, you now get an on-screen error instead of a silent nothing.
+
 v2.27.3  (2026-07-16)
     Proxy: hover tooltips on every field so you know what to type. The key one - State is the FULL state NAME (New York, Florida, North Carolina), NOT the 2-letter code; capitals and spaces don't matter, the app converts it. Also explained on hover: Username, Password, Country (2-letter code), Gateway, Mobile-vs-residential, and the "target a specific location" toggle.
 

@@ -559,10 +559,18 @@ class MediaWindow:
         _pr.manage_dialog(self.win, self.cfg)
 
     def _open_watcher(self):
-        from .watcher_gui import WatcherWindow
-        from . import watcher as _w
-        _w.clear_new_ready()
-        WatcherWindow(self.win, self.cfg)
+        try:
+            from .watcher_gui import WatcherWindow
+            from . import watcher as _w
+            _w.clear_new_ready()
+            WatcherWindow(self.win, self.cfg)
+        except Exception as e:
+            import traceback
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Channel watcher",
+                "Couldn't open the watcher:\n\n"
+                + "".join(traceback.format_exception_only(type(e), e)).strip())
 
     def _open_autobatch(self):
         from .auto_batch import AutoBatchWindow

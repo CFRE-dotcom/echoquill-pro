@@ -170,6 +170,8 @@ DEFAULTS = {
     "di_use_geo": False,
     "watch_check_hours": 6,
     "watch_retry_minutes": 30,
+    "watch_gap_seconds": 600,
+    "watch_per_cycle": 5,
     "di_mobile": True,
     "di_gateway": "gw.dataimpulse.com:824",
     "custom_prompts": [],   # "" off, else chrome/edge/firefox/brave for member-only videos

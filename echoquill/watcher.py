@@ -115,7 +115,10 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
     done = 0
     try:
         from . import pipeline
+        gap = int((cfg or {}).get("watch_gap_seconds", 600) or 0)
+        per_cycle = int((cfg or {}).get("watch_per_cycle", 5) or 0)
         d = load()
+        processed = 0
         for item in d["queue"]:
             if cancel():
                 break
@@ -123,6 +126,16 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
                 continue
             if item.get("next_try", 0) > time.time():
                 continue
+            if per_cycle and processed >= per_cycle:
+                break
+            if processed > 0 and gap > 0:
+                for _ in range(gap):
+                    if cancel():
+                        break
+                    time.sleep(1)
+                if cancel():
+                    break
+            processed += 1
             log(f"→ {item.get('title') or item['url']}")
             status, msg = pipeline.process_video(cfg, item, log, cancel)
             item["attempts"] = item.get("attempts", 0) + 1
@@ -154,6 +167,14 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
 def run_once(cfg, log=lambda s: None, cancel=lambda: False):
     check_new(cfg)
     return process_pending(cfg, log, cancel)
+
+
+def clear_queue():
+    """Wipe every queued item (keeps channels + their seen lists)."""
+    d = load()
+    d["queue"] = []
+    d["new_ready"] = 0
+    save(d)
 
 
 def clear_new_ready():

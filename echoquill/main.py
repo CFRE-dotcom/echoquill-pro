@@ -293,10 +293,20 @@ class App:
             from .tts_gui import ReadAloudWindow
             ReadAloudWindow(self.root, self.cfg)
         elif ev == "watch":
-            from .watcher_gui import WatcherWindow
-            from . import watcher as _w
-            _w.clear_new_ready()
-            WatcherWindow(self.root, self.cfg)
+            try:
+                from .watcher_gui import WatcherWindow
+                from . import watcher as _w
+                _w.clear_new_ready()
+                WatcherWindow(self.root, self.cfg)
+            except Exception as e:
+                self._log_crash("open watcher (tray)", e)
+                try:
+                    from tkinter import messagebox
+                    messagebox.showerror(
+                        "Channel watcher",
+                        f"Couldn't open the watcher:\n\n{e}")
+                except Exception:
+                    pass
         elif ev == "quit":
             self._quit()
             return True

@@ -13,6 +13,7 @@ class WatcherWindow:
     def __init__(self, parent, cfg):
         self.cfg = cfg
         self._chan_ids = []
+        self._cancel = False
 
         self.win = tk.Toplevel(parent)
         self.win.title("EchoQuill — Channel watcher")
@@ -107,6 +108,35 @@ class WatcherWindow:
         ttk.Button(sch, text="Save schedule",
                    command=self._save_sched).pack(side="left", padx=10)
 
+        sch2 = ttk.Frame(self.win); sch2.pack(fill="x", padx=16, pady=(0, 4))
+        ttk.Label(sch2, text="When several are queued, do at most").pack(side="left")
+        self.per_cycle = tk.StringVar(
+            value=str(self.cfg.get("watch_per_cycle", 5)))
+        tk.Entry(sch2, textvariable=self.per_cycle, width=4, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=4)
+        ttk.Label(sch2, text="per cycle · wait").pack(side="left")
+        self.gap_sec = tk.StringVar(
+            value=str(self.cfg.get("watch_gap_seconds", 600)))
+        _ge = tk.Entry(sch2, textvariable=self.gap_sec, width=6, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1)
+        _ge.pack(side="left", padx=4)
+        ttk.Label(sch2, text="sec between each").pack(side="left")
+        helptip.tip(_ge, "Seconds to pause between videos so YouTube does not "
+                    "flag the batch. 600 (10 min) is a safe default; you can "
+                    "go lower when running on a residential/mobile proxy.")
+
+        prow = ttk.Frame(self.win); prow.pack(fill="x", padx=16, pady=(0, 4))
+        self.proxy_on = tk.BooleanVar(value=bool(self.cfg.get("di_enabled")))
+        _pc = ttk.Checkbutton(prow, text="Run downloads through the proxy "
+                              "(residential/mobile IP)", variable=self.proxy_on,
+                              command=self._toggle_proxy)
+        _pc.pack(side="left")
+        helptip.tip(_pc, "Uses your DataImpulse proxy (set it up in Settings ▸ "
+                    "Transcription). Verify it works there first. Lets you "
+                    "safely shorten the wait between videos.")
+
         # -------- watched list --------
         ttk.Label(self.win, text="Watched channels", style="Section.TLabel").pack(
             anchor="w", padx=16, pady=(4, 2))
@@ -125,6 +155,12 @@ class WatcherWindow:
                    command=self._check_now).pack(side="left")
         ttk.Button(brow, text="Refresh", command=self._refresh).pack(
             side="left", padx=8)
+        _bstop = ttk.Button(brow, text="Stop", command=self._stop)
+        _bstop.pack(side="left", padx=8)
+        helptip.tip(_bstop, "Halts the current run after the video in progress.")
+        _bclr = ttk.Button(brow, text="Clear queue", command=self._clear_queue)
+        _bclr.pack(side="left", padx=8)
+        helptip.tip(_bclr, "Deletes every queued item (keeps your channels).")
         ttk.Button(brow, text="Close", command=self.win.destroy).pack(side="right")
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16)
@@ -144,6 +180,10 @@ class WatcherWindow:
                 self.chk_hours.get().strip() or 6))
             self.cfg["watch_retry_minutes"] = max(1, int(
                 self.retry_min.get().strip() or 30))
+            self.cfg["watch_per_cycle"] = max(0, int(
+                self.per_cycle.get().strip() or 5))
+            self.cfg["watch_gap_seconds"] = max(0, int(
+                self.gap_sec.get().strip() or 600))
         except Exception:
             self._set_status("Enter whole numbers for hours/minutes."); return
         _c.save(self.cfg)
@@ -235,12 +275,37 @@ class WatcherWindow:
         self._refresh()
         self._set_status("Deleted the watch and its data.")
 
+    def _stop(self):
+        self._cancel = True
+        self._set_status("Stopping after the current video…")
+        self._log("Stop requested — finishing the current video, then halting.")
+
+    def _clear_queue(self):
+        if not messagebox.askyesno(
+                "Clear queue",
+                "Delete every queued item?\n\nThis keeps your watched "
+                "channels but empties everything waiting to be processed. "
+                "This can't be undone.", parent=self.win):
+            return
+        watcher.clear_queue()
+        self._refresh()
+        self._set_status("Queue cleared.")
+
+    def _toggle_proxy(self):
+        from . import config as _c
+        self.cfg["di_enabled"] = bool(self.proxy_on.get())
+        _c.save(self.cfg)
+        self._set_status("Proxy ON for downloads." if self.proxy_on.get()
+                         else "Proxy OFF for downloads.")
+
     def _check_now(self):
+        self._cancel = False
         self._set_status("Checking channels…")
         self._log("Checking for new uploads…")
 
         def run():
-            done = watcher.run_once(self.cfg, self._log)
+            done = watcher.run_once(self.cfg, self._log,
+                                    cancel=lambda: self._cancel)
             self.win.after(0, self._refresh)
             self._set_status(f"Check done — {done} newly finished."
                              if done else "Check done — nothing new to finish.")

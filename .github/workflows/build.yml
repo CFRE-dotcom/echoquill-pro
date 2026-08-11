@@ -61,6 +61,7 @@ jobs:
           --hidden-import qrcode
           --collect-all openpyxl
           --hidden-import et_xmlfile
+          --collect-submodules echoquill
           --hidden-import echoquill.watcher
           --hidden-import echoquill.watcher_gui
           --hidden-import echoquill.pipeline
