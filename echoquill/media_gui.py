@@ -119,6 +119,7 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    _apply_proxy(opts, cfg)
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
     title = (info or {}).get("title") or "transcript"
@@ -191,6 +192,7 @@ def fetch_captions(url, cfg, langs=("en", "en-US", "en-GB", "en-orig")):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    _apply_proxy(opts, cfg)
     title = ""
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -232,6 +234,7 @@ def _video_comments(url, cfg, max_total=200):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    _apply_proxy(opts, cfg)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -278,6 +281,7 @@ def _video_description(url, cfg):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    _apply_proxy(opts, cfg)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -307,6 +311,18 @@ def _unique_path(p: str) -> str:
     return q
 
 
+def _apply_proxy(opts, cfg):
+    """Route this yt-dlp job through the DataImpulse proxy if enabled+set."""
+    try:
+        from . import proxy as _px
+        u = _px.proxy_url(cfg)
+        if u:
+            opts["proxy"] = u
+    except Exception:
+        pass
+    return opts
+
+
 def _media_opts(url, cfg, tmpl, fmt):
     opts = {"format": fmt, "outtmpl": tmpl,
             "quiet": True, "no_warnings": True, "noplaylist": True}
@@ -323,6 +339,7 @@ def _media_opts(url, cfg, tmpl, fmt):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    _apply_proxy(opts, cfg)
     return opts
 
 

@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.26.0  (2026-07-16)
+    Optional DataImpulse proxy for downloads (Settings -> Transcription -> PROXY). Enter username/password, country/state, and mobile vs residential - it builds the DataImpulse username for you (base__cr.us;state.x;type.mobile). "Save & Test proxy" verifies the exit IP and geography THROUGH the proxy before it is ever used (verify-before-execute, per the DataImpulse procedure). When enabled + verified, every download routes through it (yt-dlp socks5) - dodges datacenter-VPN blocks and raises YouTube's limits. Off by default; the password is stored in Windows Credential Manager.
+
 v2.25.0  (2026-07-16)
     Auto-batch: new "Transcript source" dropdown - defaults to "Whisper (accurate)". The second option, "YouTube captions (fast)", pulls the video's EXISTING captions instead of downloading and transcribing (fast, no media download, like the online transcript sites), and falls back to Whisper automatically if a video has no captions. Whisper stays the default and still works on every site.
 

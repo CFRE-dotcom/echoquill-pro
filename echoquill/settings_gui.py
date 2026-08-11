@@ -458,6 +458,62 @@ class SettingsWindow:
         ttk.Button(crow2, text="Clear", command=_clear_cookies).pack(side="left", padx=6)
         self.cookie_status.pack(side="left", padx=8)
 
+        # ---------------- DataImpulse proxy (optional) ----------------
+        ttk.Label(f, style="Section.TLabel",
+                  text="PROXY (DataImpulse residential/mobile — optional)"
+                  ).pack(anchor="w", pady=(16, 4))
+        ttk.Label(f, style="Dim.TLabel", wraplength=470, text=(
+            "Route downloads through a residential/mobile proxy to dodge "
+            "datacenter-VPN blocks and raise YouTube's limits. Off by default - "
+            "your normal home IP is fine for most use. Password is kept in "
+            "Windows Credential Manager. 'Test' checks the exit IP through the "
+            "proxy before it's ever used for a download.")).pack(anchor="w")
+        self.di_enabled = tk.BooleanVar(value=self.cfg.get("di_enabled", False))
+        ttk.Checkbutton(f, text="Use the proxy for downloads",
+                        variable=self.di_enabled).pack(anchor="w", pady=(2, 2))
+        dr = self._row(f, "Username")
+        self.di_user = tk.StringVar(value=self.cfg.get("di_base_username", ""))
+        ttk.Entry(dr, textvariable=self.di_user, width=40).pack(side="left")
+        dr = self._row(f, "Password")
+        self.di_pw = tk.StringVar(value=self.cfg.get("di_password", ""))
+        ttk.Entry(dr, textvariable=self.di_pw, width=40, show="\u2022").pack(side="left")
+        dr = self._row(f, "Country / State")
+        self.di_country = tk.StringVar(value=self.cfg.get("di_country", "us"))
+        ttk.Entry(dr, textvariable=self.di_country, width=8).pack(side="left")
+        self.di_state = tk.StringVar(value=self.cfg.get("di_state", ""))
+        ttk.Entry(dr, textvariable=self.di_state, width=20).pack(side="left", padx=(6, 0))
+        self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", True))
+        ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
+                        variable=self.di_mobile).pack(anchor="w", pady=(2, 2))
+        dr = self._row(f, "Gateway")
+        self.di_gw = tk.StringVar(
+            value=self.cfg.get("di_gateway", "gw.dataimpulse.com:824"))
+        ttk.Entry(dr, textvariable=self.di_gw, width=30).pack(side="left")
+        drow = ttk.Frame(f); drow.pack(anchor="w", pady=(4, 2))
+        ttk.Button(drow, text="Save & Test proxy", style="Accent.TButton",
+                   command=self._di_test).pack(side="left")
+        self.di_status = ttk.Label(drow, style="Dim.TLabel", text="")
+        self.di_status.pack(side="left", padx=8)
+
+    def _di_test(self):
+        import threading
+        from . import config as _c
+        self.cfg["di_enabled"] = self.di_enabled.get()
+        self.cfg["di_base_username"] = self.di_user.get().strip()
+        self.cfg["di_password"] = self.di_pw.get().strip()
+        self.cfg["di_country"] = self.di_country.get().strip() or "us"
+        self.cfg["di_state"] = self.di_state.get().strip()
+        self.cfg["di_mobile"] = self.di_mobile.get()
+        self.cfg["di_gateway"] = (self.di_gw.get().strip()
+                                  or "gw.dataimpulse.com:824")
+        _c.save(self.cfg)
+        self.di_status.configure(text="Testing the proxy\u2026")
+
+        def run():
+            from . import proxy as _px
+            ok, msg = _px.test(self.cfg)
+            self.win.after(0, lambda: self.di_status.configure(text=msg))
+        threading.Thread(target=run, daemon=True).start()
 
     def _build_read_aloud(self, f):
         from . import helptip, player

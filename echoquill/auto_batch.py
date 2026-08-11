@@ -144,6 +144,8 @@ def fetch_channel(channel, kind, limit, cfg):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    from .media_gui import _apply_proxy
+    _apply_proxy(opts, cfg)
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(target, download=False)
     flat = []
@@ -181,6 +183,8 @@ def fetch_search(query, n, cfg):
             opts["cookiesfrombrowser"] = (br,)
         except Exception:
             pass
+    from .media_gui import _apply_proxy
+    _apply_proxy(opts, cfg)
     target = f"ytsearch{int(n)}:{query}"
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(target, download=False)
