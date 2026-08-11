@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.3  (2026-07-16)
+    Proxy: hover tooltips on every field so you know what to type. The key one - State is the FULL state NAME (New York, Florida, North Carolina), NOT the 2-letter code; capitals and spaces don't matter, the app converts it. Also explained on hover: Username, Password, Country (2-letter code), Gateway, Mobile-vs-residential, and the "target a specific location" toggle.
+
 v2.27.2  (2026-07-16)
     Channel watcher: (1) added a "Watched channels..." button in the transcriber (row of Batch / Auto-batch buttons) - a second way in, not just the tray menu. (2) Auto-retry and check timing are now YOUR choice: set "Check for new every N hours" and "Retry failed every N minutes" right in the watcher window (defaults 6 h / 30 min). (3) Bundled the new watcher/pipeline/proxy modules explicitly in the build - if the tray item wasn't opening, a missing-module bundle was the likely cause; this ensures they ship.
 

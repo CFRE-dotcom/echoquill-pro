@@ -396,6 +396,7 @@ class SettingsWindow:
                   ).pack(anchor="w")
 
     def _build_transcription(self, f):
+        from . import helptip
         self._title(f, "Transcription",
                     "Turn videos and audio into text — one at a time or in bulk.")
         ttk.Label(f, style="Dim.TLabel", wraplength=460, text=(
@@ -425,33 +426,53 @@ class SettingsWindow:
                         variable=self.di_enabled).pack(anchor="w", pady=(2, 2))
         dr = self._row(f, "Username")
         self.di_user = tk.StringVar(value=self.cfg.get("di_base_username", ""))
-        ttk.Entry(dr, textvariable=self.di_user, width=40).pack(side="left")
+        _due = ttk.Entry(dr, textvariable=self.di_user, width=40)
+        _due.pack(side="left")
+        helptip.tip(_due, "Your DataImpulse account username - just the base "
+                    "name. The app adds the country/state/mobile part for you.")
         dr = self._row(f, "Password")
         self.di_pw = tk.StringVar(value=self.cfg.get("di_password", ""))
-        ttk.Entry(dr, textvariable=self.di_pw, width=40,
-                  show="\u2022").pack(side="left")
+        _dpw = ttk.Entry(dr, textvariable=self.di_pw, width=40, show="\u2022")
+        _dpw.pack(side="left")
+        helptip.tip(_dpw, "Your DataImpulse account password. Kept in Windows "
+                    "Credential Manager, never shown or uploaded.")
         self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", True))
-        ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
-                        variable=self.di_mobile).pack(anchor="w", pady=(2, 2))
+        _dmb = ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
+                               variable=self.di_mobile)
+        _dmb.pack(anchor="w", pady=(2, 2))
+        helptip.tip(_dmb, "Checked = phone-carrier (mobile) IPs. Unchecked = "
+                    "home (residential) IPs. Both are 'real' IPs YouTube "
+                    "accepts - residential is usually plenty.")
         # optional geo targeting (hidden unless you turn it on)
         self.di_country = tk.StringVar(value=self.cfg.get("di_country", "us"))
         self.di_state = tk.StringVar(value=self.cfg.get("di_state", ""))
         self.di_geo = tk.BooleanVar(value=bool(self.cfg.get("di_use_geo", False)))
         self._di_geo_row = ttk.Frame(f)
         ttk.Label(self._di_geo_row, text="Country").pack(side="left")
-        ttk.Entry(self._di_geo_row, textvariable=self.di_country,
-                  width=6).pack(side="left", padx=(4, 12))
+        _dco = ttk.Entry(self._di_geo_row, textvariable=self.di_country, width=6)
+        _dco.pack(side="left", padx=(4, 12))
+        helptip.tip(_dco, "2-letter country code, lowercase - e.g. us, uk, ca.")
         ttk.Label(self._di_geo_row, text="State").pack(side="left")
-        ttk.Entry(self._di_geo_row, textvariable=self.di_state,
-                  width=18).pack(side="left", padx=(4, 0))
-        ttk.Checkbutton(f, text="Target a specific location (optional)",
-                        variable=self.di_geo,
-                        command=self._di_toggle_geo).pack(anchor="w", pady=(2, 0))
+        _dst = ttk.Entry(self._di_geo_row, textvariable=self.di_state, width=18)
+        _dst.pack(side="left", padx=(4, 0))
+        helptip.tip(_dst, "The FULL state NAME - not the 2-letter abbreviation. "
+                    "e.g. New York, Florida, North Carolina, California. "
+                    "Capitals and spaces don't matter (the app converts it to "
+                    "state.newyork, state.florida, etc.).")
+        _dgeo = ttk.Checkbutton(f, text="Target a specific location (optional)",
+                                variable=self.di_geo,
+                                command=self._di_toggle_geo)
+        _dgeo.pack(anchor="w", pady=(2, 0))
+        helptip.tip(_dgeo, "Optional. Off = any IP in your country (fine for "
+                    "most). On = pin to one specific US state below.")
         dr = self._row(f, "Gateway")
         self._di_gw_row = dr
         self.di_gw = tk.StringVar(
             value=self.cfg.get("di_gateway", "gw.dataimpulse.com:824"))
-        ttk.Entry(dr, textvariable=self.di_gw, width=30).pack(side="left")
+        _dgw = ttk.Entry(dr, textvariable=self.di_gw, width=30)
+        _dgw.pack(side="left")
+        helptip.tip(_dgw, "Leave as gw.dataimpulse.com:824 unless DataImpulse "
+                    "gave you a different gateway host:port.")
         drow = ttk.Frame(f); drow.pack(anchor="w", pady=(4, 10))
         ttk.Button(drow, text="Save & Test proxy", style="Accent.TButton",
                    command=self._di_test).pack(side="left")
