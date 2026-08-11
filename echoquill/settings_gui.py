@@ -170,7 +170,7 @@ class SettingsWindow:
         # Sections dominated by a big text box lay the box out to fill and scroll
         # internally (like the standalone windows) - NO outer scroll pane, so
         # there's never a second scrollbar stacked next to the text box's own.
-        _noscroll = {"Meeting", "Read aloud", "Transcription", "History",
+        _noscroll = {"Meeting", "Read aloud", "History",
                      "Help", "Feedback", "Dictionary", "What\u2019s New"}
         for name, builder in body.items():
             if name in _noscroll:
@@ -410,6 +410,55 @@ class SettingsWindow:
             "\nTip: it's also one right-click away — right-click the mic pill "
             "→ Transcribe video / URL.")).pack(anchor="w")
 
+        # ---------------- DataImpulse proxy (optional) ----------------
+        ttk.Label(f, style="Section.TLabel",
+                  text="PROXY (DataImpulse — optional)").pack(
+                  anchor="w", pady=(14, 4))
+        ttk.Label(f, style="Dim.TLabel", wraplength=470, text=(
+            "Route downloads through a residential/mobile proxy to dodge "
+            "datacenter-VPN blocks and raise YouTube's limits. Off by default - "
+            "your normal home IP is fine for most use. Password is kept in "
+            "Windows Credential Manager. Test checks the exit IP THROUGH the "
+            "proxy before it is ever used.")).pack(anchor="w")
+        self.di_enabled = tk.BooleanVar(value=self.cfg.get("di_enabled", False))
+        ttk.Checkbutton(f, text="Use the proxy for downloads",
+                        variable=self.di_enabled).pack(anchor="w", pady=(2, 2))
+        dr = self._row(f, "Username")
+        self.di_user = tk.StringVar(value=self.cfg.get("di_base_username", ""))
+        ttk.Entry(dr, textvariable=self.di_user, width=40).pack(side="left")
+        dr = self._row(f, "Password")
+        self.di_pw = tk.StringVar(value=self.cfg.get("di_password", ""))
+        ttk.Entry(dr, textvariable=self.di_pw, width=40,
+                  show="\u2022").pack(side="left")
+        self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", True))
+        ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
+                        variable=self.di_mobile).pack(anchor="w", pady=(2, 2))
+        # optional geo targeting (hidden unless you turn it on)
+        self.di_country = tk.StringVar(value=self.cfg.get("di_country", "us"))
+        self.di_state = tk.StringVar(value=self.cfg.get("di_state", ""))
+        self.di_geo = tk.BooleanVar(value=bool(self.cfg.get("di_use_geo", False)))
+        self._di_geo_row = ttk.Frame(f)
+        ttk.Label(self._di_geo_row, text="Country").pack(side="left")
+        ttk.Entry(self._di_geo_row, textvariable=self.di_country,
+                  width=6).pack(side="left", padx=(4, 12))
+        ttk.Label(self._di_geo_row, text="State").pack(side="left")
+        ttk.Entry(self._di_geo_row, textvariable=self.di_state,
+                  width=18).pack(side="left", padx=(4, 0))
+        ttk.Checkbutton(f, text="Target a specific location (optional)",
+                        variable=self.di_geo,
+                        command=self._di_toggle_geo).pack(anchor="w", pady=(2, 0))
+        dr = self._row(f, "Gateway")
+        self._di_gw_row = dr
+        self.di_gw = tk.StringVar(
+            value=self.cfg.get("di_gateway", "gw.dataimpulse.com:824"))
+        ttk.Entry(dr, textvariable=self.di_gw, width=30).pack(side="left")
+        drow = ttk.Frame(f); drow.pack(anchor="w", pady=(4, 10))
+        ttk.Button(drow, text="Save & Test proxy", style="Accent.TButton",
+                   command=self._di_test).pack(side="left")
+        self.di_status = ttk.Label(drow, style="Dim.TLabel", text="")
+        self.di_status.pack(side="left", padx=8)
+        self._di_toggle_geo()
+
         ttk.Label(f, style="Section.TLabel",
                   text="SIGN IN (YouTube bot-checks, Skool & member-only videos)"
                   ).pack(anchor="w", pady=(16, 4))
@@ -458,42 +507,16 @@ class SettingsWindow:
         ttk.Button(crow2, text="Clear", command=_clear_cookies).pack(side="left", padx=6)
         self.cookie_status.pack(side="left", padx=8)
 
-        # ---------------- DataImpulse proxy (optional) ----------------
-        ttk.Label(f, style="Section.TLabel",
-                  text="PROXY (DataImpulse residential/mobile — optional)"
-                  ).pack(anchor="w", pady=(16, 4))
-        ttk.Label(f, style="Dim.TLabel", wraplength=470, text=(
-            "Route downloads through a residential/mobile proxy to dodge "
-            "datacenter-VPN blocks and raise YouTube's limits. Off by default - "
-            "your normal home IP is fine for most use. Password is kept in "
-            "Windows Credential Manager. 'Test' checks the exit IP through the "
-            "proxy before it's ever used for a download.")).pack(anchor="w")
-        self.di_enabled = tk.BooleanVar(value=self.cfg.get("di_enabled", False))
-        ttk.Checkbutton(f, text="Use the proxy for downloads",
-                        variable=self.di_enabled).pack(anchor="w", pady=(2, 2))
-        dr = self._row(f, "Username")
-        self.di_user = tk.StringVar(value=self.cfg.get("di_base_username", ""))
-        ttk.Entry(dr, textvariable=self.di_user, width=40).pack(side="left")
-        dr = self._row(f, "Password")
-        self.di_pw = tk.StringVar(value=self.cfg.get("di_password", ""))
-        ttk.Entry(dr, textvariable=self.di_pw, width=40, show="\u2022").pack(side="left")
-        dr = self._row(f, "Country / State")
-        self.di_country = tk.StringVar(value=self.cfg.get("di_country", "us"))
-        ttk.Entry(dr, textvariable=self.di_country, width=8).pack(side="left")
-        self.di_state = tk.StringVar(value=self.cfg.get("di_state", ""))
-        ttk.Entry(dr, textvariable=self.di_state, width=20).pack(side="left", padx=(6, 0))
-        self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", True))
-        ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
-                        variable=self.di_mobile).pack(anchor="w", pady=(2, 2))
-        dr = self._row(f, "Gateway")
-        self.di_gw = tk.StringVar(
-            value=self.cfg.get("di_gateway", "gw.dataimpulse.com:824"))
-        ttk.Entry(dr, textvariable=self.di_gw, width=30).pack(side="left")
-        drow = ttk.Frame(f); drow.pack(anchor="w", pady=(4, 2))
-        ttk.Button(drow, text="Save & Test proxy", style="Accent.TButton",
-                   command=self._di_test).pack(side="left")
-        self.di_status = ttk.Label(drow, style="Dim.TLabel", text="")
-        self.di_status.pack(side="left", padx=8)
+
+    def _di_toggle_geo(self):
+        try:
+            if self.di_geo.get():
+                self._di_geo_row.pack(fill="x", anchor="w", padx=(20, 0),
+                                      pady=(0, 2), before=self._di_gw_row)
+            else:
+                self._di_geo_row.pack_forget()
+        except Exception:
+            pass
 
     def _di_test(self):
         import threading
@@ -501,8 +524,10 @@ class SettingsWindow:
         self.cfg["di_enabled"] = self.di_enabled.get()
         self.cfg["di_base_username"] = self.di_user.get().strip()
         self.cfg["di_password"] = self.di_pw.get().strip()
+        self.cfg["di_use_geo"] = self.di_geo.get()
         self.cfg["di_country"] = self.di_country.get().strip() or "us"
-        self.cfg["di_state"] = self.di_state.get().strip()
+        self.cfg["di_state"] = (self.di_state.get().strip()
+                                if self.di_geo.get() else "")
         self.cfg["di_mobile"] = self.di_mobile.get()
         self.cfg["di_gateway"] = (self.di_gw.get().strip()
                                   or "gw.dataimpulse.com:824")

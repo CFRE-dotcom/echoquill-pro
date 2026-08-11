@@ -167,6 +167,7 @@ DEFAULTS = {
     "di_password": "",
     "di_country": "us",
     "di_state": "",
+    "di_use_geo": False,
     "di_mobile": True,
     "di_gateway": "gw.dataimpulse.com:824",
     "custom_prompts": [],   # "" off, else chrome/edge/firefox/brave for member-only videos

@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.1  (2026-07-16)
+    Proxy/Transcription UI fixes. (1) The Transcription tab now SCROLLS - it was in the no-scroll list, so the proxy fields under the checkbox were cut off and invisible. (2) Moved the PROXY section up (right under "Open the transcriber"); SIGN IN / cookies now sits at the bottom. (3) The proxy's location targeting (country/state) is now OPTIONAL - hidden behind a "Target a specific location" checkbox. By default it just uses your country nationally, nothing to fiddle with.
+
 v2.27.0  (2026-07-16)
     Channel watcher (new) - tray menu -> "Watched channels...". Add channels to watch, each with its own types (Videos/Shorts/Lives), optional keyword, question set, folder, save options, and transcript source. The app checks them (every ~6 hours while running, plus a "Check now" button) and queues any NEW uploads - deduped against a per-channel seen list. New videos run the full pipeline; anything that fails (e.g. a bot-throttle) stays in a PERSISTENT queue and auto-retries with backoff (30m -> 2h -> 6h -> daily), while permanently-gone videos are marked "unavailable" and skipped. Deleting a watch (with a confirmation) also wipes its stored data. A desktop tray notification pops when new results land, and the window shows done/pending/retrying/unavailable counts.
 
