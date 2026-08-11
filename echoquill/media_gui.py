@@ -131,6 +131,85 @@ def fetch_audio(url: str, status_cb) -> str:
     return fetch_audio_info(url, status_cb)[0]
 
 
+def _parse_vtt(raw):
+    """Turn a WebVTT caption file into (segments, plain_text)."""
+    import re
+
+    def to_sec(t):
+        try:
+            parts = [float(x) for x in t.strip().split(":")]
+        except Exception:
+            return 0.0
+        while len(parts) < 3:
+            parts.insert(0, 0.0)
+        return parts[-3] * 3600 + parts[-2] * 60 + parts[-1]
+
+    segs, out, cur = [], [], None
+    for ln in (raw or "").splitlines():
+        m = re.match(r"\s*([\d:.]+)\s*-->", ln)
+        if m:
+            cur = to_sec(m.group(1))
+            continue
+        t = ln.strip()
+        if (not t or t == "WEBVTT" or t.startswith("Kind:")
+                or t.startswith("Language:") or t.startswith("NOTE")
+                or t.isdigit()):
+            continue
+        t = re.sub(r"<[^>]+>", "", t).replace("&nbsp;", " ").replace("&amp;", "&")
+        t = t.strip()
+        if not t or (out and out[-1] == t):     # skip blanks + rolling dupes
+            continue
+        out.append(t)
+        if cur is not None:
+            segs.append((cur, t))
+    text = re.sub(r"\s{2,}", " ", " ".join(out)).strip()
+    return segs, text
+
+
+def fetch_captions(url, cfg, langs=("en", "en-US", "en-GB", "en-orig")):
+    """Pull a video's existing captions as (segments, text, title). Fast, no
+    media download. Returns (None, None, title) if there are no captions."""
+    import yt_dlp
+    import tempfile
+    import glob
+    import shutil
+    tmp = tempfile.mkdtemp(prefix="eqcap_")
+    opts = {"skip_download": True, "writesubtitles": True,
+            "writeautomaticsub": True, "subtitleslangs": list(langs),
+            "subtitlesformat": "vtt", "quiet": True, "no_warnings": True,
+            "outtmpl": os.path.join(tmp, "%(id)s.%(ext)s")}
+    low = (url or "").lower()
+    if "skool.com" in low or ".m3u8" in low:
+        opts["http_headers"] = {"Referer": "https://www.skool.com/",
+                                "Origin": "https://www.skool.com"}
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    title = ""
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+        title = (info or {}).get("title") or ""
+        vtts = glob.glob(os.path.join(tmp, "*.vtt"))
+        if not vtts:
+            return (None, None, title)
+        vtts.sort(key=lambda f: (0 if ".en" in os.path.basename(f).lower()
+                                 else 1))
+        with open(vtts[0], encoding="utf-8", errors="ignore") as fh:
+            segs, text = _parse_vtt(fh.read())
+        return (segs, text, title) if text else (None, None, title)
+    except Exception:
+        return (None, None, title)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _video_comments(url, cfg, max_total=200):
     """Fetch a video's comments (top-sorted). Returns formatted text, or a note
     if there are none / it fails. Off by default because it is slow."""

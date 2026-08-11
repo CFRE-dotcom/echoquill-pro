@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.25.0  (2026-07-16)
+    Auto-batch: new "Transcript source" dropdown - defaults to "Whisper (accurate)". The second option, "YouTube captions (fast)", pulls the video's EXISTING captions instead of downloading and transcribing (fast, no media download, like the online transcript sites), and falls back to Whisper automatically if a video has no captions. Whisper stays the default and still works on every site.
+
 v2.24.0  (2026-07-16)
     Column builder "Add from" now has a Source dropdown - "YouTube channel" or "Search YouTube". (1) Keyword box: when fetching a channel, keep only videos whose TITLE contains your word(s) - it over-scans the channel to find enough matches. (2) Search YouTube: type any query, pick how many, and it fills the URL + Title columns with the top results. Both work the same as the channel fetch and respect your sign-in cookies.
 

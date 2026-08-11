@@ -247,6 +247,18 @@ class AutoBatchWindow:
         helptip.tip(self.setmenu, "The saved set of questions to ask every "
                     "video. Create sets in Ask AI → 'Ask several' → 'Save "
                     "checked as set'.")
+        trow = ttk.Frame(self.win)
+        trow.pack(fill="x", padx=18, pady=(6, 0))
+        ttk.Label(trow, text="Transcript source:").pack(side="left")
+        self.transcript_mode = tk.StringVar(value="Whisper (accurate)")
+        _tm = ttk.OptionMenu(trow, self.transcript_mode, "Whisper (accurate)",
+                             "Whisper (accurate)", "YouTube captions (fast)")
+        _tm.pack(side="left", padx=(6, 0))
+        helptip.tip(_tm, "Whisper: our local speech-to-text - most accurate, "
+                    "works on any site. YouTube captions: pulls the video's "
+                    "existing captions instead (fast, no download); falls back "
+                    "to Whisper if a video has none.")
+
         self.save_video = tk.BooleanVar(value=True)
         self.save_audio = tk.BooleanVar(value=True)
         self.save_desc = tk.BooleanVar(value=False)
@@ -449,7 +461,8 @@ class AutoBatchWindow:
     def _worker(self, rows, questions):
         from .media_gui import (download_video, fetch_audio_info, safe_filename,
                                 _safe_stem, _unique_path, _keep_awake,
-                                _video_description, _video_comments)
+                                _video_description, _video_comments,
+                                fetch_captions)
         from .transcriber import Transcriber
         total = len(rows)
         done = 0
@@ -467,14 +480,30 @@ class AutoBatchWindow:
                     self._log(f"[{i}/{total}] {url}")
                     self._log(f"    folder: {dest}")
 
-                    # 1) audio (also used to transcribe) + dated file name
-                    self._set(f"Video {i}/{total}: downloading audio…")
-                    apath, atitle = fetch_audio_info(url, self._set, self.cfg)
-                    tmpdir = os.path.dirname(apath)
-                    name = normalize_name(ttl or atitle or "video") or "video"
+                    # 1) optional fast path: YouTube captions
+                    use_captions = self.transcript_mode.get().lower().startswith(
+                        "youtube")
+                    cap_segs = cap_text = None
+                    cap_title = ""
+                    if use_captions:
+                        self._set(f"Video {i}/{total}: fetching captions…")
+                        cap_segs, cap_text, cap_title = fetch_captions(
+                            url, self.cfg)
+                        if not cap_text:
+                            self._log("    no captions found — using Whisper")
+                    got_captions = bool(cap_text)
+
+                    # 2) audio: needed for Whisper, or if you want to save audio
+                    apath, atitle, tmpdir = None, "", None
+                    if (not got_captions) or self.save_audio.get():
+                        self._set(f"Video {i}/{total}: downloading audio…")
+                        apath, atitle = fetch_audio_info(url, self._set, self.cfg)
+                        tmpdir = os.path.dirname(apath)
+                    name = normalize_name(
+                        ttl or cap_title or atitle or "video") or "video"
                     dname = _dated(name)
 
-                    # 2) full video file (dated)
+                    # 3) full video file (dated)
                     if self.save_video.get():
                         self._set(f"Video {i}/{total}: downloading video…")
                         try:
@@ -484,7 +513,7 @@ class AutoBatchWindow:
                         except Exception as e:
                             self._log(f"    video save failed: {e}")
 
-                    # 3) audio file (dated)
+                    # 4) audio file (dated)
                     if self.save_audio.get() and apath and os.path.exists(apath):
                         try:
                             ext = os.path.splitext(apath)[1] or ".m4a"
@@ -495,26 +524,30 @@ class AutoBatchWindow:
                         except Exception as e:
                             self._log(f"    audio save failed: {e}")
 
-                    # 4) transcribe + save transcript (description merged in)
+                    # 5) transcript: captions or Whisper
                     if self._cancel:
                         break
-                    self._set(f"Video {i}/{total}: transcribing…")
-                    if self._eng is None:
-                        self._eng = Transcriber(self.cfg.get("model", "base"))
-                    model = self._eng.load()
-                    lang = self.cfg.get("language", "auto")
-                    lang = None if lang in ("", "auto") else lang
-                    segs, parts = [], []
-                    with self._eng._lock:
-                        segments, _info = model.transcribe(
-                            apath, language=lang, vad_filter=True)
-                        for seg in segments:
-                            if self._cancel:
-                                break
-                            t = seg.text.strip()
-                            segs.append((seg.start, t))
-                            parts.append(t)
-                    text = " ".join(parts).strip()
+                    if got_captions:
+                        segs, text = cap_segs, cap_text
+                        self._log("    transcript from YouTube captions ✓")
+                    else:
+                        self._set(f"Video {i}/{total}: transcribing…")
+                        if self._eng is None:
+                            self._eng = Transcriber(self.cfg.get("model", "base"))
+                        model = self._eng.load()
+                        lang = self.cfg.get("language", "auto")
+                        lang = None if lang in ("", "auto") else lang
+                        segs, parts = [], []
+                        with self._eng._lock:
+                            segments, _info = model.transcribe(
+                                apath, language=lang, vad_filter=True)
+                            for seg in segments:
+                                if self._cancel:
+                                    break
+                                t = seg.text.strip()
+                                segs.append((seg.start, t))
+                                parts.append(t)
+                        text = " ".join(parts).strip()
                     body = text
                     if self.save_desc.get():
                         desc = _video_description(url, self.cfg)
