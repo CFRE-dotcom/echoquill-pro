@@ -167,6 +167,7 @@ class App:
                     lambda: self.events.put("toggle"), default=True),
                 pystray.MenuItem("Voice command", lambda: self.events.put("toggle_command")),
                 pystray.MenuItem("Transcribe video / URL", lambda: self.events.put("media")),
+                pystray.MenuItem("Watched channels…", lambda: self.events.put("watch")),
                 pystray.MenuItem("Settings…", lambda: self.events.put("settings")),
                 pystray.MenuItem("Meeting / Record", lambda: self.events.put("meeting")),
                 pystray.MenuItem("Read aloud (Text-to-speech)", lambda: self.events.put("read_aloud")),
@@ -188,7 +189,30 @@ class App:
         except Exception:
             pass
         self.root.after(50, self._poll)
+        self.root.after(120000, self._watcher_tick)   # first channel check ~2 min in
         self.root.mainloop()
+
+    def _watcher_tick(self):
+        import threading
+
+        def run():
+            try:
+                from . import watcher as _w
+                done = _w.run_once(self.cfg)
+                if done:
+                    try:
+                        self.tray.notify(
+                            f"{done} new video(s) transcribed - check your "
+                            "Transcriptions folder.", "EchoQuill - new results")
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        threading.Thread(target=run, daemon=True).start()
+        try:
+            self.root.after(6 * 3600 * 1000, self._watcher_tick)   # every 6h
+        except Exception:
+            pass
 
     def _log_crash(self, where, exc):
         """Never let a handler crash silently - record it and keep running."""
@@ -267,6 +291,11 @@ class App:
         elif ev == "read_aloud":
             from .tts_gui import ReadAloudWindow
             ReadAloudWindow(self.root, self.cfg)
+        elif ev == "watch":
+            from .watcher_gui import WatcherWindow
+            from . import watcher as _w
+            _w.clear_new_ready()
+            WatcherWindow(self.root, self.cfg)
         elif ev == "quit":
             self._quit()
             return True

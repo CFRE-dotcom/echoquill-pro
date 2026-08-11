@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.0  (2026-07-16)
+    Channel watcher (new) - tray menu -> "Watched channels...". Add channels to watch, each with its own types (Videos/Shorts/Lives), optional keyword, question set, folder, save options, and transcript source. The app checks them (every ~6 hours while running, plus a "Check now" button) and queues any NEW uploads - deduped against a per-channel seen list. New videos run the full pipeline; anything that fails (e.g. a bot-throttle) stays in a PERSISTENT queue and auto-retries with backoff (30m -> 2h -> 6h -> daily), while permanently-gone videos are marked "unavailable" and skipped. Deleting a watch (with a confirmation) also wipes its stored data. A desktop tray notification pops when new results land, and the window shows done/pending/retrying/unavailable counts.
+
 v2.26.0  (2026-07-16)
     Optional DataImpulse proxy for downloads (Settings -> Transcription -> PROXY). Enter username/password, country/state, and mobile vs residential - it builds the DataImpulse username for you (base__cr.us;state.x;type.mobile). "Save & Test proxy" verifies the exit IP and geography THROUGH the proxy before it is ever used (verify-before-execute, per the DataImpulse procedure). When enabled + verified, every download routes through it (yt-dlp socks5) - dodges datacenter-VPN blocks and raises YouTube's limits. Off by default; the password is stored in Windows Credential Manager.
 
