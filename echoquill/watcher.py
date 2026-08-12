@@ -10,6 +10,17 @@ import threading
 _LOCK = threading.Lock()
 _BUSY = False
 
+# live progress the watcher window polls
+ACTIVITY = {"phase": "idle", "i": 0, "n": 0, "title": "", "wait_until": 0}
+
+
+def get_activity():
+    return dict(ACTIVITY)
+
+
+def _set_activity(**kw):
+    ACTIVITY.update(kw)
+
 # retry backoff after N failed attempts: 30m, 2h, 6h, then daily
 BACKOFF = [0, 1800, 7200, 21600, 86400]
 
@@ -51,6 +62,43 @@ def add_channel(ch):
     return ch["id"]
 
 
+def update_channel(cid, fields):
+    """Edit an existing watch in place (keeps id, seen list, enabled)."""
+    d = load()
+    for ch in d["channels"]:
+        if ch.get("id") == cid:
+            keep_id = ch.get("id")
+            seen = ch.get("seen", [])
+            en = ch.get("enabled", True)
+            ch.clear()
+            ch.update(fields)
+            ch["id"] = keep_id
+            ch["seen"] = seen
+            ch["enabled"] = en
+            break
+    save(d)
+
+
+def stats(cid):
+    """Per-channel counts: done total, last finished time, last-7-days done."""
+    d = load()
+    now = time.time()
+    total = last = last7 = pending = 0
+    for q in d["queue"]:
+        if q.get("channel_id") != cid:
+            continue
+        if q.get("status") == "done":
+            total += 1
+            da = q.get("done_at", 0) or 0
+            if da > last:
+                last = da
+            if da and now - da <= 7 * 86400:
+                last7 += 1
+        elif q.get("status") not in ("unavailable",):
+            pending += 1
+    return {"done": total, "last": last, "last7": last7, "pending": pending}
+
+
 def delete_channel(cid):
     """Remove a watch AND everything stored for it (seen list + queued items)."""
     d = load()
@@ -59,7 +107,7 @@ def delete_channel(cid):
     save(d)
 
 
-def check_new(cfg):
+def check_new(cfg, log=lambda s: None):
     """Queue any new uploads from each enabled channel. Returns count queued."""
     from .auto_batch import fetch_channel
     from . import prompts as _pr
@@ -70,6 +118,8 @@ def check_new(cfg):
             continue
         seen = set(ch.get("seen", []))
         kinds = ch.get("kinds") or ["Videos"]
+        log(f"Scanning {ch.get('url','')} ({', '.join(kinds)})…")
+        before = added
         kw = (ch.get("keyword", "") or "").strip().lower()
         limit = int(ch.get("count") or 15)
         for kind in kinds:
@@ -101,6 +151,9 @@ def check_new(cfg):
                 })
                 added += 1
         ch["seen"] = list(seen)
+        got = added - before
+        log(f"  {got} new video(s) queued." if got
+            else "  nothing new (already seen).")
     save(d)
     return added
 
@@ -119,6 +172,15 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
         per_cycle = int((cfg or {}).get("watch_per_cycle", 5) or 0)
         d = load()
         processed = 0
+        _now = time.time()
+        due = 0
+        for _it in d["queue"]:
+            if _it.get("status") in ("done", "unavailable"):
+                continue
+            if _it.get("next_try", 0) > _now:
+                continue
+            due += 1
+        n_total = min(due, per_cycle) if per_cycle else due
         for item in d["queue"]:
             if cancel():
                 break
@@ -129,6 +191,9 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
             if per_cycle and processed >= per_cycle:
                 break
             if processed > 0 and gap > 0:
+                _set_activity(phase="waiting", i=processed + 1, n=n_total,
+                              title=item.get("title") or item.get("url", ""),
+                              wait_until=time.time() + gap)
                 for _ in range(gap):
                     if cancel():
                         break
@@ -136,12 +201,18 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
                 if cancel():
                     break
             processed += 1
-            log(f"→ {item.get('title') or item['url']}")
-            status, msg = pipeline.process_video(cfg, item, log, cancel)
+            title = item.get("title") or item.get("url", "")
+            _set_activity(phase="Starting", i=processed, n=n_total,
+                          title=title, wait_until=0)
+            log(f"→ {title}")
+            status, msg = pipeline.process_video(
+                cfg, item, log, cancel,
+                progress=lambda ph: _set_activity(phase=ph))
             item["attempts"] = item.get("attempts", 0) + 1
             if status == "done":
                 item["status"] = "done"
                 item["last_error"] = ""
+                item["done_at"] = time.time()
                 done += 1
                 log("    done ✓")
             elif status == "unavailable":
@@ -160,12 +231,13 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
             fresh["new_ready"] = fresh.get("new_ready", 0) + done
             save(fresh)
     finally:
+        _set_activity(phase="idle", i=0, n=0, title="", wait_until=0)
         _BUSY = False
     return done
 
 
 def run_once(cfg, log=lambda s: None, cancel=lambda: False):
-    check_new(cfg)
+    check_new(cfg, log)
     return process_pending(cfg, log, cancel)
 
 

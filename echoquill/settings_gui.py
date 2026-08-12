@@ -471,8 +471,12 @@ class SettingsWindow:
             value=self.cfg.get("di_gateway", "gw.dataimpulse.com:824"))
         _dgw = ttk.Entry(dr, textvariable=self.di_gw, width=30)
         _dgw.pack(side="left")
-        helptip.tip(_dgw, "Leave as gw.dataimpulse.com:824 unless DataImpulse "
-                    "gave you a different gateway host:port.")
+        helptip.tip(_dgw, "Leave as gw.dataimpulse.com:824. This app connects "
+                    "over SOCKS5, and DataImpulse's SOCKS5 rotating port is 824. "
+                    "Your dashboard shows 823 because that is the HTTP port - "
+                    "same proxy, same login/password, just a different protocol. "
+                    "Don't change it unless DataImpulse gives you a different "
+                    "gateway host.")
         drow = ttk.Frame(f); drow.pack(anchor="w", pady=(4, 10))
         ttk.Button(drow, text="Save & Test proxy", style="Accent.TButton",
                    command=self._di_test).pack(side="left")

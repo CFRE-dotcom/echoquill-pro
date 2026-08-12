@@ -8,6 +8,17 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.7  (2026-08-12)
+    Big watcher upgrade - visibility + control.
+    - LIVE MONITOR: a big status line at the top of the run area shows exactly where it is in real time - "Video 2/5 · Transcribing · <title>", or a countdown "Waiting 8m 12s before video 3/5", or "Idle". No more guessing whether it's working.
+    - Per-channel STATS: each channel row now shows downloaded count, last-7-days count, and when the last one finished (e.g. "✓12 · 7d:3 · last 2h ago · 4 queued"). Hover a channel for a full breakdown.
+    - EDIT a channel: double-click any watched channel to load it into the form, change anything, Save changes. No longer static.
+    - SKIP already-downloaded: before downloading, it checks the target folder - if that video's transcript is already there (ignoring the date prefix), it skips it. Re-runs won't re-download.
+    - Clearer LOG: the log now says what it's doing per channel - "Scanning <url>… 3 new video(s) queued" / "nothing new (already seen)."
+    - Whole watcher window now SCROLLS (right-side scrollbar) so nothing gets cut off.
+    - "Test notification" button to confirm toasts fire on your PC.
+    - Proxy gateway tooltip now explains 823 vs 824: this app uses SOCKS5 (port 824); your dashboard's 823 is the HTTP port - same proxy, don't change it.
+
 v2.27.6  (2026-08-12)
     Notifications now actually fire on a successful watcher run. Two bugs: (1) the "Check now" button in the watcher window had NO notification code at all - it does now. (2) The background path relied on the Windows tray balloon, which silently does nothing on many machines - replaced with our own always-on-top toast (bottom-right, click to dismiss, auto-closes) so it can't fail quietly. You'll get a toast whenever new videos finish, whether it ran on the timer or from Check now.
 

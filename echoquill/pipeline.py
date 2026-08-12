@@ -3,7 +3,30 @@ per-video work): captions/audio -> optional video/audio save -> transcript
 (+description) -> comments -> question set -> Q&A. Returns a status."""
 
 
-def process_video(cfg, item, log=lambda s: None, cancel=lambda: False):
+def _already_have(dest, name):
+    """True if a main transcript for <name> already exists in dest, ignoring the
+    date prefix (YYYY-MM-DD-) so a re-run doesn't re-download."""
+    import os
+    import re
+    from .media_gui import safe_filename
+    try:
+        if not name or not os.path.isdir(dest):
+            return False
+        target = safe_filename(name)[:-4].strip().lower()
+        datepat = re.compile(r"^\d{4}-\d{1,2}-\d{1,2}-")
+        for fn in os.listdir(dest):
+            if not fn.lower().endswith(".txt"):
+                continue
+            stem = datepat.sub("", fn[:-4]).strip().lower()
+            if stem == target:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
+                  progress=lambda ph: None):
     """Run one video end-to-end. Returns (status, message) where status is
     'done', 'failed' (retryable) or 'unavailable' (permanent)."""
     import os
@@ -23,22 +46,30 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False):
     try:
         dest = resolve_folder(cfg, item.get("folder", ""))
 
+        early = normalize_name(ttl) if ttl else ""
+        if early and _already_have(dest, early):
+            log("    already in this folder — skipping download.")
+            return ("done", early)
+
         use_caps = str(item.get("transcript_mode", "")).lower().startswith(
             "youtube")
         cap_segs = cap_text = None
         cap_title = ""
         if use_caps:
+            progress("Fetching captions")
             cap_segs, cap_text, cap_title = fetch_captions(url, cfg)
         got_caps = bool(cap_text)
 
         apath, atitle = None, ""
         if (not got_caps) or item.get("save_audio"):
+            progress("Downloading audio")
             apath, atitle = fetch_audio_info(url, log, cfg)
             tmpdir = os.path.dirname(apath)
         name = normalize_name(ttl or cap_title or atitle or "video") or "video"
         dname = _dated(name)
 
         if item.get("save_video"):
+            progress("Saving video")
             try:
                 download_video(url, cfg, dest, log, name=dname)
             except Exception as e:
@@ -54,6 +85,7 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False):
         if got_caps:
             segs, text = cap_segs, cap_text
         else:
+            progress("Transcribing")
             eng = Transcriber(cfg.get("model", "base"))
             model = eng.load()
             lang = cfg.get("language", "auto")
@@ -76,11 +108,16 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False):
             desc = _video_description(url, cfg)
             body = ("========== VIDEO DESCRIPTION ==========\n" + desc +
                     "\n\n========== TRANSCRIPTION ==========\n" + text)
+        if _already_have(dest, name):
+            log("    already in this folder — skipping.")
+            return ("done", name)
+        progress("Writing transcript")
         tpath = _unique_path(os.path.join(dest, safe_filename(dname)))
         with open(tpath, "w", encoding="utf-8") as f:
             f.write(f"{name}\n{url}\n\n{body}")
 
         if item.get("save_comments"):
+            progress("Saving comments")
             try:
                 cmts = _video_comments(url, cfg)
                 cpath = _unique_path(os.path.join(
@@ -91,6 +128,7 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False):
                 pass
 
         if questions:
+            progress("Asking AI")
             qa = []
             for q in questions:
                 if cancel():
