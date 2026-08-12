@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.29.1  (2026-08-12)
+    Smart-proxy hardening: clear state between IPs. Per the DataImpulse skill rule that "IP rotation and browser state are separate," the proxy now wipes yt-dlp's on-disk cache (nsig/player tokens) AFTER releasing an IP and BEFORE firing a new one - the no-browser equivalent of a fresh context - so a new IP never reuses state minted under the previous IP.
+
 v2.29.0  (2026-08-12)
     Search by keyword (topic subscriptions) + smart proxy.
     - SEARCH BY KEYWORD: the Channel watcher's Channels tab now has two sub-tabs - "Add a channel" and "Search by keyword" - feeding one shared list. A search follows a TOPIC across all of YouTube: it re-runs on the timer, queues only NEW matches (deduped), and pipelines them like a channel.

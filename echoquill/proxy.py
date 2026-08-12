@@ -24,6 +24,18 @@ def set_active_sessid(sid):
 def clear_active_sessid():
     global _ACTIVE_SESSID
     _ACTIVE_SESSID = None
+    clear_cache()          # wipe session state AFTER releasing an IP
+
+
+def clear_cache():
+    """Remove yt-dlp's on-disk cache (nsig/player tokens, etc.) so a new IP does
+    NOT reuse state minted under the previous IP - the no-browser equivalent of
+    a fresh context. Called after releasing an IP and before firing a new one."""
+    try:
+        import yt_dlp
+        yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}).cache.remove()
+    except Exception:
+        pass
 
 
 def build_username(cfg, sessid=None):
@@ -111,6 +123,7 @@ def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
     tries = max(1, int(tries or 3))
     clear_active_sessid()
     for attempt in range(1, tries + 1):
+        clear_cache()          # fresh state BEFORE firing a new IP
         sid = uuid.uuid4().hex[:12]
         ok, ip, geo, msg = _verify(cfg, sid, timeout)
         if ok:
