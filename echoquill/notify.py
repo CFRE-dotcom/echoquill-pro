@@ -6,6 +6,7 @@ registers a handler on startup; anything can call notify.send(title, msg).
 """
 
 _HANDLER = None
+_BADGE = None
 
 
 def set_handler(fn):
@@ -19,5 +20,21 @@ def send(title, msg):
         return
     try:
         fn(title, msg)
+    except Exception:
+        pass
+
+
+def set_badge_handler(fn):
+    global _BADGE
+    _BADGE = fn
+
+
+def badge(on):
+    """Turn the 'new results' dot on the pill + tray on or off."""
+    fn = _BADGE
+    if not fn:
+        return
+    try:
+        fn(bool(on))
     except Exception:
         pass

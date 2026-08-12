@@ -1,5 +1,5 @@
-"""Channel watcher window: add/edit/delete watched channels, run a check now,
-see queue status, and hover a channel for its download stats."""
+"""Channel watcher window. Tabbed: Channels / Schedule / Proxy, with a live
+monitor and the log always visible below the tabs."""
 
 import threading
 import time
@@ -21,172 +21,59 @@ def _ago(ts):
     return f"{secs // 86400}d ago"
 
 
+def _entry(parent, var, width=None):
+    return tk.Entry(parent, textvariable=var, width=width or 0, bg=theme.FIELD,
+                    fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                    borderwidth=1)
+
+
 class WatcherWindow:
     def __init__(self, parent, cfg):
         self.cfg = cfg
         self._chan_ids = []
         self._cancel = False
-        self._editing = None          # channel id being edited, or None
+        self._editing = None
         self._tip = None
 
         self.win = tk.Toplevel(parent)
         self.win.title("EchoQuill — Channel watcher")
-        self.win.geometry("760x760")
-        self.win.minsize(620, 560)
+        self.win.geometry("800x660")
+        self.win.minsize(680, 580)
         theme.apply(self.win)
 
-        # whole window scrolls
-        sc = theme.Scrollable(self.win)
-        sc.pack(fill="both", expand=True)
-        body = sc.inner
-
-        top = ttk.Frame(body)
+        # ---- header ----
+        top = ttk.Frame(self.win)
         top.pack(fill="x", padx=16, pady=(12, 2))
         ttk.Label(top, text="Channel watcher", style="Title.TLabel").pack(
             side="left")
-        ttk.Label(body, style="Dim.TLabel", wraplength=680, text=(
-            "Watch channels for new uploads and auto-run them through the "
-            "pipeline. New videos are queued and retried until they succeed; "
-            "you get a toast when new results land. Double-click a channel to "
-            "edit it; hover it to see its stats.")).pack(anchor="w", padx=16)
 
-        # -------- add / edit form --------
-        self.form_lbl = ttk.Label(body, text="Add a channel",
-                                  style="Section.TLabel")
-        self.form_lbl.pack(anchor="w", padx=16, pady=(10, 2))
+        # ---- tabs ----
+        nb = ttk.Notebook(self.win)
+        nb.pack(fill="both", expand=True, padx=12, pady=(6, 4))
+        tab_ch = ttk.Frame(nb)
+        tab_sch = ttk.Frame(nb)
+        tab_prx = ttk.Frame(nb)
+        nb.add(tab_ch, text="  Channels  ")
+        nb.add(tab_sch, text="  Schedule & pacing  ")
+        nb.add(tab_prx, text="  Proxy  ")
 
-        r = ttk.Frame(body); r.pack(fill="x", padx=16, pady=1)
-        ttk.Label(r, text="Channel URL / @handle:").pack(side="left")
-        self.url_var = tk.StringVar()
-        tk.Entry(r, textvariable=self.url_var, bg=theme.FIELD, fg=theme.FG,
-                 insertbackground=theme.FG, relief="solid", borderwidth=1).pack(
-                 side="left", fill="x", expand=True, padx=(6, 0))
+        self._build_channels_tab(tab_ch)
+        self._build_schedule_tab(tab_sch)
+        self._build_proxy_tab(tab_prx)
 
-        r = ttk.Frame(body); r.pack(fill="x", padx=16, pady=1)
-        ttk.Label(r, text="Catch:").pack(side="left")
-        self.k_videos = tk.BooleanVar(value=True)
-        self.k_shorts = tk.BooleanVar(value=False)
-        self.k_lives = tk.BooleanVar(value=False)
-        ttk.Checkbutton(r, text="Videos", variable=self.k_videos).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Shorts", variable=self.k_shorts).pack(side="left", padx=(8, 0))
-        ttk.Checkbutton(r, text="Lives", variable=self.k_lives).pack(side="left", padx=(8, 12))
-        ttk.Label(r, text="Keyword:").pack(side="left")
-        self.kw_var = tk.StringVar()
-        tk.Entry(r, textvariable=self.kw_var, width=16, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=(4, 12))
-        ttk.Label(r, text="Newest:").pack(side="left")
-        self.count_var = tk.StringVar(value="15")
-        tk.Entry(r, textvariable=self.count_var, width=5, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=(4, 0))
+        # ---- constant: monitor ----
+        mon = tk.Frame(self.win, bg="#141414", bd=1, relief="solid")
+        mon.pack(fill="x", padx=16, pady=(2, 2))
+        self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
+                                font=("Segoe UI", 12, "bold"), anchor="w",
+                                justify="left", wraplength=740,
+                                text="●  Idle — nothing running")
+        self.monitor.pack(fill="x", padx=12, pady=8)
+        mon.bind("<Configure>", lambda e: self.monitor.configure(
+            wraplength=max(220, e.width - 28)))
 
-        r = ttk.Frame(body); r.pack(fill="x", padx=16, pady=1)
-        ttk.Label(r, text="Question set:").pack(side="left")
-        self.set_var = tk.StringVar(value="—")
-        self.set_menu = ttk.OptionMenu(r, self.set_var, "—")
-        self.set_menu.configure(width=18)
-        self.set_menu.pack(side="left", padx=(6, 12))
-        self._refresh_sets()
-        ttk.Label(r, text="Transcript:").pack(side="left")
-        self.tmode_var = tk.StringVar(value="Whisper (accurate)")
-        ttk.OptionMenu(r, self.tmode_var, "Whisper (accurate)",
-                       "Whisper (accurate)", "YouTube captions (fast)").pack(
-                       side="left", padx=(4, 0))
-
-        r = ttk.Frame(body); r.pack(fill="x", padx=16, pady=1)
-        ttk.Label(r, text="Folder:").pack(side="left")
-        self.folder_var = tk.StringVar()
-        tk.Entry(r, textvariable=self.folder_var, width=22, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=(6, 12))
-        self.sv = tk.BooleanVar(value=False)
-        self.sa = tk.BooleanVar(value=False)
-        self.sd = tk.BooleanVar(value=False)
-        self.sc = tk.BooleanVar(value=False)
-        ttk.Checkbutton(r, text="Video", variable=self.sv).pack(side="left")
-        ttk.Checkbutton(r, text="Audio", variable=self.sa).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Desc", variable=self.sd).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Comments", variable=self.sc).pack(side="left", padx=(6, 0))
-
-        arow = ttk.Frame(body); arow.pack(anchor="w", padx=16, pady=(4, 6))
-        self.add_btn = ttk.Button(arow, text="＋ Add channel",
-                                  style="Accent.TButton", command=self._add)
-        self.add_btn.pack(side="left")
-        self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
-                                          command=self._cancel_edit)
-        # shown only while editing
-
-        # -------- schedule --------
-        sch = ttk.Frame(body); sch.pack(fill="x", padx=16, pady=(0, 4))
-        ttk.Label(sch, text="Check for new every").pack(side="left")
-        self.chk_hours = tk.StringVar(
-            value=str(self.cfg.get("watch_check_hours", 6)))
-        tk.Entry(sch, textvariable=self.chk_hours, width=4, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=4)
-        ttk.Label(sch, text="hours   ·   retry failed every").pack(side="left")
-        self.retry_min = tk.StringVar(
-            value=str(self.cfg.get("watch_retry_minutes", 30)))
-        tk.Entry(sch, textvariable=self.retry_min, width=5, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=4)
-        ttk.Label(sch, text="minutes").pack(side="left")
-        ttk.Button(sch, text="Save schedule",
-                   command=self._save_sched).pack(side="left", padx=10)
-
-        sch2 = ttk.Frame(body); sch2.pack(fill="x", padx=16, pady=(0, 4))
-        ttk.Label(sch2, text="When several are queued, do at most").pack(side="left")
-        self.per_cycle = tk.StringVar(
-            value=str(self.cfg.get("watch_per_cycle", 5)))
-        tk.Entry(sch2, textvariable=self.per_cycle, width=4, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=4)
-        ttk.Label(sch2, text="per cycle · wait").pack(side="left")
-        self.gap_sec = tk.StringVar(
-            value=str(self.cfg.get("watch_gap_seconds", 600)))
-        _ge = tk.Entry(sch2, textvariable=self.gap_sec, width=6, bg=theme.FIELD,
-                       fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                       borderwidth=1)
-        _ge.pack(side="left", padx=4)
-        ttk.Label(sch2, text="sec between each").pack(side="left")
-        helptip.tip(_ge, "Seconds to pause between videos so YouTube does not "
-                    "flag the batch. 600 (10 min) is a safe default; you can go "
-                    "lower when running on a residential/mobile proxy.")
-
-        prow = ttk.Frame(body); prow.pack(fill="x", padx=16, pady=(0, 4))
-        self.proxy_on = tk.BooleanVar(value=bool(self.cfg.get("di_enabled")))
-        _pc = ttk.Checkbutton(prow, text="Run downloads through the proxy "
-                              "(residential/mobile IP)", variable=self.proxy_on,
-                              command=self._toggle_proxy)
-        _pc.pack(side="left")
-        ttk.Label(prow, style="Dim.TLabel",
-                  text="  (saves instantly — not part of Save schedule)").pack(
-                  side="left")
-        helptip.tip(_pc, "Uses your DataImpulse proxy (set it up in Settings ▸ "
-                    "Transcription). Verify it works there first. Lets you "
-                    "safely shorten the wait between videos.")
-
-        # -------- watched list --------
-        ttk.Label(body, text="Watched channels", style="Section.TLabel").pack(
-            anchor="w", padx=16, pady=(4, 2))
-        self.lb = theme.dark_listbox(body, height=7)
-        self.lb.pack(fill="both", expand=True, padx=16, pady=(0, 4))
-        self.lb.bind("<Double-Button-1>", self._edit_selected)
-        self.lb.bind("<Motion>", self._hover)
-        self.lb.bind("<Leave>", lambda _e: self._hide_tip())
-        lrow = ttk.Frame(body); lrow.pack(fill="x", padx=16, pady=(0, 6))
-        _bd = ttk.Button(lrow, text="Delete selected (and its data)",
-                         command=self._delete)
-        _bd.pack(side="left")
-        helptip.tip(_bd, "Removes the watch AND everything stored for it "
-                    "(seen list + queued items). Asks first.")
-        ttk.Label(lrow, style="Dim.TLabel",
-                  text="  Double-click a channel to edit · hover for stats").pack(
-                  side="left", padx=8)
-
-        # -------- run + status --------
-        brow = ttk.Frame(body); brow.pack(fill="x", padx=16, pady=(2, 2))
+        # ---- constant: run controls ----
+        brow = ttk.Frame(self.win); brow.pack(fill="x", padx=16, pady=(2, 2))
         ttk.Button(brow, text="Check now", style="Accent.TButton",
                    command=self._check_now).pack(side="left")
         ttk.Button(brow, text="Refresh", command=self._refresh).pack(
@@ -204,20 +91,14 @@ class WatcherWindow:
                     "notifications work on your PC.")
         ttk.Button(brow, text="Close", command=self.win.destroy).pack(side="right")
 
-        mon = tk.Frame(body, bg="#141414", bd=1, relief="solid")
-        mon.pack(fill="x", padx=16, pady=(6, 2))
-        self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
-                                font=("Segoe UI", 12, "bold"), anchor="w",
-                                justify="left", wraplength=680,
-                                text="●  Idle — nothing running")
-        self.monitor.pack(fill="x", padx=12, pady=8)
-        mon.bind("<Configure>", lambda e: self.monitor.configure(
-            wraplength=max(200, e.width - 28)))
-        self.status = ttk.Label(body, style="Dim.TLabel", text="")
+        self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16)
-        self.log = theme.dark_text(body, wrap="word", height=6)
-        self.log.pack(fill="both", expand=True, padx=16, pady=(2, 12))
 
+        # ---- constant: log ----
+        self.log = theme.dark_text(self.win, wrap="word", height=6)
+        self.log.pack(fill="x", padx=16, pady=(2, 12))
+
+        notify.badge(False)   # opening the watcher clears the 'new results' dot
         self.win.deiconify()
         self.win.lift()
         self.win.attributes("-topmost", True)
@@ -226,7 +107,137 @@ class WatcherWindow:
         self._refresh()
         self._tick_monitor()
 
-    # ---------- helpers ----------
+    # ================= tab builders =================
+    def _build_channels_tab(self, f):
+        ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
+            "Double-click a channel to edit it · hover for stats.")).pack(
+            anchor="w", padx=8, pady=(8, 2))
+        self.lb = theme.dark_listbox(f, height=8)
+        self.lb.pack(fill="both", expand=True, padx=8, pady=(0, 4))
+        self.lb.bind("<Double-Button-1>", self._edit_selected)
+        self.lb.bind("<Motion>", self._hover)
+        self.lb.bind("<Leave>", lambda _e: self._hide_tip())
+        lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 6))
+        _bd = ttk.Button(lrow, text="Delete selected (and its data)",
+                         command=self._delete)
+        _bd.pack(side="left")
+        helptip.tip(_bd, "Removes the watch AND everything stored for it "
+                    "(seen list + queued items). Asks first.")
+
+        self.form_lbl = ttk.Label(f, text="Add a channel",
+                                  style="Section.TLabel")
+        self.form_lbl.pack(anchor="w", padx=8, pady=(6, 2))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Channel URL / @handle:").pack(side="left")
+        self.url_var = tk.StringVar()
+        _entry(r, self.url_var).pack(side="left", fill="x", expand=True,
+                                     padx=(6, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Catch:").pack(side="left")
+        self.k_videos = tk.BooleanVar(value=True)
+        self.k_shorts = tk.BooleanVar(value=False)
+        self.k_lives = tk.BooleanVar(value=False)
+        ttk.Checkbutton(r, text="Videos", variable=self.k_videos).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Shorts", variable=self.k_shorts).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(r, text="Lives", variable=self.k_lives).pack(side="left", padx=(8, 12))
+        ttk.Label(r, text="Keyword:").pack(side="left")
+        self.kw_var = tk.StringVar()
+        _entry(r, self.kw_var, 16).pack(side="left", padx=(4, 12))
+        ttk.Label(r, text="Newest:").pack(side="left")
+        self.count_var = tk.StringVar(value="15")
+        _entry(r, self.count_var, 5).pack(side="left", padx=(4, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Question set:").pack(side="left")
+        self.set_var = tk.StringVar(value="—")
+        self.set_menu = ttk.OptionMenu(r, self.set_var, "—")
+        self.set_menu.configure(width=18)
+        self.set_menu.pack(side="left", padx=(6, 12))
+        self._refresh_sets()
+        ttk.Label(r, text="Transcript:").pack(side="left")
+        self.tmode_var = tk.StringVar(value="Whisper (accurate)")
+        ttk.OptionMenu(r, self.tmode_var, "Whisper (accurate)",
+                       "Whisper (accurate)", "YouTube captions (fast)").pack(
+                       side="left", padx=(4, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Folder:").pack(side="left")
+        self.folder_var = tk.StringVar()
+        _entry(r, self.folder_var, 22).pack(side="left", padx=(6, 12))
+        self.sv = tk.BooleanVar(value=False)
+        self.sa = tk.BooleanVar(value=False)
+        self.sd = tk.BooleanVar(value=False)
+        self.sc = tk.BooleanVar(value=False)
+        ttk.Checkbutton(r, text="Video", variable=self.sv).pack(side="left")
+        ttk.Checkbutton(r, text="Audio", variable=self.sa).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Desc", variable=self.sd).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Comments", variable=self.sc).pack(side="left", padx=(6, 0))
+
+        arow = ttk.Frame(f); arow.pack(anchor="w", padx=8, pady=(4, 8))
+        self.add_btn = ttk.Button(arow, text="＋ Add channel",
+                                  style="Accent.TButton", command=self._add)
+        self.add_btn.pack(side="left")
+        self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
+                                          command=self._cancel_edit)
+
+    def _build_schedule_tab(self, f):
+        ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
+            "These four settings are saved with the Save schedule button "
+            "below.")).pack(anchor="w", padx=10, pady=(10, 6))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=10, pady=4)
+        ttk.Label(r, text="Check for new every").pack(side="left")
+        self.chk_hours = tk.StringVar(
+            value=str(self.cfg.get("watch_check_hours", 6)))
+        _entry(r, self.chk_hours, 4).pack(side="left", padx=4)
+        ttk.Label(r, text="hours").pack(side="left")
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=10, pady=4)
+        ttk.Label(r, text="Retry a failed video every").pack(side="left")
+        self.retry_min = tk.StringVar(
+            value=str(self.cfg.get("watch_retry_minutes", 30)))
+        _entry(r, self.retry_min, 5).pack(side="left", padx=4)
+        ttk.Label(r, text="minutes").pack(side="left")
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=10, pady=4)
+        ttk.Label(r, text="When several are queued, do at most").pack(side="left")
+        self.per_cycle = tk.StringVar(
+            value=str(self.cfg.get("watch_per_cycle", 5)))
+        _entry(r, self.per_cycle, 4).pack(side="left", padx=4)
+        ttk.Label(r, text="per cycle").pack(side="left")
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=10, pady=4)
+        ttk.Label(r, text="Wait").pack(side="left")
+        self.gap_sec = tk.StringVar(
+            value=str(self.cfg.get("watch_gap_seconds", 600)))
+        _ge = _entry(r, self.gap_sec, 6); _ge.pack(side="left", padx=4)
+        ttk.Label(r, text="seconds between each video").pack(side="left")
+        helptip.tip(_ge, "Seconds to pause between videos so YouTube does not "
+                    "flag the batch. 600 (10 min) is a safe default; you can go "
+                    "lower on a residential/mobile proxy.")
+
+        ttk.Button(f, text="Save schedule", style="Accent.TButton",
+                   command=self._save_sched).pack(anchor="w", padx=10, pady=(10, 4))
+
+    def _build_proxy_tab(self, f):
+        self.proxy_on = tk.BooleanVar(value=bool(self.cfg.get("di_enabled")))
+        _pc = ttk.Checkbutton(f, text="Run downloads through the proxy "
+                              "(residential/mobile IP)", variable=self.proxy_on,
+                              command=self._toggle_proxy)
+        _pc.pack(anchor="w", padx=10, pady=(12, 2))
+        ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
+            "Saves instantly the moment you tick it — it is NOT part of the "
+            "Save schedule button. Set up the proxy itself (login, password, "
+            "location) in Settings ▸ Transcription, and verify it there first."
+        )).pack(anchor="w", padx=28, pady=(0, 10))
+        ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
+            "Using a residential/mobile IP makes YouTube far less likely to "
+            "flag a batch, so you can safely lower the gap on the Schedule "
+            "tab.")).pack(anchor="w", padx=28)
+
+    # ================= helpers =================
     def _drop_topmost(self):
         try:
             self.win.attributes("-topmost", False)
@@ -327,9 +338,9 @@ class WatcherWindow:
             t = tk.Toplevel(self.win)
             t.overrideredirect(True)
             t.attributes("-topmost", True)
-            f = tk.Frame(t, bg="#101010", bd=1, relief="solid")
-            f.pack(fill="both", expand=True)
-            tk.Label(f, text=txt, bg="#101010", fg="#e8e8e8",
+            fr = tk.Frame(t, bg="#101010", bd=1, relief="solid")
+            fr.pack(fill="both", expand=True)
+            tk.Label(fr, text=txt, bg="#101010", fg="#e8e8e8",
                      font=("Segoe UI", 9), justify="left",
                      anchor="w").pack(padx=10, pady=8)
             t.update_idletasks()
@@ -492,10 +503,10 @@ class WatcherWindow:
                 self.monitor.configure(
                     text=f"⏳  Waiting {m}m {sec:02d}s before video "
                          f"{a.get('i',0)}/{a.get('n',0)}  ·  next: "
-                         f"{(a.get('title') or '')[:46]}",
+                         f"{a.get('title') or ''}",
                     fg="#e0a030")
             else:
-                t = (a.get("title") or "")[:46]
+                t = a.get("title") or ""
                 self.monitor.configure(
                     text=f"▶  Video {a.get('i',0)}/{a.get('n',0)}  ·  {ph}"
                          f"{'  ·  ' + t if t else ''}",

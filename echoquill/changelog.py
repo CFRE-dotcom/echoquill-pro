@@ -8,6 +8,12 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.9  (2026-08-12)
+    Notifications fixed + tabbed watcher + badges.
+    - NOTIFICATIONS NOW FIRE ON REAL COMPLETIONS. The bug: a finished video announced from a background worker thread, but the toast could only be drawn from the main thread, so it silently failed (while the Test button, which runs on the main thread, worked). Completions now route through the main-thread queue - a finished video pops the same blue toast as Test.
+    - RED-DOT BADGE: when new results land, a red dot appears on the floating pill AND on the tray/taskbar icon. It clears the moment you open the watcher. This is the backup for any toast you miss.
+    - TABBED WATCHER: the long scroll is gone. The window now has tabs - Channels, Schedule & pacing, Proxy - while the live monitor and the log stay visible at all times below the tabs. Schedule tab makes it obvious those four boxes belong to Save schedule; Proxy tab states it saves instantly.
+
 v2.27.8  (2026-08-12)
     Watcher polish. (1) The live monitor line now WORD-WRAPS - long video titles carry to the next line instead of getting cut off, so you see the whole thing without widening the window. (2) Clarified the proxy checkbox: it saves the instant you tick it (labeled "saves instantly - not part of Save schedule"). The four boxes above it - check-every hours, retry minutes, per-cycle, and gap seconds - are the ones tied to the Save schedule button.
 

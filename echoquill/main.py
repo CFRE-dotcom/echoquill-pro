@@ -151,16 +151,37 @@ class App:
     def _start_tray(self):
         threading.Thread(target=self._tray_thread, daemon=True).start()
 
+    def _tray_img(self, dot=False):
+        from PIL import Image, ImageDraw
+        img = Image.new("RGB", (64, 64), "#1c1c1e")
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle([24, 10, 40, 40], radius=8, fill="#0a84ff")
+        d.rectangle([30, 40, 34, 50], fill="#0a84ff")
+        d.rectangle([22, 50, 42, 54], fill="#0a84ff")
+        if dot:
+            d.ellipse([40, 2, 62, 24], fill="#ff3b30", outline="#1c1c1e")
+        return img
+
+    def _set_tray_badge(self, on):
+        try:
+            if getattr(self, "tray", None):
+                self.tray.icon = self._tray_img(dot=on)
+        except Exception:
+            pass
+
+    def _set_new_results(self, on):
+        """Show/clear the 'new results' dot on the pill overlay and tray icon."""
+        try:
+            self.overlay.set_badge(on)
+        except Exception:
+            pass
+        self._set_tray_badge(on)
+
     def _tray_thread(self):
         try:
             import pystray
-            from PIL import Image, ImageDraw
 
-            img = Image.new("RGB", (64, 64), "#1c1c1e")
-            d = ImageDraw.Draw(img)
-            d.rounded_rectangle([24, 10, 40, 40], radius=8, fill="#0a84ff")  # mic body
-            d.rectangle([30, 40, 34, 50], fill="#0a84ff")                    # mic stem
-            d.rectangle([22, 50, 42, 54], fill="#0a84ff")                    # mic base
+            img = self._tray_img(dot=False)
 
             menu = pystray.Menu(
                 pystray.MenuItem(
@@ -193,17 +214,15 @@ class App:
         self.root.after(50, self._poll)
         self.root.after(120000, self._watcher_tick)   # first channel check ~2 min in
         notify.set_handler(self._notify)
+        notify.set_badge_handler(self._set_new_results)
         self.root.mainloop()
 
     def _notify(self, title, msg):
-        """Show a reliable toast (main thread) + best-effort tray balloon."""
+        """Thread-safe: enqueue so the toast is drawn on the main thread.
+        (Drawing from a worker thread silently fails - that was the bug where
+        Test worked but a finished video did not.)"""
         try:
-            self.root.after(0, lambda: self._show_toast(title, msg))
-        except Exception:
-            pass
-        try:
-            if getattr(self, "tray", None):
-                self.tray.notify(msg, title)
+            self.events.put(("toast", title, msg))
         except Exception:
             pass
 
@@ -340,6 +359,7 @@ class App:
                 from .watcher_gui import WatcherWindow
                 from . import watcher as _w
                 _w.clear_new_ready()
+                self._set_new_results(False)
                 WatcherWindow(self.root, self.cfg)
             except Exception as e:
                 self._log_crash("open watcher (tray)", e)
@@ -358,6 +378,14 @@ class App:
             return True
         elif isinstance(ev, tuple) and ev[0] == "overlay":
             self._overlay_update(ev[1], ev[2] if len(ev) > 2 else "")
+        elif isinstance(ev, tuple) and ev[0] == "toast":
+            self._show_toast(ev[1], ev[2])
+            self._set_new_results(True)
+            try:
+                if getattr(self, "tray", None):
+                    self.tray.notify(ev[2], ev[1])
+            except Exception:
+                pass
         return False
 
     def _overlay_update(self, state: str, text: str = ""):

@@ -91,6 +91,8 @@ class Overlay:
         self._live_text = ""
         self._levels = deque([0.0] * N_BARS, maxlen=N_BARS)
         self._smooth = 0.0
+        self._badge = False
+        self._cur_w = 0
 
     # ---------- window ----------
 
@@ -165,6 +167,7 @@ class Overlay:
         return "break"
 
     def _place(self, w, h):
+        self._cur_w = w
         sw = self.win.winfo_screenwidth()
         sh = self.win.winfo_screenheight()
         self.canvas.configure(width=w, height=h)
@@ -182,6 +185,28 @@ class Overlay:
 
     # ---------- drawing ----------
 
+    def _draw_badge(self):
+        """A small red dot (top-right) meaning new watcher results are ready."""
+        if not getattr(self, "_badge", False):
+            return
+        try:
+            w = self._cur_w or self.IDLE_W
+            r = 6
+            self.canvas.create_oval(w - 8 - 2 * r, 4, w - 8, 4 + 2 * r,
+                                    fill="#ff3b30", outline="#3a0a08",
+                                    tags="badge")
+        except Exception:
+            pass
+
+    def set_badge(self, on):
+        self._badge = bool(on)
+        try:
+            self._ensure()
+            self.canvas.delete("badge")
+            self._draw_badge()
+        except Exception:
+            pass
+
     def _draw_pill(self, w, h, fill=BG, outline="#3a3a3c"):
         self.canvas.delete("all")
         try:
@@ -197,6 +222,7 @@ class Overlay:
         self._draw_pill(w, h, fill=ACCENT, outline=ACCENT_DARK)
         self.canvas.create_text(w / 2, h / 2, text=self.idle_text,
                                 fill="#ffffff", font=("Segoe UI Emoji", 13))
+        self._draw_badge()
 
     def _draw_live(self):
         w, h = self.LIVE_W, self.LIVE_H
@@ -207,6 +233,7 @@ class Overlay:
         self.canvas.create_text(w / 2, 22, text=shown,
                                 fill=FG if self._live_text else DIM,
                                 font=("Segoe UI", 11), width=w - 50)
+        self._draw_badge()
 
     def _draw_bars(self):
         """Flowing waveform: each bar is a moment of your voice, scrolling
@@ -246,6 +273,7 @@ class Overlay:
         self._draw_pill(w, h)
         self.canvas.create_text(w / 2, h / 2, text=text, fill=color,
                                 font=("Segoe UI", 11), width=w - 30)
+        self._draw_badge()
 
     # ---------- states ----------
 
