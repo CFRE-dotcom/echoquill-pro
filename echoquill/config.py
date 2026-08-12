@@ -174,6 +174,7 @@ DEFAULTS = {
     "watch_per_cycle": 5,
     "di_mobile": True,
     "di_gateway": "gw.dataimpulse.com:824",
+    "di_verify_tries": 3,
     "custom_prompts": [],   # "" off, else chrome/edge/firefox/brave for member-only videos
     # Read aloud (Text-to-speech) - Pro. Bring your own ElevenLabs key.
     "elevenlabs_api_key": "",

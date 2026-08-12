@@ -124,6 +124,117 @@ def _channel_tab_url(channel, tab):
     return c + "/" + tab
 
 
+def _entry_upload_ts(e, cfg):
+    """Best-effort unix timestamp of a search entry's upload; fetches the single
+    video's metadata only if the flat entry doesn't already carry a date."""
+    import time
+    ts = e.get("timestamp") or e.get("release_timestamp")
+    if ts:
+        try:
+            return float(ts)
+        except Exception:
+            pass
+    ud = e.get("upload_date")
+    if ud and len(str(ud)) == 8:
+        try:
+            import datetime
+            return datetime.datetime.strptime(str(ud), "%Y%m%d").timestamp()
+        except Exception:
+            pass
+    url = e.get("url") or e.get("webpage_url")
+    if not url:
+        return None
+    try:
+        import yt_dlp
+        opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        from .media_gui import _apply_proxy
+        _apply_proxy(opts, cfg)
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        ts = info.get("timestamp") or info.get("release_timestamp")
+        if ts:
+            return float(ts)
+        ud = info.get("upload_date")
+        if ud and len(str(ud)) == 8:
+            import datetime
+            return datetime.datetime.strptime(str(ud), "%Y%m%d").timestamp()
+    except Exception:
+        return None
+    return None
+
+
+def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
+                          upload_days=0, sort="Relevance", n=25):
+    """YouTube search with client-side type/duration/upload-window filtering.
+    Returns [(url, title), ...]. sort: 'Relevance' or 'Upload date'."""
+    import time
+    import yt_dlp
+    date_sorted = str(sort).lower().startswith("upload")
+    prefix = "ytsearchdate" if date_sorted else "ytsearch"
+    pull = min(max(int(n) * 3, int(n)), 120)
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+            "skip_download": True}
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    from .media_gui import _apply_proxy
+    _apply_proxy(opts, cfg)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f"{prefix}{pull}:{query}", download=False)
+    except Exception:
+        return []
+    want = set(t.lower() for t in (types or ["Video"]))
+    now = time.time()
+    date_fetches = 0
+    out = []
+    for e in (info.get("entries") or []):
+        if not e:
+            continue
+        u = e.get("url") or e.get("webpage_url")
+        if not u and e.get("id"):
+            u = "https://www.youtube.com/watch?v=" + e["id"]
+        if not u:
+            continue
+        t = (e.get("title") or "").strip()
+        dur = e.get("duration")
+        live = (e.get("live_status") or "")
+        is_live = live in ("is_live", "is_upcoming", "post_live") or bool(
+            e.get("is_live"))
+        is_short = ("/shorts/" in u) or (dur is not None and dur <= 60)
+        kind = "live" if is_live else ("shorts" if is_short else "video")
+        if kind not in want:
+            continue
+        if duration and duration != "Any" and dur is not None:
+            if duration.startswith("Under") and not dur < 240:
+                continue
+            if duration.startswith("4") and not (240 <= dur <= 1200):
+                continue
+            if duration.startswith("Over") and not dur > 1200:
+                continue
+        if upload_days and int(upload_days) > 0:
+            ts = None
+            if date_fetches < 45:
+                ts = _entry_upload_ts(e, cfg)
+                if ts is None:
+                    date_fetches += 1
+            if ts is not None:
+                if now - ts > int(upload_days) * 86400:
+                    if date_sorted:
+                        break
+                    continue
+        out.append((u, t))
+        if len(out) >= int(n):
+            break
+    return out
+
+
 def fetch_channel(channel, kind, limit, cfg):
     """List a YouTube channel's Videos/Shorts/Lives (metadata only, no
     download). Returns [(url, title), ...]."""
@@ -508,6 +619,7 @@ class AutoBatchWindow:
                                 _video_description, _video_comments,
                                 fetch_captions)
         from .transcriber import Transcriber
+        from . import proxy
         total = len(rows)
         done = 0
         if self._eng is None:
@@ -523,6 +635,16 @@ class AutoBatchWindow:
                     dest = resolve_folder(self.cfg, fld)
                     self._log(f"[{i}/{total}] {url}")
                     self._log(f"    folder: {dest}")
+
+                    if self.cfg.get("di_enabled"):
+                        self._set(f"Video {i}/{total}: verifying proxy IP…")
+                        tries = int(self.cfg.get("di_verify_tries", 3) or 3)
+                        sid, ip = proxy.acquire_verified(
+                            self.cfg, tries=tries, log=self._log)
+                        if not sid:
+                            self._log(f"    proxy: no live IP after {tries} "
+                                      "tries — skipping this video")
+                            continue
 
                     # 1) optional fast path: YouTube captions
                     use_captions = self.transcript_mode.get().lower().startswith(
@@ -637,6 +759,10 @@ class AutoBatchWindow:
                 except Exception as e:
                     self._log(f"    ERROR on this video: {e}")
                 finally:
+                    try:
+                        proxy.clear_active_sessid()
+                    except Exception:
+                        pass
                     if tmpdir:
                         shutil.rmtree(tmpdir, ignore_errors=True)
                     segs = parts = text = None   # drop this video's data

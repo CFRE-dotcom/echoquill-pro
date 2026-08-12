@@ -136,21 +136,87 @@ def delete_channel(cid):
     save(d)
 
 
+def is_expired(ch):
+    """True if a search source has passed its lifespan."""
+    days = int(ch.get("lifespan_days", 0) or 0)
+    if days <= 0:
+        return False
+    return (ch.get("created_at", 0) or 0) + days * 86400 < time.time()
+
+
+def expiry_info(ch):
+    """('none'|'expired'|seconds_left) for the GUI."""
+    days = int(ch.get("lifespan_days", 0) or 0)
+    if days <= 0:
+        return "none"
+    left = (ch.get("created_at", 0) or 0) + days * 86400 - time.time()
+    return "expired" if left <= 0 else int(left)
+
+
+def _queue_item(cfg, ch, u, t):
+    from . import prompts as _pr
+    return {
+        "channel_id": ch["id"], "url": u, "title": t,
+        "folder": ch.get("folder", ""),
+        "set_name": ch.get("set_name", ""),
+        "questions": (_pr.get_set(cfg, ch["set_name"])
+                      if ch.get("set_name") else []),
+        "save_video": ch.get("save_video", False),
+        "save_audio": ch.get("save_audio", False),
+        "save_desc": ch.get("save_desc", False),
+        "save_comments": ch.get("save_comments", False),
+        "transcript_mode": ch.get("transcript_mode", "Whisper"),
+        "status": "pending", "attempts": 0,
+        "last_error": "", "next_try": 0,
+    }
+
+
 def check_new(cfg, log=lambda s: None):
     """Queue any new uploads from each enabled channel. Returns count queued."""
     from .auto_batch import fetch_channel
-    from . import prompts as _pr
     d = load()
     added = 0
     for ch in d["channels"]:
         if not ch.get("enabled", True):
             continue
+        if ch.get("kind") == "search" and is_expired(ch):
+            ch["enabled"] = False
+            ch["expired"] = True
+            _emit(log, f"Search \"{ch.get('query','')}\" reached its lifespan "
+                  "— retired.")
+            continue
         seen = set(ch.get("seen", []))
+        limit = int(ch.get("count") or 15)
+        before = added
+
+        if ch.get("kind") == "search":
+            from .auto_batch import fetch_search_filtered
+            q = ch.get("query", "")
+            _emit(log, f"Searching \"{q}\"…")
+            try:
+                items = fetch_search_filtered(
+                    q, cfg, types=ch.get("types") or ["Video"],
+                    duration=ch.get("duration", "Any"),
+                    upload_days=int(ch.get("upload_days", 0) or 0),
+                    sort=ch.get("sort", "Relevance"), n=limit)
+            except Exception as e:
+                items = []
+                _emit(log, f"  search failed: {str(e)[:70]}")
+            for (u, t) in items:
+                if u in seen:
+                    continue
+                seen.add(u)
+                d["queue"].append(_queue_item(cfg, ch, u, t))
+                added += 1
+            ch["seen"] = list(seen)
+            got = added - before
+            _emit(log, f"  {got} new video(s) queued." if got
+                  else "  nothing new (already seen).")
+            continue
+
         kinds = ch.get("kinds") or ["Videos"]
         _emit(log, f"Scanning {ch.get('url','')} ({', '.join(kinds)})…")
-        before = added
         kw = (ch.get("keyword", "") or "").strip().lower()
-        limit = int(ch.get("count") or 15)
         for kind in kinds:
             try:
                 fetch_n = min(limit * 8, 300) if kw else limit
@@ -164,20 +230,7 @@ def check_new(cfg, log=lambda s: None):
                 if u in seen:
                     continue
                 seen.add(u)
-                d["queue"].append({
-                    "channel_id": ch["id"], "url": u, "title": t,
-                    "folder": ch.get("folder", ""),
-                    "set_name": ch.get("set_name", ""),
-                    "questions": (_pr.get_set(cfg, ch["set_name"])
-                                  if ch.get("set_name") else []),
-                    "save_video": ch.get("save_video", False),
-                    "save_audio": ch.get("save_audio", False),
-                    "save_desc": ch.get("save_desc", False),
-                    "save_comments": ch.get("save_comments", False),
-                    "transcript_mode": ch.get("transcript_mode", "Whisper"),
-                    "status": "pending", "attempts": 0,
-                    "last_error": "", "next_try": 0,
-                })
+                d["queue"].append(_queue_item(cfg, ch, u, t))
                 added += 1
         ch["seen"] = list(seen)
         got = added - before
