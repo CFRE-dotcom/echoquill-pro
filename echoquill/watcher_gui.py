@@ -115,7 +115,7 @@ class WatcherWindow:
             "Double-click a channel to edit it · hover for stats.")).pack(
             anchor="w", padx=8, pady=(8, 2))
         lbf = ttk.Frame(f); lbf.pack(fill="x", padx=8, pady=(0, 4))
-        self.lb = theme.dark_listbox(lbf, height=6)
+        self.lb = theme.dark_listbox(lbf, height=8)
         _lbsb = ttk.Scrollbar(lbf, orient="vertical", command=self.lb.yview)
         self.lb.configure(yscrollcommand=_lbsb.set)
         _lbsb.pack(side="right", fill="y")

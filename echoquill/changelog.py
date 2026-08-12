@@ -8,6 +8,10 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.28.2  (2026-08-12)
+    Settings now uses REAL native tabs (the same tab widget as the Channel watcher), not the box strip. Sections are grouped into 8 clean top tabs - General, Dictation, Transcription, AI, Meeting, Read aloud, Account, Help - and groups that hold several sections (Dictation, Account, Help) get a second row of sub-tabs. Tabs size to their text and sit on the left; they no longer stretch across the whole window. Opening a specific section (from the tray, etc.) still jumps straight to it.
+    Channel watcher: the channel list now shows 8 rows (was 6).
+
 v2.28.1  (2026-08-12)
     Polish pass on the tabs, the watcher, and naming.
     - SETTINGS TABS look like real tabs now: filled segmented tabs with a clear blue active tab and hover, flush together and wrapping to a second row - not the loose boxes from 2.28.0 (the inactive tabs used to blend into the bar).

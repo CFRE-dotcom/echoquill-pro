@@ -37,7 +37,7 @@ class SettingsWindow:
         self.win.attributes("-topmost", True)
         theme.apply(self.win)
 
-        # ----- layout: top wrapping tab bar | content -----
+        # ----- layout: native tabs (grouped) -----
         header = tk.Frame(self.win, bg=theme.PANEL)
         header.pack(side="top", fill="x")
         tk.Label(header, text="EchoQuill", bg=theme.PANEL, fg=theme.FG,
@@ -55,70 +55,80 @@ class SettingsWindow:
             up.pack(side="right", padx=16)
             up.bind("<Button-1>", lambda e: self._show("License"))
 
-        # wrapping tab bar: tabs flow onto a second row when width runs out
-        self._tabbar = tk.Frame(self.win, bg=theme.SIDEBAR, height=40)
-        self._tabbar.pack(side="top", fill="x")
-        self._tabbar.pack_propagate(False)
-        self._tabbar.bind("<Configure>", lambda e: self._reflow_tabs())
-
-        # content on top, save bar below it (now full width - no sidebar)
-        right = ttk.Frame(self.win)
-        right.pack(side="top", fill="both", expand=True)
-        self._save_bar = ttk.Frame(right)
+        # save bar pinned to the bottom (packed before the notebook so it keeps
+        # its space); the button inside it is shown only on savable sections
+        self._save_bar = ttk.Frame(self.win)
         self._save_bar.pack(side="bottom", fill="x")
-        ttk.Button(self._save_bar, text="Save changes", style="Accent.TButton",
-                   command=self._save).pack(side="right", padx=16, pady=10)
-        self.content = ttk.Frame(right)
-        self.content.pack(side="top", fill="both", expand=True)
-        # green "update available" banner (hidden until a check finds one)
-        self._update_banner = tk.Frame(right, bg="#30d158")
+        self._save_btn = ttk.Button(self._save_bar, text="Save changes",
+                                    style="Accent.TButton", command=self._save)
+        self._update_banner = tk.Frame(self.win, bg="#30d158")
 
-        # tab buttons (positioned by _reflow_tabs) - filled segmented tabs
-        self._active = None
-        self._nav_buttons = {}
-        for name in self.SECTIONS:
-            b = tk.Label(self._tabbar, text=name, bg=theme.FIELD,
-                         fg=theme.DIM, font=("Segoe UI", 10), padx=16, pady=8,
-                         cursor="hand2")
-            b.bind("<Button-1>", lambda e, n=name: self._show(n))
-            b.bind("<Enter>", lambda e, n=name: self._tab_hover(n, True))
-            b.bind("<Leave>", lambda e, n=name: self._tab_hover(n, False))
-            self._nav_buttons[name] = b
-        self._frames = {}
+        # REAL native tabs, grouped so they fit as proper tabs; groups with
+        # several sections get a second-level tab strip (no giant sidebar, no
+        # full-width box row).
+        self._nb = ttk.Notebook(self.win)
+        self._nb.pack(side="top", fill="both", expand=True, padx=8, pady=(6, 0))
 
-        body = {"General": self._build_general,
-                "Dictation": self._build_dictation,
-                "Transcription": self._build_transcription,
-                "Meeting": self._build_meeting,
-                "Read aloud": self._build_read_aloud,
-                "Clipboard": self._build_clipboard,
-                "Dictionary": self._build_dictionary,
-                "AI Enhancement": self._build_ai,
-                "Stats": self._build_stats,
-                "History": self._build_history,
-                "License": self._build_license,
-                "Help": self._build_help,
-                "Feedback": self._build_feedback,
-                "About": self._build_about,
-                "What\u2019s New": self._build_whatsnew}
-        # Sections dominated by a big text box lay the box out to fill and scroll
-        # internally (like the standalone windows) - NO outer scroll pane, so
-        # there's never a second scrollbar stacked next to the text box's own.
         _noscroll = {"Meeting", "Read aloud", "History",
                      "Help", "Feedback", "Dictionary", "What\u2019s New"}
-        for name, builder in body.items():
+        builders = {"General": self._build_general,
+                    "Dictation": self._build_dictation,
+                    "Transcription": self._build_transcription,
+                    "Meeting": self._build_meeting,
+                    "Read aloud": self._build_read_aloud,
+                    "Clipboard": self._build_clipboard,
+                    "Dictionary": self._build_dictionary,
+                    "AI Enhancement": self._build_ai,
+                    "Stats": self._build_stats,
+                    "History": self._build_history,
+                    "License": self._build_license,
+                    "Help": self._build_help,
+                    "Feedback": self._build_feedback,
+                    "About": self._build_about,
+                    "What\u2019s New": self._build_whatsnew}
+
+        def _mk(parent, name):
             if name in _noscroll:
-                fr = ttk.Frame(self.content)
-                builder(fr)
-                self._frames[name] = fr
+                fr = ttk.Frame(parent)
+                builders[name](fr)
+                return fr
+            sc = theme.Scrollable(parent)
+            builders[name](sc.inner)
+            return sc
+
+        # (outer tab label, [sections in it])
+        self._groups = [
+            ("General", ["General"]),
+            ("Dictation", ["Dictation", "Dictionary", "Clipboard"]),
+            ("Transcription", ["Transcription"]),
+            ("AI", ["AI Enhancement"]),
+            ("Meeting", ["Meeting"]),
+            ("Read aloud", ["Read aloud"]),
+            ("Account", ["License", "Stats", "History"]),
+            ("Help", ["Help", "Feedback", "About", "What\u2019s New"]),
+        ]
+        self._section_tab = {}     # section -> (outer_i, nested_nb|None, inner_i|None)
+        self._group_nested = {}    # outer_i -> nested nb or None
+        for oi, (label, secs) in enumerate(self._groups):
+            if len(secs) == 1:
+                self._nb.add(_mk(self._nb, secs[0]), text="  %s  " % label)
+                self._section_tab[secs[0]] = (oi, None, None)
+                self._group_nested[oi] = None
             else:
-                sc = theme.Scrollable(self.content)
-                builder(sc.inner)
-                self._frames[name] = sc
+                nb2 = ttk.Notebook(self._nb)
+                for ii, sec in enumerate(secs):
+                    nb2.add(_mk(nb2, sec), text="  %s  " % sec)
+                    self._section_tab[sec] = (oi, nb2, ii)
+                nb2.bind("<<NotebookTabChanged>>",
+                         lambda e: self._update_savebar())
+                self._nb.add(nb2, text="  %s  " % label)
+                self._group_nested[oi] = nb2
+        self._nb.bind("<<NotebookTabChanged>>",
+                      lambda e: self._update_savebar())
 
         self._show(initial_section if initial_section in self.SECTIONS
                    else "General")
-        self.win.after(50, self._reflow_tabs)
+        self._update_savebar()
         self._snapshot = self._collect_state()
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._start_update_autocheck()
@@ -146,53 +156,42 @@ class SettingsWindow:
     # only these tabs have anything to save
     SAVE_SECTIONS = {"General", "Dictation", "Dictionary", "AI Enhancement"}
 
-    def _tab_hover(self, name, on):
-        if name == getattr(self, "_active", None):
-            return
-        b = self._nav_buttons.get(name)
-        if b is not None:
-            b.configure(bg=theme.BORDER if on else theme.FIELD,
-                        fg=theme.FG if on else theme.DIM)
-
-    def _reflow_tabs(self):
-        """Flow tab labels left-to-right, wrapping onto a new row when the bar
-        runs out of width (so all sections fit without a big sidebar)."""
-        bar = getattr(self, "_tabbar", None)
-        if bar is None:
-            return
-        avail = bar.winfo_width()
-        if avail <= 1:
-            return
-        pad, gap = 6, 4
-        x, y, rowh = pad, 6, 0
-        for name in self.SECTIONS:
-            b = self._nav_buttons[name]
-            w, h = b.winfo_reqwidth(), b.winfo_reqheight()
-            if x > pad and x + w > avail - pad:
-                x = pad
-                y += h + gap
-            b.place(x=x, y=y)
-            x += w + gap
-            rowh = h
+    def _current_section(self):
         try:
-            bar.configure(height=y + rowh + 6)
+            oi = self._nb.index(self._nb.select())
         except Exception:
-            pass
+            return "General"
+        label, secs = self._groups[oi]
+        nb2 = self._group_nested.get(oi)
+        if nb2 is None:
+            return secs[0]
+        try:
+            ii = nb2.index(nb2.select())
+        except Exception:
+            ii = 0
+        return secs[ii]
+
+    def _update_savebar(self):
+        if self._current_section() in self.SAVE_SECTIONS:
+            self._save_btn.pack(side="right", padx=16, pady=10)
+        else:
+            self._save_btn.pack_forget()
 
     def _show(self, name):
-        if name in self.SAVE_SECTIONS:
-            self._save_bar.pack(side="bottom", fill="x")
-        else:
-            self._save_bar.pack_forget()
-        self._active = name
-        for n, b in self._nav_buttons.items():
-            if n == name:
-                b.configure(bg=theme.ACCENT, fg="#ffffff")
-            else:
-                b.configure(bg=theme.FIELD, fg=theme.DIM)
-        for n, f in self._frames.items():
-            f.pack_forget()
-        self._frames[name].pack(fill="both", expand=True, padx=24, pady=18)
+        loc = getattr(self, "_section_tab", {}).get(name)
+        if not loc:
+            return
+        oi, nb2, ii = loc
+        try:
+            self._nb.select(oi)
+        except Exception:
+            pass
+        if nb2 is not None and ii is not None:
+            try:
+                nb2.select(ii)
+            except Exception:
+                pass
+        self._update_savebar()
 
     def _title(self, parent, text, sub=""):
         ttk.Label(parent, text=text, style="Title.TLabel").pack(anchor="w")
@@ -1373,7 +1372,7 @@ class SettingsWindow:
         dismiss.pack(side="right", padx=(0, 4))
         dismiss.bind("<Button-1>", lambda e: self._update_banner.pack_forget())
         try:
-            self._update_banner.pack(side="top", fill="x", before=self.content)
+            self._update_banner.pack(side="top", fill="x", before=self._nb)
         except Exception:
             self._update_banner.pack(side="top", fill="x")
 
