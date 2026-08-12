@@ -5,7 +5,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from . import theme, helptip, watcher
+from . import theme, helptip, watcher, notify
 from . import prompts as _pr
 
 
@@ -318,6 +318,11 @@ class WatcherWindow:
             done = watcher.run_once(self.cfg, self._log,
                                     cancel=lambda: self._cancel)
             self.win.after(0, self._refresh)
+            if done:
+                notify.send(
+                    "EchoQuill - new results",
+                    f"{done} new video(s) transcribed - check your "
+                    "Transcriptions folder.")
             self._set_status(f"Check done — {done} newly finished."
                              if done else "Check done — nothing new to finish.")
         threading.Thread(target=run, daemon=True).start()

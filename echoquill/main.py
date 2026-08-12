@@ -6,6 +6,7 @@ Lives in the system tray. Everything optional is off unless you turn it on.
 """
 
 import queue
+from . import notify
 import threading
 import time
 import tkinter as tk
@@ -191,7 +192,50 @@ class App:
             pass
         self.root.after(50, self._poll)
         self.root.after(120000, self._watcher_tick)   # first channel check ~2 min in
+        notify.set_handler(self._notify)
         self.root.mainloop()
+
+    def _notify(self, title, msg):
+        """Show a reliable toast (main thread) + best-effort tray balloon."""
+        try:
+            self.root.after(0, lambda: self._show_toast(title, msg))
+        except Exception:
+            pass
+        try:
+            if getattr(self, "tray", None):
+                self.tray.notify(msg, title)
+        except Exception:
+            pass
+
+    def _show_toast(self, title, msg):
+        import tkinter as tk
+        try:
+            t = tk.Toplevel(self.root)
+            t.overrideredirect(True)
+            t.attributes("-topmost", True)
+            try:
+                t.attributes("-alpha", 0.97)
+            except Exception:
+                pass
+            frm = tk.Frame(t, bg="#1e1e1e", bd=1, relief="solid")
+            frm.pack(fill="both", expand=True)
+            tk.Label(frm, text=title, bg="#1e1e1e", fg="#4da3ff",
+                     font=("Segoe UI", 10, "bold"), anchor="w",
+                     justify="left").pack(fill="x", padx=14, pady=(11, 2))
+            tk.Label(frm, text=msg, bg="#1e1e1e", fg="#e8e8e8",
+                     font=("Segoe UI", 9), anchor="w", justify="left",
+                     wraplength=300).pack(fill="x", padx=14, pady=(0, 12))
+            t.update_idletasks()
+            w = t.winfo_width() or 320
+            h = t.winfo_height() or 90
+            sw = t.winfo_screenwidth()
+            sh = t.winfo_screenheight()
+            t.geometry(f"+{sw - w - 24}+{sh - h - 64}")
+            for wdg in (t, frm):
+                wdg.bind("<Button-1>", lambda _e: t.destroy())
+            t.after(7000, t.destroy)
+        except Exception:
+            pass
 
     def _watcher_tick(self):
         import threading
@@ -201,12 +245,10 @@ class App:
                 from . import watcher as _w
                 done = _w.run_once(self.cfg)
                 if done:
-                    try:
-                        self.tray.notify(
-                            f"{done} new video(s) transcribed - check your "
-                            "Transcriptions folder.", "EchoQuill - new results")
-                    except Exception:
-                        pass
+                    notify.send(
+                        "EchoQuill - new results",
+                        f"{done} new video(s) transcribed - check your "
+                        "Transcriptions folder.")
             except Exception:
                 pass
         threading.Thread(target=run, daemon=True).start()

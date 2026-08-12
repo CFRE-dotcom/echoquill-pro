@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.6  (2026-08-12)
+    Notifications now actually fire on a successful watcher run. Two bugs: (1) the "Check now" button in the watcher window had NO notification code at all - it does now. (2) The background path relied on the Windows tray balloon, which silently does nothing on many machines - replaced with our own always-on-top toast (bottom-right, click to dismiss, auto-closes) so it can't fail quietly. You'll get a toast whenever new videos finish, whether it ran on the timer or from Check now.
+
 v2.27.5  (2026-08-12)
     Fixes the watcher window not opening. Root cause: the watcher window was tied ("transient") to the app's hidden background window, so on Windows it got created but never shown - no error, just nothing. It now forces itself to the front like every other window. Also: (1) added "Watched channels…" to the pill's right-click menu (a third way in, next to Transcribe video / URL). (2) Widened the transcriber window and shortened one label so the "Watched channels…" and "Ask AI about this video" buttons no longer get their text cut off.
 
