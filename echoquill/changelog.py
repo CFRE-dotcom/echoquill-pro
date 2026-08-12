@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.28.1  (2026-08-12)
+    Polish pass on the tabs, the watcher, and naming.
+    - SETTINGS TABS look like real tabs now: filled segmented tabs with a clear blue active tab and hover, flush together and wrapping to a second row - not the loose boxes from 2.28.0 (the inactive tabs used to blend into the bar).
+    - CHANNEL WATCHER layout: the channel list is now a compact 6-row box with its own scrollbar, and the log below is much bigger and grows with the window - easier to watch what is happening.
+    - LOG NOW FILLS IN: previously the log stayed empty during a background (timer) run because only the "Check now" button was wired to it. Every run - timer or manual - now streams into the open window's log, including per-step lines ("Downloading audio…", "Transcribing…", "waiting 600s before next video…").
+    - RENAMED to "Channel watcher" everywhere (tray menu, pill menu, transcriber button) - it was "Watched channels" in some places.
+
 v2.28.0  (2026-08-12)
     Tabs everywhere - less clutter, more room.
     - SETTINGS: the big left sidebar is gone. Sections are now a tab bar across the top that wraps onto a second row when it runs out of width, so every section is one click away and the content area is wider. Opening a specific section (e.g. from the tray) still jumps straight to it.

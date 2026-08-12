@@ -486,7 +486,7 @@ class MediaWindow:
         helptip.tip(_b_auto, "Paste many URLs, each with an optional title and "
                     "folder; every video is downloaded and saved, transcribed, "
                     "then run through a saved question set - all automatic.")
-        _b_watch = ttk.Button(row2, text="Watched channels…",
+        _b_watch = ttk.Button(row2, text="Channel watcher…",
                    command=self._open_watcher); _b_watch.pack(side="left", padx=8)
         helptip.tip(_b_watch, "Watch channels for new uploads and auto-run "
                     "each new video through the pipeline.")

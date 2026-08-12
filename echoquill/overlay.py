@@ -143,7 +143,7 @@ class Overlay:
         if self.on_media:
             m.add_command(label="Transcribe video / URL…", command=self.on_media)
         if self.on_watch:
-            m.add_command(label="Watched channels…", command=self.on_watch)
+            m.add_command(label="Channel watcher…", command=self.on_watch)
         if self.on_meeting:
             m.add_command(label="Meeting / Record…", command=self.on_meeting)
         if self.on_read_aloud:

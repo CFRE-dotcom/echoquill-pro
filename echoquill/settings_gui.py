@@ -73,13 +73,16 @@ class SettingsWindow:
         # green "update available" banner (hidden until a check finds one)
         self._update_banner = tk.Frame(right, bg="#30d158")
 
-        # tab buttons (positioned by _reflow_tabs)
+        # tab buttons (positioned by _reflow_tabs) - filled segmented tabs
+        self._active = None
         self._nav_buttons = {}
         for name in self.SECTIONS:
-            b = tk.Label(self._tabbar, text=name, bg=theme.SIDEBAR,
-                         fg=theme.DIM, font=("Segoe UI", 10), padx=13, pady=7,
+            b = tk.Label(self._tabbar, text=name, bg=theme.FIELD,
+                         fg=theme.DIM, font=("Segoe UI", 10), padx=16, pady=8,
                          cursor="hand2")
             b.bind("<Button-1>", lambda e, n=name: self._show(n))
+            b.bind("<Enter>", lambda e, n=name: self._tab_hover(n, True))
+            b.bind("<Leave>", lambda e, n=name: self._tab_hover(n, False))
             self._nav_buttons[name] = b
         self._frames = {}
 
@@ -143,6 +146,14 @@ class SettingsWindow:
     # only these tabs have anything to save
     SAVE_SECTIONS = {"General", "Dictation", "Dictionary", "AI Enhancement"}
 
+    def _tab_hover(self, name, on):
+        if name == getattr(self, "_active", None):
+            return
+        b = self._nav_buttons.get(name)
+        if b is not None:
+            b.configure(bg=theme.BORDER if on else theme.FIELD,
+                        fg=theme.FG if on else theme.DIM)
+
     def _reflow_tabs(self):
         """Flow tab labels left-to-right, wrapping onto a new row when the bar
         runs out of width (so all sections fit without a big sidebar)."""
@@ -152,8 +163,8 @@ class SettingsWindow:
         avail = bar.winfo_width()
         if avail <= 1:
             return
-        pad, gap = 4, 3
-        x, y, rowh = pad, 4, 0
+        pad, gap = 6, 4
+        x, y, rowh = pad, 6, 0
         for name in self.SECTIONS:
             b = self._nav_buttons[name]
             w, h = b.winfo_reqwidth(), b.winfo_reqheight()
@@ -173,10 +184,12 @@ class SettingsWindow:
             self._save_bar.pack(side="bottom", fill="x")
         else:
             self._save_bar.pack_forget()
+        self._active = name
         for n, b in self._nav_buttons.items():
-            active = (n == name)
-            b.configure(bg=theme.PANEL if active else theme.SIDEBAR,
-                        fg=theme.FG if active else theme.DIM)
+            if n == name:
+                b.configure(bg=theme.ACCENT, fg="#ffffff")
+            else:
+                b.configure(bg=theme.FIELD, fg=theme.DIM)
         for n, f in self._frames.items():
             f.pack_forget()
         self._frames[name].pack(fill="both", expand=True, padx=24, pady=18)

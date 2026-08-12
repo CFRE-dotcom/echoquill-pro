@@ -49,7 +49,7 @@ class WatcherWindow:
 
         # ---- tabs ----
         nb = ttk.Notebook(self.win)
-        nb.pack(fill="both", expand=True, padx=12, pady=(6, 4))
+        nb.pack(fill="x", padx=12, pady=(6, 4))
         tab_ch = ttk.Frame(nb)
         tab_sch = ttk.Frame(nb)
         tab_prx = ttk.Frame(nb)
@@ -89,16 +89,18 @@ class WatcherWindow:
         _btest.pack(side="left", padx=8)
         helptip.tip(_btest, "Fires a sample toast so you can confirm "
                     "notifications work on your PC.")
-        ttk.Button(brow, text="Close", command=self.win.destroy).pack(side="right")
+        ttk.Button(brow, text="Close", command=self._on_close).pack(side="right")
 
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16)
 
         # ---- constant: log ----
-        self.log = theme.dark_text(self.win, wrap="word", height=6)
-        self.log.pack(fill="x", padx=16, pady=(2, 12))
+        self.log = theme.dark_text(self.win, wrap="word", height=14)
+        self.log.pack(fill="both", expand=True, padx=16, pady=(2, 12))
 
         notify.badge(False)   # opening the watcher clears the 'new results' dot
+        watcher.add_log_listener(self._log)
+        self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self.win.deiconify()
         self.win.lift()
         self.win.attributes("-topmost", True)
@@ -112,8 +114,12 @@ class WatcherWindow:
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
             "Double-click a channel to edit it · hover for stats.")).pack(
             anchor="w", padx=8, pady=(8, 2))
-        self.lb = theme.dark_listbox(f, height=8)
-        self.lb.pack(fill="both", expand=True, padx=8, pady=(0, 4))
+        lbf = ttk.Frame(f); lbf.pack(fill="x", padx=8, pady=(0, 4))
+        self.lb = theme.dark_listbox(lbf, height=6)
+        _lbsb = ttk.Scrollbar(lbf, orient="vertical", command=self.lb.yview)
+        self.lb.configure(yscrollcommand=_lbsb.set)
+        _lbsb.pack(side="right", fill="y")
+        self.lb.pack(side="left", fill="both", expand=True)
         self.lb.bind("<Double-Button-1>", self._edit_selected)
         self.lb.bind("<Motion>", self._hover)
         self.lb.bind("<Leave>", lambda _e: self._hide_tip())
@@ -238,6 +244,16 @@ class WatcherWindow:
             "tab.")).pack(anchor="w", padx=28)
 
     # ================= helpers =================
+    def _on_close(self):
+        try:
+            watcher.remove_log_listener(self._log)
+        except Exception:
+            pass
+        try:
+            self.win.destroy()
+        except Exception:
+            pass
+
     def _drop_topmost(self):
         try:
             self.win.attributes("-topmost", False)
