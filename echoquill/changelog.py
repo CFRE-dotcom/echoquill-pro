@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.8  (2026-08-12)
+    Watcher polish. (1) The live monitor line now WORD-WRAPS - long video titles carry to the next line instead of getting cut off, so you see the whole thing without widening the window. (2) Clarified the proxy checkbox: it saves the instant you tick it (labeled "saves instantly - not part of Save schedule"). The four boxes above it - check-every hours, retry minutes, per-cycle, and gap seconds - are the ones tied to the Save schedule button.
+
 v2.27.7  (2026-08-12)
     Big watcher upgrade - visibility + control.
     - LIVE MONITOR: a big status line at the top of the run area shows exactly where it is in real time - "Video 2/5 · Transcribing · <title>", or a countdown "Waiting 8m 12s before video 3/5", or "Idle". No more guessing whether it's working.

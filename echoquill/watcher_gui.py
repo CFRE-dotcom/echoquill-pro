@@ -160,6 +160,9 @@ class WatcherWindow:
                               "(residential/mobile IP)", variable=self.proxy_on,
                               command=self._toggle_proxy)
         _pc.pack(side="left")
+        ttk.Label(prow, style="Dim.TLabel",
+                  text="  (saves instantly — not part of Save schedule)").pack(
+                  side="left")
         helptip.tip(_pc, "Uses your DataImpulse proxy (set it up in Settings ▸ "
                     "Transcription). Verify it works there first. Lets you "
                     "safely shorten the wait between videos.")
@@ -205,8 +208,11 @@ class WatcherWindow:
         mon.pack(fill="x", padx=16, pady=(6, 2))
         self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
                                 font=("Segoe UI", 12, "bold"), anchor="w",
-                                justify="left", text="●  Idle — nothing running")
+                                justify="left", wraplength=680,
+                                text="●  Idle — nothing running")
         self.monitor.pack(fill="x", padx=12, pady=8)
+        mon.bind("<Configure>", lambda e: self.monitor.configure(
+            wraplength=max(200, e.width - 28)))
         self.status = ttk.Label(body, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16)
         self.log = theme.dark_text(body, wrap="word", height=6)
