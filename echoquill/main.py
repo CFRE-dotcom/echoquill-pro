@@ -59,6 +59,7 @@ class App:
             on_help=lambda: self.events.put("help"),
             on_meeting=lambda: self.events.put("meeting"),
             on_read_aloud=lambda: self.events.put("read_aloud"),
+            on_watch=lambda: self.events.put("watch"),
             level_provider=lambda: (self.recorder.level if self.recorder else 0.0),
         )
 

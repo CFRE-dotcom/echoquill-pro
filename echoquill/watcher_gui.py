@@ -167,12 +167,23 @@ class WatcherWindow:
         self.log = theme.dark_text(self.win, wrap="word", height=6)
         self.log.pack(fill="both", expand=True, padx=16, pady=(2, 12))
 
-        self.win.transient(parent)
+        # Show reliably: parent (root) is withdrawn, so DON'T make this
+        # transient to it (that leaves the window created-but-hidden on
+        # Windows). Match the other windows: force topmost, then release.
+        self.win.deiconify()
         self.win.lift()
+        self.win.attributes("-topmost", True)
         self.win.focus_force()
+        self.win.after(400, lambda: self._drop_topmost())
         self._refresh()
 
     # ---------- helpers ----------
+    def _drop_topmost(self):
+        try:
+            self.win.attributes("-topmost", False)
+        except Exception:
+            pass
+
     def _save_sched(self):
         from . import config as _c
         try:

@@ -67,7 +67,7 @@ class Overlay:
                  on_stats=None, on_quit=None, on_history=None,
                  on_clips=None, on_media=None, on_command=None,
                  on_help=None, on_meeting=None, on_read_aloud=None,
-                 level_provider=None):
+                 on_watch=None, level_provider=None):
         self.root = root
         self.on_toggle = on_toggle
         self.on_settings = on_settings
@@ -80,6 +80,7 @@ class Overlay:
         self.on_help = on_help
         self.on_meeting = on_meeting
         self.on_read_aloud = on_read_aloud
+        self.on_watch = on_watch
         self.level_provider = level_provider or (lambda: 0.0)
         self.win = None
         self.canvas = None
@@ -139,6 +140,8 @@ class Overlay:
             m.add_command(label="Clips tray (recent 10)", command=self.on_clips)
         if self.on_media:
             m.add_command(label="Transcribe video / URL…", command=self.on_media)
+        if self.on_watch:
+            m.add_command(label="Watched channels…", command=self.on_watch)
         if self.on_meeting:
             m.add_command(label="Meeting / Record…", command=self.on_meeting)
         if self.on_read_aloud:

@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.27.5  (2026-08-12)
+    Fixes the watcher window not opening. Root cause: the watcher window was tied ("transient") to the app's hidden background window, so on Windows it got created but never shown - no error, just nothing. It now forces itself to the front like every other window. Also: (1) added "Watched channels…" to the pill's right-click menu (a third way in, next to Transcribe video / URL). (2) Widened the transcriber window and shortened one label so the "Watched channels…" and "Ask AI about this video" buttons no longer get their text cut off.
+
 v2.27.4  (2026-08-11)
     Channel watcher pacing + controls. (1) Multi-video runs are now PACED so YouTube doesn't bot-flag the batch: default 600 sec (10 min) between each video, and at most 5 per cycle - both editable in the watcher window. (Before, it fired every queued video at once, which got them all flagged.) (2) "Run downloads through the proxy" checkbox right in the watcher - toggles your residential/mobile IP without leaving the window; lets you safely shorten the gap. (3) "Stop" button halts after the current video. (4) "Clear queue" empties everything waiting (keeps your channels), so you can wipe a bad batch. (5) If the watcher fails to open, you now get an on-screen error instead of a silent nothing.
 

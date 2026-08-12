@@ -419,8 +419,8 @@ class MediaWindow:
         self.cfg = cfg
         self.win = tk.Toplevel(root)
         self.win.title("EchoQuill — Transcribe video or audio")
-        self.win.geometry("660x560")
-        self.win.minsize(560, 480)
+        self.win.geometry("900x600")
+        self.win.minsize(820, 520)
         self.win.attributes("-topmost", True)
         theme.apply(self.win)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -476,7 +476,7 @@ class MediaWindow:
 
         row2 = ttk.Frame(self.win)
         row2.pack(fill="x", padx=18, pady=4)
-        _b_file = ttk.Button(row2, text="Choose a file on this PC…",
+        _b_file = ttk.Button(row2, text="Choose file…",
                    command=self._go_file); _b_file.pack(side="left")
         helptip.tip(_b_file, "Pick an audio or video file on your computer to transcribe.")
         _b_batch = ttk.Button(row2, text="Batch: many URLs…",
