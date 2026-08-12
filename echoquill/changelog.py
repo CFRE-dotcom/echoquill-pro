@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.29.0  (2026-08-12)
+    Search by keyword (topic subscriptions) + smart proxy.
+    - SEARCH BY KEYWORD: the Channel watcher's Channels tab now has two sub-tabs - "Add a channel" and "Search by keyword" - feeding one shared list. A search follows a TOPIC across all of YouTube: it re-runs on the timer, queues only NEW matches (deduped), and pipelines them like a channel.
+    - Filters: Type as checkboxes (Video/Shorts/Live default on; Playlist/Channel present but not matched in this version), Upload window (Any / 7 / 30 / 60 / 90 days), Duration (Any / under 4 / 4-20 / over 20 min), Sort (Relevance / Upload date), Newest N.
+    - LIFESPAN: a search auto-retires after 1 / 3 / 5 / 7 / 14 / 30 / 60 / 90 days (or No expiry) so a hot-topic watch doesn't run forever. The list shows a live countdown ("5d left", "expired").
+    - SMART PROXY (verify-before-execute, from the DataImpulse skill): when the proxy is on, each run pins a fresh IP with a sessid, VERIFIES that exact IP before any download, and if it fails it rotates to a new IP and re-verifies - up to 3 tries. Only a verified IP is used. If all 3 fail it does NOT download on a bad IP; it pauses and requeues for the next cycle. The verified IP is held for the video (same sessid), then released so the next video gets a fresh verified IP.
+
 v2.28.2  (2026-08-12)
     Settings now uses REAL native tabs (the same tab widget as the Channel watcher), not the box strip. Sections are grouped into 8 clean top tabs - General, Dictation, Transcription, AI, Meeting, Read aloud, Account, Help - and groups that hold several sections (Dictation, Account, Help) get a second row of sub-tabs. Tabs size to their text and sit on the left; they no longer stretch across the whole window. Opening a specific section (from the tray, etc.) still jumps straight to it.
     Channel watcher: the channel list now shows 8 rows (was 6).

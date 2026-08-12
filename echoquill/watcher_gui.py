@@ -21,6 +21,32 @@ def _ago(ts):
     return f"{secs // 86400}d ago"
 
 
+LIFE_OPTS = [("No expiry", 0), ("1 day", 1), ("3 days", 3), ("5 days", 5),
+             ("7 days", 7), ("14 days", 14), ("30 days", 30), ("60 days", 60),
+             ("90 days", 90)]
+UPLOAD_OPTS = [("Any time", 0), ("Past 7 days", 7), ("Past 30 days", 30),
+               ("Past 60 days", 60), ("Past 90 days", 90)]
+DUR_OPTS = ["Any", "Under 4 min", "4-20 min", "Over 20 min"]
+SORT_OPTS = ["Relevance", "Upload date"]
+_LIFE_L2V = {l: v for l, v in LIFE_OPTS}
+_LIFE_V2L = {v: l for l, v in LIFE_OPTS}
+_UP_L2V = {l: v for l, v in UPLOAD_OPTS}
+_UP_V2L = {v: l for l, v in UPLOAD_OPTS}
+
+
+def _fmt_left(info):
+    if info == "none":
+        return "no expiry"
+    if info == "expired":
+        return "expired"
+    secs = int(info)
+    if secs < 3600:
+        return f"{secs // 60}m left"
+    if secs < 86400:
+        return f"{secs // 3600}h left"
+    return f"{secs // 86400}d left"
+
+
 def _entry(parent, var, width=None):
     return tk.Entry(parent, textvariable=var, width=width or 0, bg=theme.FIELD,
                     fg=theme.FG, insertbackground=theme.FG, relief="solid",
@@ -33,6 +59,7 @@ class WatcherWindow:
         self._chan_ids = []
         self._cancel = False
         self._editing = None
+        self._editing_search = None
         self._tip = None
 
         self.win = tk.Toplevel(parent)
@@ -112,8 +139,8 @@ class WatcherWindow:
     # ================= tab builders =================
     def _build_channels_tab(self, f):
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
-            "Double-click a channel to edit it · hover for stats.")).pack(
-            anchor="w", padx=8, pady=(8, 2))
+            "Channels and topic-searches you watch. Double-click to edit · "
+            "hover for stats.")).pack(anchor="w", padx=8, pady=(8, 2))
         lbf = ttk.Frame(f); lbf.pack(fill="x", padx=8, pady=(0, 4))
         self.lb = theme.dark_listbox(lbf, height=8)
         _lbsb = ttk.Scrollbar(lbf, orient="vertical", command=self.lb.yview)
@@ -127,9 +154,19 @@ class WatcherWindow:
         _bd = ttk.Button(lrow, text="Delete selected (and its data)",
                          command=self._delete)
         _bd.pack(side="left")
-        helptip.tip(_bd, "Removes the watch AND everything stored for it "
+        helptip.tip(_bd, "Removes the source AND everything stored for it "
                     "(seen list + queued items). Asks first.")
 
+        self._subnb = ttk.Notebook(f)
+        self._subnb.pack(fill="x", padx=4, pady=(2, 6))
+        self._tab_addch = ttk.Frame(self._subnb)
+        self._tab_search = ttk.Frame(self._subnb)
+        self._subnb.add(self._tab_addch, text="  Add a channel  ")
+        self._subnb.add(self._tab_search, text="  Search by keyword  ")
+        self._build_add_channel_form(self._tab_addch)
+        self._build_search_form(self._tab_search)
+
+    def _build_add_channel_form(self, f):
         self.form_lbl = ttk.Label(f, text="Add a channel",
                                   style="Section.TLabel")
         self.form_lbl.pack(anchor="w", padx=8, pady=(6, 2))
@@ -187,6 +224,90 @@ class WatcherWindow:
         self.add_btn.pack(side="left")
         self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
                                           command=self._cancel_edit)
+
+    def _build_search_form(self, f):
+        self.s_form_lbl = ttk.Label(f, text="Search by keyword",
+                                    style="Section.TLabel")
+        self.s_form_lbl.pack(anchor="w", padx=8, pady=(6, 2))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Keyword:").pack(side="left")
+        self.s_query = tk.StringVar()
+        _entry(r, self.s_query).pack(side="left", fill="x", expand=True,
+                                     padx=(6, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Type:").pack(side="left")
+        self.st_video = tk.BooleanVar(value=True)
+        self.st_shorts = tk.BooleanVar(value=True)
+        self.st_live = tk.BooleanVar(value=True)
+        self.st_playlist = tk.BooleanVar(value=False)
+        self.st_channel = tk.BooleanVar(value=False)
+        ttk.Checkbutton(r, text="Video", variable=self.st_video).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Shorts", variable=self.st_shorts).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(r, text="Live", variable=self.st_live).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(r, text="Playlist", variable=self.st_playlist).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(r, text="Channel", variable=self.st_channel).pack(side="left", padx=(8, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Upload window:").pack(side="left")
+        self.s_upload = tk.StringVar(value="Past 30 days")
+        ttk.OptionMenu(r, self.s_upload, "Past 30 days",
+                       *[l for l, _ in UPLOAD_OPTS]).pack(side="left", padx=(4, 12))
+        ttk.Label(r, text="Duration:").pack(side="left")
+        self.s_dur = tk.StringVar(value="Any")
+        ttk.OptionMenu(r, self.s_dur, "Any", *DUR_OPTS).pack(side="left", padx=(4, 12))
+        ttk.Label(r, text="Sort:").pack(side="left")
+        self.s_sort = tk.StringVar(value="Upload date")
+        ttk.OptionMenu(r, self.s_sort, "Upload date", *SORT_OPTS).pack(side="left", padx=(4, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Newest:").pack(side="left")
+        self.s_count = tk.StringVar(value="25")
+        _entry(r, self.s_count, 5).pack(side="left", padx=(4, 12))
+        ttk.Label(r, text="Lifespan:").pack(side="left")
+        self.s_life = tk.StringVar(value="30 days")
+        ttk.OptionMenu(r, self.s_life, "30 days",
+                       *[l for l, _ in LIFE_OPTS]).pack(side="left", padx=(4, 0))
+        helptip.tip(r, "Lifespan auto-retires this search after N days so a "
+                    "hot-topic watch doesn't run forever.")
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Question set:").pack(side="left")
+        self.s_set = tk.StringVar(value="—")
+        self.s_set_menu = ttk.OptionMenu(r, self.s_set, "—")
+        self.s_set_menu.configure(width=18)
+        self.s_set_menu.pack(side="left", padx=(6, 12))
+        m = self.s_set_menu["menu"]; m.delete(0, "end")
+        m.add_command(label="—", command=lambda: self.s_set.set("—"))
+        for n in _pr.set_names(self.cfg):
+            m.add_command(label=n, command=lambda n=n: self.s_set.set(n))
+        ttk.Label(r, text="Transcript:").pack(side="left")
+        self.s_tmode = tk.StringVar(value="Whisper (accurate)")
+        ttk.OptionMenu(r, self.s_tmode, "Whisper (accurate)",
+                       "Whisper (accurate)", "YouTube captions (fast)").pack(
+                       side="left", padx=(4, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Folder:").pack(side="left")
+        self.s_folder = tk.StringVar()
+        _entry(r, self.s_folder, 22).pack(side="left", padx=(6, 12))
+        self.ssv = tk.BooleanVar(value=False)
+        self.ssa = tk.BooleanVar(value=False)
+        self.ssd = tk.BooleanVar(value=False)
+        self.ssc = tk.BooleanVar(value=False)
+        ttk.Checkbutton(r, text="Video", variable=self.ssv).pack(side="left")
+        ttk.Checkbutton(r, text="Audio", variable=self.ssa).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Desc", variable=self.ssd).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Comments", variable=self.ssc).pack(side="left", padx=(6, 0))
+
+        arow = ttk.Frame(f); arow.pack(anchor="w", padx=8, pady=(4, 8))
+        self.add_search_btn = ttk.Button(arow, text="＋ Add search",
+                                         style="Accent.TButton",
+                                         command=self._add_search)
+        self.add_search_btn.pack(side="left")
+        self.cancel_search_btn = ttk.Button(arow, text="Cancel edit",
+                                            command=self._cancel_search_edit)
 
     def _build_schedule_tab(self, f):
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
@@ -302,9 +423,6 @@ class WatcherWindow:
         self.lb.delete(0, "end")
         self._chan_ids = []
         for ch in d["channels"]:
-            kinds = ", ".join(ch.get("kinds") or [])
-            kw = f" · kw:{ch['keyword']}" if ch.get("keyword") else ""
-            st = ch.get("set_name") or "no set"
             stx = watcher.stats(ch.get("id"))
             tail = " · ✓" + str(stx["done"])
             if stx["last7"]:
@@ -313,10 +431,22 @@ class WatcherWindow:
                 tail += " · last " + _ago(stx["last"])
             if stx["pending"]:
                 tail += " · " + str(stx["pending"]) + " queued"
-            url = ch.get("url", "")
-            self.lb.insert("end",
-                           "  " + url + "   [" + kinds + "]" + kw
-                           + " · " + st + tail)
+            if ch.get("kind") == "search":
+                types = ", ".join(ch.get("types") or [])
+                win = _UP_V2L.get(int(ch.get("upload_days", 0) or 0),
+                                  "custom")
+                life = _fmt_left(watcher.expiry_info(ch))
+                off = "" if ch.get("enabled", True) else " (retired)"
+                self.lb.insert("end",
+                               '  ⌕ "' + ch.get("query", "") + '"   [' + types
+                               + "] · " + win + " · " + life + off + tail)
+            else:
+                kinds = ", ".join(ch.get("kinds") or [])
+                kw = f" · kw:{ch['keyword']}" if ch.get("keyword") else ""
+                st = ch.get("set_name") or "no set"
+                self.lb.insert("end",
+                               "  ▸ " + ch.get("url", "") + "   [" + kinds
+                               + "]" + kw + " · " + st + tail)
             self._chan_ids.append(ch.get("id"))
         c = watcher.counts()
         self.status.configure(text=(
@@ -338,9 +468,17 @@ class WatcherWindow:
         if not ch:
             self._hide_tip(); return
         stx = watcher.stats(cid)
-        txt = (f"{ch.get('url','')}\n"
-               f"Catch: {', '.join(ch.get('kinds') or [])}"
-               f"{'  · kw: ' + ch['keyword'] if ch.get('keyword') else ''}\n"
+        if ch.get("kind") == "search":
+            head = (f'Search: "{ch.get("query","")}"\n'
+                    f"Type: {', '.join(ch.get('types') or [])}"
+                    f"   ·   window: {_UP_V2L.get(int(ch.get('upload_days',0) or 0),'custom')}\n"
+                    f"Sort: {ch.get('sort','Relevance')}"
+                    f"   ·   lifespan: {_fmt_left(watcher.expiry_info(ch))}\n")
+        else:
+            head = (f"{ch.get('url','')}\n"
+                    f"Catch: {', '.join(ch.get('kinds') or [])}"
+                    f"{'  · kw: ' + ch['keyword'] if ch.get('keyword') else ''}\n")
+        txt = (head +
                f"Downloaded: {stx['done']} total"
                f"   ·   last 7 days: {stx['last7']}\n"
                f"Last finished: {_ago(stx['last'])}"
@@ -433,6 +571,13 @@ class WatcherWindow:
         ch = next((c for c in d["channels"] if c.get("id") == cid), None)
         if not ch:
             return
+        if ch.get("kind") == "search":
+            self._edit_search(ch)
+            return
+        try:
+            self._subnb.select(self._tab_addch)
+        except Exception:
+            pass
         self._editing = cid
         self.url_var.set(ch.get("url", ""))
         self.kw_var.set(ch.get("keyword", ""))
@@ -459,6 +604,109 @@ class WatcherWindow:
         self.add_btn.configure(text="＋ Add channel")
         self.cancel_edit_btn.pack_forget()
         self._clear_form()
+
+    # ---------- search sources ----------
+    def _search_types(self):
+        out = []
+        if self.st_video.get():
+            out.append("Video")
+        if self.st_shorts.get():
+            out.append("Shorts")
+        if self.st_live.get():
+            out.append("Live")
+        if self.st_playlist.get():
+            out.append("Playlist")
+        if self.st_channel.get():
+            out.append("Channel")
+        return out
+
+    def _form_data_search(self):
+        cv = self.s_count.get().strip()
+        return {
+            "kind": "search",
+            "query": self.s_query.get().strip(),
+            "types": self._search_types(),
+            "upload_days": _UP_L2V.get(self.s_upload.get(), 0),
+            "duration": self.s_dur.get(),
+            "sort": self.s_sort.get(),
+            "count": int(cv) if cv.isdigit() else 25,
+            "lifespan_days": _LIFE_L2V.get(self.s_life.get(), 0),
+            "set_name": ("" if self.s_set.get() in ("—", "")
+                         else self.s_set.get()),
+            "transcript_mode": self.s_tmode.get(),
+            "folder": self.s_folder.get().strip(),
+            "save_video": self.ssv.get(), "save_audio": self.ssa.get(),
+            "save_desc": self.ssd.get(), "save_comments": self.ssc.get(),
+        }
+
+    def _clear_search_form(self):
+        self.s_query.set(""); self.s_folder.set(""); self.s_count.set("25")
+        self.s_set.set("—"); self.s_upload.set("Past 30 days")
+        self.s_dur.set("Any"); self.s_sort.set("Upload date")
+        self.s_life.set("30 days"); self.s_tmode.set("Whisper (accurate)")
+        self.st_video.set(True); self.st_shorts.set(True); self.st_live.set(True)
+        self.st_playlist.set(False); self.st_channel.set(False)
+        for v in (self.ssv, self.ssa, self.ssd, self.ssc):
+            v.set(False)
+
+    def _add_search(self):
+        data = self._form_data_search()
+        if not data["query"]:
+            self._set_status("Type a keyword to search for first."); return
+        if not data["types"]:
+            self._set_status("Tick at least one Type."); return
+        if self._editing_search:
+            watcher.update_channel(self._editing_search, data)
+            self._cancel_search_edit()
+            self._refresh()
+            self._set_status("Search updated.")
+            return
+        import time as _t
+        data["created_at"] = _t.time()
+        data["enabled"] = True
+        watcher.add_channel(data)
+        self._clear_search_form()
+        self._refresh()
+        self._set_status("Search added. Use 'Check now' to pull matches.")
+
+    def _edit_search(self, ch):
+        try:
+            self._subnb.select(self._tab_search)
+        except Exception:
+            pass
+        self._editing_search = ch.get("id")
+        self.s_query.set(ch.get("query", ""))
+        self.s_folder.set(ch.get("folder", ""))
+        self.s_count.set(str(ch.get("count", 25)))
+        self.s_set.set(ch.get("set_name") or "—")
+        self.s_upload.set(_UP_V2L.get(int(ch.get("upload_days", 0) or 0),
+                                      "Past 30 days"))
+        self.s_dur.set(ch.get("duration") or "Any")
+        self.s_sort.set(ch.get("sort") or "Upload date")
+        self.s_life.set(_LIFE_V2L.get(int(ch.get("lifespan_days", 0) or 0),
+                                      "No expiry"))
+        self.s_tmode.set(ch.get("transcript_mode") or "Whisper (accurate)")
+        types = ch.get("types") or []
+        self.st_video.set("Video" in types)
+        self.st_shorts.set("Shorts" in types)
+        self.st_live.set("Live" in types)
+        self.st_playlist.set("Playlist" in types)
+        self.st_channel.set("Channel" in types)
+        self.ssv.set(ch.get("save_video", False))
+        self.ssa.set(ch.get("save_audio", False))
+        self.ssd.set(ch.get("save_desc", False))
+        self.ssc.set(ch.get("save_comments", False))
+        self.s_form_lbl.configure(text="Edit search")
+        self.add_search_btn.configure(text="✔ Save changes")
+        self.cancel_search_btn.pack(side="left", padx=8)
+        self._set_status("Editing search — change anything, then Save changes.")
+
+    def _cancel_search_edit(self):
+        self._editing_search = None
+        self.s_form_lbl.configure(text="Search by keyword")
+        self.add_search_btn.configure(text="＋ Add search")
+        self.cancel_search_btn.pack_forget()
+        self._clear_search_form()
 
     def _delete(self):
         sel = self.lb.curselection()
