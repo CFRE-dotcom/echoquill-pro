@@ -219,27 +219,35 @@ class AutoBatchWindow:
                   style="Title.TLabel").pack(side="left")
         helptip.attach(self.win, top, "Auto-batch - help", HELP).pack(
             side="left", padx=8)
-        ttk.Button(top, text="▦ Build from columns…",
-                   command=self._open_grid).pack(side="right")
-        ttk.Button(top, text="⭱ Load .xlsx…",
-                   command=self._load_xlsx).pack(side="right", padx=(0, 6))
 
-        ttk.Label(self.win, style="Dim.TLabel", wraplength=700, text=(
+        nb = ttk.Notebook(self.win)
+        nb.pack(fill="both", expand=True, padx=12, pady=(6, 4))
+        tab_build = ttk.Frame(nb)
+        tab_run = ttk.Frame(nb)
+        nb.add(tab_build, text="  Build list  ")
+        nb.add(tab_run, text="  Run options  ")
+
+        # ---------- Build list tab ----------
+        brow = ttk.Frame(tab_build); brow.pack(fill="x", padx=8, pady=(8, 2))
+        ttk.Button(brow, text="▦ Build from columns…",
+                   command=self._open_grid).pack(side="left")
+        ttk.Button(brow, text="⭱ Load .xlsx…",
+                   command=self._load_xlsx).pack(side="left", padx=6)
+        ttk.Label(tab_build, style="Dim.TLabel", wraplength=720, text=(
             "One line per video:   URL | Title | folder\\subfolder      "
             "(Title and folder optional; blank title uses the video's own "
-            "title).")).pack(anchor="w", padx=18)
-
-        self.box = theme.dark_text(self.win, wrap="none", height=11)
-        self.box.pack(fill="both", expand=True, padx=18, pady=(6, 2))
+            "title).")).pack(anchor="w", padx=8)
+        self.box = theme.dark_text(tab_build, wrap="none", height=11)
+        self.box.pack(fill="both", expand=True, padx=8, pady=(6, 2))
         self.box.bind("<KeyRelease>", lambda e: self._recount())
         helptip.tip(self.box, "Paste your list here, one video per line: "
                     "URL | Title | folder. See the ? above for the full format.")
+        self.count = ttk.Label(tab_build, text="0 videos", style="Dim.TLabel")
+        self.count.pack(anchor="w", padx=8, pady=(0, 6))
 
-        self.count = ttk.Label(self.win, text="0 videos", style="Dim.TLabel")
-        self.count.pack(anchor="w", padx=18)
-
-        opt = ttk.Frame(self.win)
-        opt.pack(fill="x", padx=18, pady=(6, 2))
+        # ---------- Run options tab ----------
+        opt = ttk.Frame(tab_run)
+        opt.pack(fill="x", padx=8, pady=(10, 2))
         ttk.Label(opt, text="Question set:").pack(side="left")
         self.setvar = tk.StringVar(value="—")
         self.setmenu = ttk.OptionMenu(opt, self.setvar, "—")
@@ -251,8 +259,8 @@ class AutoBatchWindow:
         helptip.tip(self.setmenu, "The saved set of questions to ask every "
                     "video. Create sets in Ask AI → 'Ask several' → 'Save "
                     "checked as set'.")
-        trow = ttk.Frame(self.win)
-        trow.pack(fill="x", padx=18, pady=(6, 0))
+        trow = ttk.Frame(tab_run)
+        trow.pack(fill="x", padx=8, pady=(8, 0))
         ttk.Label(trow, text="Transcript source:").pack(side="left")
         self.transcript_mode = tk.StringVar(value="Whisper (accurate)")
         _tm = ttk.OptionMenu(trow, self.transcript_mode, "Whisper (accurate)",
@@ -266,8 +274,8 @@ class AutoBatchWindow:
         self.save_video = tk.BooleanVar(value=True)
         self.save_audio = tk.BooleanVar(value=True)
         self.save_desc = tk.BooleanVar(value=False)
-        saverow = ttk.Frame(self.win)
-        saverow.pack(fill="x", padx=18, pady=(2, 2))
+        saverow = ttk.Frame(tab_run)
+        saverow.pack(fill="x", padx=8, pady=(8, 2))
         ttk.Checkbutton(saverow, text="Save video",
                         variable=self.save_video).pack(side="left")
         ttk.Checkbutton(saverow, text="Save audio",
@@ -286,8 +294,8 @@ class AutoBatchWindow:
                     "'<name> - Description.txt' (off by default). Says "
                     "'No video description' if there is none.")
 
-        thr = ttk.Frame(self.win)
-        thr.pack(fill="x", padx=18, pady=(0, 2))
+        thr = ttk.Frame(tab_run)
+        thr.pack(fill="x", padx=8, pady=(8, 2))
         ttk.Label(thr, text="Pause every").pack(side="left")
         self.thr_n = tk.StringVar(value="5")
         tk.Entry(thr, textvariable=self.thr_n, width=4, bg=theme.FIELD,
@@ -301,8 +309,20 @@ class AutoBatchWindow:
         ttk.Label(thr, text="seconds   (0 = no pause; memory is released "
                   "during each pause)", style="Dim.TLabel").pack(side="left")
 
+        # ---------- constant: live monitor ----------
+        mon = tk.Frame(self.win, bg="#141414", bd=1, relief="solid")
+        mon.pack(fill="x", padx=18, pady=(2, 2))
+        self.monitor = tk.Label(mon, bg="#141414", fg="#8a8a8a",
+                                font=("Segoe UI", 12, "bold"), anchor="w",
+                                justify="left", wraplength=700,
+                                text="●  Idle — nothing running")
+        self.monitor.pack(fill="x", padx=12, pady=8)
+        mon.bind("<Configure>", lambda e: self.monitor.configure(
+            wraplength=max(220, e.width - 28)))
+
+        # ---------- constant: run controls ----------
         bar = ttk.Frame(self.win)
-        bar.pack(fill="x", padx=18, pady=(4, 2))
+        bar.pack(fill="x", padx=18, pady=(2, 2))
         self.start_btn = ttk.Button(bar, text="Start", style="Accent.TButton",
                                     command=self._start)
         self.start_btn.pack(side="left")
@@ -320,7 +340,7 @@ class AutoBatchWindow:
         ttk.Label(self.win, text="Progress", style="Section.TLabel").pack(
             anchor="w", padx=18, pady=(4, 0))
         self.log = theme.dark_text(self.win, wrap="word", height=8)
-        self.log.pack(fill="both", expand=True, padx=18, pady=(2, 12))
+        self.log.pack(fill="x", padx=18, pady=(2, 12))
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self.win.transient(parent)
         self.win.lift()
@@ -402,8 +422,28 @@ class AutoBatchWindow:
         self._recount()
 
     def _set(self, msg):
+        def _do():
+            self.status.configure(text=msg)
+            self._set_monitor(msg)
         try:
-            self.win.after(0, lambda: self.status.configure(text=msg))
+            self.win.after(0, _do)
+        except Exception:
+            pass
+
+    def _set_monitor(self, msg):
+        low = (msg or "").lower()
+        if not msg:
+            col, txt = "#8a8a8a", "●  Idle — nothing running"
+        elif low.startswith("done") or "processed" in low:
+            col, txt = "#30d158", "✓  " + msg
+        elif low.startswith("stop"):
+            col, txt = "#e0a030", "■  " + msg
+        elif "video" in low:
+            col, txt = "#4da3ff", "▶  " + msg
+        else:
+            col, txt = "#4da3ff", msg
+        try:
+            self.monitor.configure(text=txt, fg=col)
         except Exception:
             pass
 

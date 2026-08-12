@@ -37,18 +37,33 @@ class SettingsWindow:
         self.win.attributes("-topmost", True)
         theme.apply(self.win)
 
-        # ----- layout: sidebar | content -----
-        self.sidebar = tk.Frame(self.win, bg=theme.SIDEBAR, width=180)
-        self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
+        # ----- layout: top wrapping tab bar | content -----
+        header = tk.Frame(self.win, bg=theme.PANEL)
+        header.pack(side="top", fill="x")
+        tk.Label(header, text="EchoQuill", bg=theme.PANEL, fg=theme.FG,
+                 font=("Segoe UI Semibold", 14)).pack(side="left", padx=16,
+                                                       pady=10)
+        from . import license as _lic
+        if _lic.is_pro(self.cfg):
+            tk.Label(header, text="⭐ PRO — licensed", bg=theme.PANEL,
+                     fg="#ffd60a", font=("Segoe UI Semibold", 10)).pack(
+                     side="right", padx=16)
+        else:
+            up = tk.Label(header, text="⭐ Activate Pro", bg=theme.PANEL,
+                          fg="#ffd60a", font=("Segoe UI Semibold", 10),
+                          cursor="hand2")
+            up.pack(side="right", padx=16)
+            up.bind("<Button-1>", lambda e: self._show("License"))
 
-        tk.Label(self.sidebar, text="EchoQuill", bg=theme.SIDEBAR,
-                 fg=theme.FG, font=("Segoe UI Semibold", 14)
-                 ).pack(anchor="w", padx=18, pady=(18, 14))
+        # wrapping tab bar: tabs flow onto a second row when width runs out
+        self._tabbar = tk.Frame(self.win, bg=theme.SIDEBAR, height=40)
+        self._tabbar.pack(side="top", fill="x")
+        self._tabbar.pack_propagate(False)
+        self._tabbar.bind("<Configure>", lambda e: self._reflow_tabs())
 
-        # everything right of the sidebar: content on top, save bar below it
+        # content on top, save bar below it (now full width - no sidebar)
         right = ttk.Frame(self.win)
-        right.pack(side="left", fill="both", expand=True)
+        right.pack(side="top", fill="both", expand=True)
         self._save_bar = ttk.Frame(right)
         self._save_bar.pack(side="bottom", fill="x")
         ttk.Button(self._save_bar, text="Save changes", style="Accent.TButton",
@@ -58,99 +73,15 @@ class SettingsWindow:
         # green "update available" banner (hidden until a check finds one)
         self._update_banner = tk.Frame(right, bg="#30d158")
 
-        from . import license as _lic
-        if _lic.is_pro(self.cfg):
-            tk.Label(self.sidebar, text="⭐ PRO — licensed",
-                     bg=theme.SIDEBAR, fg="#ffd60a",
-                     font=("Segoe UI Semibold", 10), pady=10
-                     ).pack(side="bottom", fill="x")
-        else:
-            up = tk.Label(self.sidebar, text="⭐ Activate Pro",
-                          bg=theme.SIDEBAR, fg="#ffd60a",
-                          font=("Segoe UI Semibold", 10), cursor="hand2", pady=10)
-            up.pack(side="bottom", fill="x")
-            up.bind("<Button-1>", lambda e: self._show("License"))
-
-        # scrollable nav area so every section is reachable on short windows
-        navwrap = tk.Frame(self.sidebar, bg=theme.SIDEBAR)
-        navwrap.pack(side="top", fill="both", expand=True)
-        self._navcanvas = tk.Canvas(navwrap, bg=theme.SIDEBAR,
-                                    highlightthickness=0, width=180)
-        self._navinner = tk.Frame(self._navcanvas, bg=theme.SIDEBAR)
-        _nid = self._navcanvas.create_window((0, 0), window=self._navinner,
-                                             anchor="nw")
-        self._navmore = tk.Label(navwrap, text="\u25be", bg=theme.SIDEBAR,
-                                 fg=theme.ACCENT, font=("Segoe UI", 13, "bold"))
-
-        # small, always-visible blue scrollbar - a fixed ~40px thumb we draw
-        # ourselves so it never balloons to full height when little scrolls.
-        _SBW, _TH = 8, 40
-        _sb = tk.Canvas(navwrap, width=_SBW, bg=theme.SIDEBAR,
-                        highlightthickness=0, bd=0)
-        _sb.pack(side="right", fill="y")
-        _thumb = _sb.create_rectangle(1, 0, _SBW - 1, _TH,
-                                      fill=theme.ACCENT, outline="")
-        _st = {"lo": 0.0, "hi": 1.0}
-
-        def _place_thumb():
-            try:
-                h = _sb.winfo_height()
-                th = min(_TH, max(16, h - 4))
-                rng = 1.0 - (_st["hi"] - _st["lo"])
-                f = (_st["lo"] / rng) if rng > 1e-6 else 0.0
-                top = f * max(0, h - th)
-                _sb.coords(_thumb, 1, top, _SBW - 1, top + th)
-            except Exception:
-                pass
-
-        def _nav_scroll(lo, hi):
-            _st["lo"], _st["hi"] = float(lo), float(hi)
-            _place_thumb()
-            try:
-                if float(hi) < 0.999:
-                    self._navmore.place(relx=0.5, rely=1.0, anchor="s")
-                    self._navmore.lift()
-                else:
-                    self._navmore.place_forget()
-            except Exception:
-                pass
-
-        def _sb_drag(e):
-            h = _sb.winfo_height()
-            th = min(_TH, max(16, h - 4))
-            f = max(0.0, min(1.0, (e.y - th / 2) / max(1, h - th)))
-            rng = 1.0 - (_st["hi"] - _st["lo"])
-            self._navcanvas.yview_moveto(f * rng)
-        _sb.bind("<Button-1>", _sb_drag)
-        _sb.bind("<B1-Motion>", _sb_drag)
-        _sb.bind("<Configure>", lambda e: _place_thumb())
-
-        self._navcanvas.configure(yscrollcommand=_nav_scroll)
-        self._navcanvas.pack(side="left", fill="both", expand=True)
-
-        def _nav_cfg(_e=None):
-            try:
-                self._navcanvas.configure(scrollregion=self._navcanvas.bbox("all"))
-            except Exception:
-                pass
-        self._navinner.bind("<Configure>", _nav_cfg)
-        self._navcanvas.bind("<Configure>", lambda e: (
-            self._navcanvas.itemconfigure(_nid, width=e.width), _nav_cfg()))
-        self._navcanvas.bind("<Enter>", lambda e: self._navcanvas.bind_all(
-            "<MouseWheel>", lambda ev: self._navcanvas.yview_scroll(
-                int(-ev.delta / 120), "units")))
-        self._navcanvas.bind("<Leave>",
-                             lambda e: self._navcanvas.unbind_all("<MouseWheel>"))
-
+        # tab buttons (positioned by _reflow_tabs)
         self._nav_buttons = {}
-        self._frames = {}
         for name in self.SECTIONS:
-            b = tk.Label(self._navinner, text=name, bg=theme.SIDEBAR,
-                         fg=theme.DIM, font=("Segoe UI", 11), anchor="w",
-                         padx=18, pady=8, cursor="hand2")
-            b.pack(fill="x")
+            b = tk.Label(self._tabbar, text=name, bg=theme.SIDEBAR,
+                         fg=theme.DIM, font=("Segoe UI", 10), padx=13, pady=7,
+                         cursor="hand2")
             b.bind("<Button-1>", lambda e, n=name: self._show(n))
             self._nav_buttons[name] = b
+        self._frames = {}
 
         body = {"General": self._build_general,
                 "Dictation": self._build_dictation,
@@ -184,6 +115,7 @@ class SettingsWindow:
 
         self._show(initial_section if initial_section in self.SECTIONS
                    else "General")
+        self.win.after(50, self._reflow_tabs)
         self._snapshot = self._collect_state()
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._start_update_autocheck()
@@ -210,6 +142,31 @@ class SettingsWindow:
 
     # only these tabs have anything to save
     SAVE_SECTIONS = {"General", "Dictation", "Dictionary", "AI Enhancement"}
+
+    def _reflow_tabs(self):
+        """Flow tab labels left-to-right, wrapping onto a new row when the bar
+        runs out of width (so all sections fit without a big sidebar)."""
+        bar = getattr(self, "_tabbar", None)
+        if bar is None:
+            return
+        avail = bar.winfo_width()
+        if avail <= 1:
+            return
+        pad, gap = 4, 3
+        x, y, rowh = pad, 4, 0
+        for name in self.SECTIONS:
+            b = self._nav_buttons[name]
+            w, h = b.winfo_reqwidth(), b.winfo_reqheight()
+            if x > pad and x + w > avail - pad:
+                x = pad
+                y += h + gap
+            b.place(x=x, y=y)
+            x += w + gap
+            rowh = h
+        try:
+            bar.configure(height=y + rowh + 6)
+        except Exception:
+            pass
 
     def _show(self, name):
         if name in self.SAVE_SECTIONS:

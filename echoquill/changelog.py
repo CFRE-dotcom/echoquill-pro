@@ -8,6 +8,12 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.28.0  (2026-08-12)
+    Tabs everywhere - less clutter, more room.
+    - SETTINGS: the big left sidebar is gone. Sections are now a tab bar across the top that wraps onto a second row when it runs out of width, so every section is one click away and the content area is wider. Opening a specific section (e.g. from the tray) still jumps straight to it.
+    - AUTO-BATCH: split into two tabs - "Build list" (paste box + Build-from-columns + Load .xlsx) and "Run options" (question set, transcript source, save options, pacing). The Start/Stop controls and the progress log stay visible below the tabs.
+    - AUTO-BATCH LIVE MONITOR: same big status line as the watcher - shows the current video and phase ("Video 3/12: transcribing…"), turns green on Done, amber on Stop.
+
 v2.27.9  (2026-08-12)
     Notifications fixed + tabbed watcher + badges.
     - NOTIFICATIONS NOW FIRE ON REAL COMPLETIONS. The bug: a finished video announced from a background worker thread, but the toast could only be drawn from the main thread, so it silently failed (while the Test button, which runs on the main thread, worked). Completions now route through the main-thread queue - a finished video pops the same blue toast as Test.
