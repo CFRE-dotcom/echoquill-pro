@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.2  (2026-08-13)
+    Search diagnostics so we can SEE why a search returns what it does. The log now reports, per search: the raw number of results YouTube returned, then how many were kept vs dropped and why ("kept 12 · dropped: type 3, duration 0, upload-window 8"), plus the actual error text if the search call itself failed. Also stopped double-quoting the query in the log (it now shows your keyword exactly as typed). This is on top of the 2.32.0 search fix (ytsearchdate is unsupported in this yt-dlp; relevance uses ytsearch, upload-date uses YouTube's date-sorted results URL).
+
 v2.32.1  (2026-08-13)
     The live monitor bar at the bottom of the Channel watcher now shows the destination folder on a second line ("folder: …\Transcriptions\…"), matching what the activity log already shows. So you can see where the current video is going in both places.
 

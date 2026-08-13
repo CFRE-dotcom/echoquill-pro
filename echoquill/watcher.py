@@ -239,13 +239,14 @@ def _scan_sources(cfg, d, log):
         if ch.get("kind") == "search":
             from .auto_batch import fetch_search_filtered
             q = ch.get("query", "")
-            _emit(log, f"Searching \"{q}\"…")
+            _emit(log, f"Searching {q}…")
             try:
                 items = fetch_search_filtered(
                     q, cfg, types=ch.get("types") or ["Video"],
                     duration=ch.get("duration", "Any"),
                     upload_days=int(ch.get("upload_days", 0) or 0),
-                    sort=ch.get("sort", "Relevance"), n=limit)
+                    sort=ch.get("sort", "Relevance"), n=limit,
+                    log=lambda m: _emit(log, m))
             except Exception as e:
                 _emit(log, f"  search failed: {str(e)[:70]}")
                 continue

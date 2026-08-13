@@ -164,7 +164,8 @@ def _entry_upload_ts(e, cfg):
 
 
 def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
-                          upload_days=0, sort="Relevance", n=25):
+                          upload_days=0, sort="Relevance", n=25,
+                          log=lambda s: None):
     """YouTube search with client-side type/duration/upload-window filtering.
     Returns [(url, title), ...]. sort: 'Relevance' or 'Upload date'."""
     import time
@@ -195,13 +196,18 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(target, download=False)
-    except Exception:
+    except Exception as e:
+        log(f"  search error: {str(e)[:120]}")
         return []
+    entries = [e for e in (info.get("entries") or []) if e]
+    log(f"  YouTube returned {len(entries)} raw result(s); "
+        f"filtering by type/duration/upload-window…")
     want = set(t.lower() for t in (types or ["Video"]))
     now = time.time()
     date_fetches = 0
+    drop_type = drop_dur = drop_date = 0
     out = []
-    for e in (info.get("entries") or []):
+    for e in entries:
         if not e:
             continue
         u = e.get("url") or e.get("webpage_url")
@@ -217,13 +223,17 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
         is_short = ("/shorts/" in u) or (dur is not None and dur <= 60)
         kind = "live" if is_live else ("shorts" if is_short else "video")
         if kind not in want:
+            drop_type += 1
             continue
         if duration and duration != "Any" and dur is not None:
             if duration.startswith("Under") and not dur < 240:
+                drop_dur += 1
                 continue
             if duration.startswith("4") and not (240 <= dur <= 1200):
+                drop_dur += 1
                 continue
             if duration.startswith("Over") and not dur > 1200:
+                drop_dur += 1
                 continue
         if upload_days and int(upload_days) > 0:
             ts = None
@@ -233,12 +243,15 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
                     date_fetches += 1
             if ts is not None:
                 if now - ts > int(upload_days) * 86400:
+                    drop_date += 1
                     if date_sorted:
                         break
                     continue
         out.append((u, t))
         if len(out) >= int(n):
             break
+    log(f"  kept {len(out)} · dropped: type {drop_type}, duration {drop_dur}, "
+        f"upload-window {drop_date}")
     return out
 
 
