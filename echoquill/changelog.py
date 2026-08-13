@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.4  (2026-08-13)
+    FIXES vanishing channels/searches. A running scan or download cycle loaded the whole watcher file once and held it for minutes (the pacing gaps between videos), then saved that stale copy back - erasing any channel or search you added while it was running. Every write is now atomic: edits (add / delete / pause / wipe / edit) reload-modify-save under a lock, the scan merges its results into the CURRENT file instead of overwriting it, and each finished video updates just its own queue item. Adding sources mid-run is now safe.
+
 v2.32.3  (2026-08-13)
     FIXES the "75 results, kept 0" search bug. The old code fetched each video's upload date one-by-one and, for date-sorted results, broke the whole loop the moment one looked older than your window - so a single bad date reading dropped all 75 hits. Now YouTube filters by date SERVER-SIDE via its own search-filter token (validated against YouTube's known tokens): your Upload window maps to today / this week / this month / this year (YouTube has no exact N-day option, so 60/90 days uses "this year"). It's faster (no per-video lookups) and it actually returns results. Type and duration are still filtered locally.
 

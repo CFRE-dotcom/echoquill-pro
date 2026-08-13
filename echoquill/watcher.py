@@ -9,6 +9,27 @@ import threading
 
 _LOCK = threading.Lock()
 _BUSY = False
+# serializes read-modify-write of watcher.json so a long-running scan/process
+# can't overwrite edits (add/delete/pause) made from the UI meanwhile.
+_STORE_LOCK = threading.RLock()
+
+
+def _mutate(fn):
+    """Atomic read-modify-write: reload fresh, apply fn(d), save."""
+    with _STORE_LOCK:
+        d = load()
+        fn(d)
+        save(d)
+
+
+def _update_item(cid, url, updates):
+    """Atomically update one queue item's fields (matched by source+url)."""
+    def fn(d):
+        for q in d["queue"]:
+            if q.get("channel_id") == cid and q.get("url") == url:
+                q.update(updates)
+                return
+    _mutate(fn)
 
 # live progress the watcher window polls
 ACTIVITY = {"phase": "idle", "i": 0, "n": 0, "title": "", "wait_until": 0, "folder": ""}
@@ -105,12 +126,10 @@ def save(d):
 
 
 def add_channel(ch):
-    d = load()
     ch.setdefault("id", uuid.uuid4().hex[:8])
     ch.setdefault("seen", [])
     ch.setdefault("enabled", True)
-    d["channels"].append(ch)
-    save(d)
+    _mutate(lambda d: d["channels"].append(ch))
     return ch["id"]
 
 
@@ -118,42 +137,42 @@ def update_channel(cid, fields):
     """Edit an existing watch in place (keeps id + seen list). If `fields`
     includes 'enabled', it wins (lets an edit un-retire a source); otherwise
     the previous enabled state is kept."""
-    d = load()
-    for ch in d["channels"]:
-        if ch.get("id") == cid:
-            keep_id = ch.get("id")
-            seen = ch.get("seen", [])
-            en = ch.get("enabled", True)
-            ch.clear()
-            ch.update(fields)
-            ch["id"] = keep_id
-            ch["seen"] = seen
-            ch.setdefault("enabled", en)
-            break
-    save(d)
+    def fn(d):
+        for ch in d["channels"]:
+            if ch.get("id") == cid:
+                keep_id = ch.get("id")
+                seen = ch.get("seen", [])
+                en = ch.get("enabled", True)
+                ch.clear()
+                ch.update(fields)
+                ch["id"] = keep_id
+                ch["seen"] = seen
+                ch.setdefault("enabled", en)
+                break
+    _mutate(fn)
 
 
 def set_enabled(cid, on):
     """Pause/resume a source. Resuming also clears an 'expired' flag."""
-    d = load()
-    for ch in d["channels"]:
-        if ch.get("id") == cid:
-            ch["enabled"] = bool(on)
-            if on:
-                ch["expired"] = False
-            break
-    save(d)
+    def fn(d):
+        for ch in d["channels"]:
+            if ch.get("id") == cid:
+                ch["enabled"] = bool(on)
+                if on:
+                    ch["expired"] = False
+                break
+    _mutate(fn)
 
 
 def clear_source_queue(cid):
     """Remove this source's queued/done items AND its seen list, so it can be
     re-pulled fresh. Keeps the source itself."""
-    d = load()
-    d["queue"] = [q for q in d["queue"] if q.get("channel_id") != cid]
-    for ch in d["channels"]:
-        if ch.get("id") == cid:
-            ch["seen"] = []
-    save(d)
+    def fn(d):
+        d["queue"] = [q for q in d["queue"] if q.get("channel_id") != cid]
+        for ch in d["channels"]:
+            if ch.get("id") == cid:
+                ch["seen"] = []
+    _mutate(fn)
 
 
 def stats(cid):
@@ -178,10 +197,10 @@ def stats(cid):
 
 def delete_channel(cid):
     """Remove a watch AND everything stored for it (seen list + queued items)."""
-    d = load()
-    d["channels"] = [c for c in d["channels"] if c.get("id") != cid]
-    d["queue"] = [q for q in d["queue"] if q.get("channel_id") != cid]
-    save(d)
+    def fn(d):
+        d["channels"] = [c for c in d["channels"] if c.get("id") != cid]
+        d["queue"] = [q for q in d["queue"] if q.get("channel_id") != cid]
+    _mutate(fn)
 
 
 def is_expired(ch):
@@ -311,7 +330,24 @@ def check_new(cfg, log=lambda s: None):
             return 0
     try:
         added = _scan_sources(cfg, d, log)
-        save(d)
+
+        def _merge(cur):
+            existing = {(q.get("channel_id"), q.get("url"))
+                        for q in cur["queue"]}
+            for q in d["queue"]:
+                key = (q.get("channel_id"), q.get("url"))
+                if key not in existing:
+                    cur["queue"].append(q)
+            dmap = {c.get("id"): c for c in d["channels"]}
+            for ch in cur["channels"]:
+                dc = dmap.get(ch.get("id"))
+                if dc:
+                    ch["seen"] = list(set(ch.get("seen", []))
+                                      | set(dc.get("seen", [])))
+                    if dc.get("expired"):
+                        ch["expired"] = True
+                        ch["enabled"] = False
+        _mutate(_merge)
     finally:
         if proxy_on:
             proxy.clear_active_sessid()
@@ -369,28 +405,27 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
 
             status, msg = pipeline.process_video(
                 cfg, item, lambda m: _emit(log, m), cancel, progress=_prog)
-            item["attempts"] = item.get("attempts", 0) + 1
+            attempts = item.get("attempts", 0) + 1
             if status == "done":
-                item["status"] = "done"
-                item["last_error"] = ""
-                item["done_at"] = time.time()
+                upd = {"status": "done", "last_error": "",
+                       "done_at": time.time(), "attempts": attempts}
                 done += 1
                 _emit(log, "    done ✓")
             elif status == "unavailable":
-                item["status"] = "unavailable"
-                item["last_error"] = msg
+                upd = {"status": "unavailable", "last_error": msg,
+                       "attempts": attempts}
                 _emit(log, "    unavailable — skipping")
             else:
-                item["status"] = "failed"
-                item["last_error"] = msg
                 mins = int((cfg or {}).get("watch_retry_minutes", 30) or 30)
-                item["next_try"] = time.time() + max(1, mins) * 60
+                upd = {"status": "failed", "last_error": msg,
+                       "attempts": attempts,
+                       "next_try": time.time() + max(1, mins) * 60}
                 _emit(log, f"    failed (will retry): {msg[:80]}")
-            save(d)
+            item.update(upd)   # keep the in-memory snapshot consistent
+            _update_item(item.get("channel_id"), item.get("url"), upd)
         if done:
-            fresh = load()
-            fresh["new_ready"] = fresh.get("new_ready", 0) + done
-            save(fresh)
+            _mutate(lambda d: d.__setitem__(
+                "new_ready", d.get("new_ready", 0) + done))
     finally:
         _set_activity(phase="idle", i=0, n=0, title="", wait_until=0, folder="")
     return done
@@ -415,16 +450,14 @@ def run_once(cfg, log=lambda s: None, cancel=lambda: False):
 
 def clear_queue():
     """Wipe every queued item (keeps channels + their seen lists)."""
-    d = load()
-    d["queue"] = []
-    d["new_ready"] = 0
-    save(d)
+    def fn(d):
+        d["queue"] = []
+        d["new_ready"] = 0
+    _mutate(fn)
 
 
 def clear_new_ready():
-    d = load()
-    d["new_ready"] = 0
-    save(d)
+    _mutate(lambda d: d.__setitem__("new_ready", 0))
 
 
 def counts():
