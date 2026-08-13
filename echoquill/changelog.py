@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.31.1  (2026-08-12)
+    Fixes a brand-new search wrongly reporting "already seen", and makes the proxy steps fully visible.
+    - SEARCH/SCAN ON A VERIFIED IP: when the proxy is on, a scan now verifies a live IP BEFORE searching, so a keyword search isn't silently run through a blocked IP (which returned 0 results and then mislabeled it "already seen"). That's why "Programmatic SEO" looked already-seen on its first run - it was blocked, not seen.
+    - HONEST LOG WORDING: a search now logs "found N result(s), M new queued", or "0 results — search returned nothing (blocked, or nothing matched your Type / Duration / Upload-window)". No more calling an empty result "already seen".
+    - VISIBLE PROXY STEPS: the log now narrates the whole procedure per IP - "[IP 1/3] clearing cache…", "firing a new residential IP…", "verifying exit IP…", "verified ✓ <ip> · <geo> · residential · <carrier>", or "NOT verified (…) — starting over". You can now see the cache clear and each rotation.
+    - RESIDENTIAL WORDING: removed the "residential/mobile" framing from the proxy checkbox and notes; the Settings mobile toggle is now clearly labeled "Advanced: request mobile IPs (off = residential, recommended)".
+
 v2.31.0  (2026-08-12)
     Proxy: rotate on bot-block, residential by default, clearer logging - and the live monitor is back where it belongs.
     - ROTATE ON BLOCK: when the proxy is on and YouTube bot-blocks a download ("Sign in to confirm you're not a bot"), it now rotates to a fresh verified IP and retries - up to your verify-tries (default 3) DIFFERENT IPs - before concluding it likely needs fresh cookies. Previously it verified one IP and gave up on the first block.

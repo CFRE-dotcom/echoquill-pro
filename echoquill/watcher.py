@@ -194,10 +194,9 @@ def _queue_item(cfg, ch, u, t):
     }
 
 
-def check_new(cfg, log=lambda s: None):
-    """Queue any new uploads from each enabled channel. Returns count queued."""
+def _scan_sources(cfg, d, log):
+    """The actual per-source scan (channels + searches). Returns count queued."""
     from .auto_batch import fetch_channel
-    d = load()
     added = 0
     for ch in d["channels"]:
         if not ch.get("enabled", True):
@@ -223,8 +222,8 @@ def check_new(cfg, log=lambda s: None):
                     upload_days=int(ch.get("upload_days", 0) or 0),
                     sort=ch.get("sort", "Relevance"), n=limit)
             except Exception as e:
-                items = []
                 _emit(log, f"  search failed: {str(e)[:70]}")
+                continue
             for (u, t) in items:
                 if u in seen:
                     continue
@@ -233,13 +232,17 @@ def check_new(cfg, log=lambda s: None):
                 added += 1
             ch["seen"] = list(seen)
             got = added - before
-            _emit(log, f"  {got} new video(s) queued." if got
-                  else "  nothing new (already seen).")
+            if not items:
+                _emit(log, "  0 results — search returned nothing (blocked, or "
+                      "nothing matched your Type / Duration / Upload-window).")
+            else:
+                _emit(log, f"  found {len(items)} result(s), {got} new queued.")
             continue
 
         kinds = ch.get("kinds") or ["Videos"]
         _emit(log, f"Scanning {ch.get('url','')} ({', '.join(kinds)})…")
         kw = (ch.get("keyword", "") or "").strip().lower()
+        found = 0
         for kind in kinds:
             try:
                 fetch_n = min(limit * 8, 300) if kw else limit
@@ -249,6 +252,7 @@ def check_new(cfg, log=lambda s: None):
             if kw:
                 items = [(u, t) for (u, t) in items if kw in (t or "").lower()]
             items = items[:limit]
+            found += len(items)
             for (u, t) in items:
                 if u in seen:
                     continue
@@ -257,9 +261,34 @@ def check_new(cfg, log=lambda s: None):
                 added += 1
         ch["seen"] = list(seen)
         got = added - before
-        _emit(log, f"  {got} new video(s) queued." if got
-              else "  nothing new (already seen).")
-    save(d)
+        if not found:
+            _emit(log, "  0 results returned (possibly blocked).")
+        else:
+            _emit(log, f"  {got} new video(s) queued." if got
+                  else "  nothing new (all already seen).")
+    return added
+
+
+def check_new(cfg, log=lambda s: None):
+    """Scan every enabled source. When the proxy is on, verify a live IP FIRST
+    so scans aren't run on a blocked IP. Returns count queued."""
+    from . import proxy
+    d = load()
+    proxy_on = bool(cfg.get("di_enabled"))
+    if proxy_on:
+        _emit(log, "Verifying a proxy IP for this scan…")
+        sid, _ip = proxy.acquire_verified(
+            cfg, tries=int(cfg.get("di_verify_tries", 3) or 3),
+            log=lambda m: _emit(log, m))
+        if not sid:
+            _emit(log, "  proxy: no live IP after tries — skipping this scan.")
+            return 0
+    try:
+        added = _scan_sources(cfg, d, log)
+        save(d)
+    finally:
+        if proxy_on:
+            proxy.clear_active_sessid()
     return added
 
 

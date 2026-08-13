@@ -431,12 +431,14 @@ class SettingsWindow:
         helptip.tip(_dpw, "Your DataImpulse account password. Kept in Windows "
                     "Credential Manager, never shown or uploaded.")
         self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", False))
-        _dmb = ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
+        _dmb = ttk.Checkbutton(f, text="Advanced: request mobile IPs "
+                               "(off = residential, recommended)",
                                variable=self.di_mobile)
         _dmb.pack(anchor="w", pady=(2, 2))
-        helptip.tip(_dmb, "Checked = phone-carrier (mobile) IPs. Unchecked = "
-                    "home (residential) IPs. Both are 'real' IPs YouTube "
-                    "accepts - residential is usually plenty.")
+        helptip.tip(_dmb, "Leave OFF. DataImpulse residential plans are "
+                    "residential - keep this unchecked. Only check it if you "
+                    "specifically have a mobile add-on and want phone-carrier "
+                    "IPs.")
         # optional geo targeting (hidden unless you turn it on)
         self.di_country = tk.StringVar(value=self.cfg.get("di_country", "us"))
         self.di_state = tk.StringVar(value=self.cfg.get("di_state", ""))

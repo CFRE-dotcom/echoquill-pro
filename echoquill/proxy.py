@@ -135,15 +135,19 @@ def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
     clear_active_sessid()
     mode = "mobile" if (cfg or {}).get("di_mobile", False) else "residential"
     for attempt in range(1, tries + 1):
+        log(f"    [IP {attempt}/{tries}] clearing cache…")
         clear_cache()          # fresh state BEFORE firing a new IP
         sid = uuid.uuid4().hex[:12]
+        log(f"    [IP {attempt}/{tries}] firing a new {mode} IP…")
+        log(f"    [IP {attempt}/{tries}] verifying exit IP…")
         ok, ip, geo, org, msg = _verify(cfg, sid, timeout)
         if ok:
             set_active_sessid(sid)
-            log(f"    proxy IP verified: {ip}"
+            log(f"    [IP {attempt}/{tries}] verified ✓  {ip}"
                 f"{'  ·  ' + geo if geo else ''}  ·  {mode}"
-                f"{'  ·  ' + org if org else ''}  (attempt {attempt})")
+                f"{'  ·  ' + org if org else ''}")
             return (sid, ip)
-        log(f"    proxy attempt {attempt}/{tries} failed ({msg}) - rotating IP")
+        log(f"    [IP {attempt}/{tries}] NOT verified ({msg}) — starting over")
+    log(f"    no live IP after {tries} tries — giving up this pass")
     clear_active_sessid()
     return (None, None)

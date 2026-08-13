@@ -353,7 +353,7 @@ class WatcherWindow:
         ttk.Label(r, text="seconds between each video").pack(side="left")
         helptip.tip(_ge, "Seconds to pause between videos so YouTube does not "
                     "flag the batch. 600 (10 min) is a safe default; you can go "
-                    "lower on a residential/mobile proxy.")
+                    "lower on a residential proxy.")
 
         ttk.Button(f, text="Save schedule", style="Accent.TButton",
                    command=self._save_sched).pack(anchor="w", padx=10, pady=(10, 4))
@@ -361,7 +361,7 @@ class WatcherWindow:
     def _build_proxy_tab(self, f):
         self.proxy_on = tk.BooleanVar(value=bool(self.cfg.get("di_enabled")))
         _pc = ttk.Checkbutton(f, text="Run downloads through the proxy "
-                              "(residential/mobile IP)", variable=self.proxy_on,
+                              "(residential IP)", variable=self.proxy_on,
                               command=self._toggle_proxy)
         _pc.pack(anchor="w", padx=10, pady=(12, 2))
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
@@ -370,7 +370,7 @@ class WatcherWindow:
             "location) in Settings ▸ Transcription, and verify it there first."
         )).pack(anchor="w", padx=28, pady=(0, 10))
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
-            "Using a residential/mobile IP makes YouTube far less likely to "
+            "Using a residential IP makes YouTube far less likely to "
             "flag a batch, so you can safely lower the gap on the Schedule "
             "tab.")).pack(anchor="w", padx=28)
 
