@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.30.1  (2026-08-12)
+    Watcher tweaks. (1) Fixed the doubled log lines - every "Scanning…/nothing new" was printed twice because the log was delivered both directly and through the window listener; now it's delivered once. (2) On the Channels tab the run controls (Check now / Stop / Clear queue / …) and the status line now sit ABOVE the activity log, and the log is smaller - the channel/search list takes the extra room instead. The live monitor line stays pinned at the very bottom.
+
 v2.30.0  (2026-08-12)
     Channel watcher re-laid-out into four real tabs, and added to Settings.
     - The watcher window is now four tabs: (1) "Channels / keyword searches" - the shared list on top and a big activity LOG filling the rest; (2) "Add a channel or keyword" - the add/edit forms (Add a channel / Search by keyword sub-tabs); (3) "Schedule & pacing"; (4) "Proxy". Moving the tall forms off the list page means the log is finally full-size and always visible.

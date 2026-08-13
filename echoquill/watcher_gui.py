@@ -74,31 +74,9 @@ class WatcherWindow:
         ttk.Label(top, text="Channel watcher", style="Title.TLabel").pack(
             side="left")
 
-        # ---- constant bottom bar (packed first so it is always visible) ----
-        self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
-        self.status.pack(side="bottom", anchor="w", padx=16, pady=(0, 8))
-
-        brow = ttk.Frame(self.win)
-        brow.pack(side="bottom", fill="x", padx=16, pady=(2, 2))
-        ttk.Button(brow, text="Check now", style="Accent.TButton",
-                   command=self._check_now).pack(side="left")
-        ttk.Button(brow, text="Refresh", command=self._refresh).pack(
-            side="left", padx=8)
-        _bstop = ttk.Button(brow, text="Stop", command=self._stop)
-        _bstop.pack(side="left", padx=8)
-        helptip.tip(_bstop, "Halts the current run after the video in progress.")
-        _bclr = ttk.Button(brow, text="Clear queue", command=self._clear_queue)
-        _bclr.pack(side="left", padx=8)
-        helptip.tip(_bclr, "Deletes every queued item (keeps your channels).")
-        _btest = ttk.Button(brow, text="Test notification",
-                            command=self._test_notify)
-        _btest.pack(side="left", padx=8)
-        helptip.tip(_btest, "Fires a sample toast so you can confirm "
-                    "notifications work on your PC.")
-        ttk.Button(brow, text="Close", command=self._on_close).pack(side="right")
-
+        # ---- constant bottom bar: just the live monitor line ----
         mon = tk.Frame(self.win, bg="#141414", bd=1, relief="solid")
-        mon.pack(side="bottom", fill="x", padx=16, pady=(2, 2))
+        mon.pack(side="bottom", fill="x", padx=16, pady=(2, 4))
         self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
                                 font=("Segoe UI", 12, "bold"), anchor="w",
                                 justify="left", wraplength=740,
@@ -140,7 +118,7 @@ class WatcherWindow:
             "Channels and topic-searches you watch. Double-click a row to edit "
             "it (opens the Add tab) · hover for stats.")).pack(
             anchor="w", padx=8, pady=(8, 2))
-        lbf = ttk.Frame(f); lbf.pack(fill="x", padx=8, pady=(0, 4))
+        lbf = ttk.Frame(f); lbf.pack(fill="both", expand=True, padx=8, pady=(0, 4))
         self.lb = theme.dark_listbox(lbf, height=8)
         _lbsb = ttk.Scrollbar(lbf, orient="vertical", command=self.lb.yview)
         self.lb.configure(yscrollcommand=_lbsb.set)
@@ -156,10 +134,32 @@ class WatcherWindow:
         helptip.tip(_bd, "Removes the source AND everything stored for it "
                     "(seen list + queued items). Asks first.")
 
+        # run controls + status sit ABOVE the log
+        brow = ttk.Frame(f); brow.pack(fill="x", padx=8, pady=(4, 2))
+        ttk.Button(brow, text="Check now", style="Accent.TButton",
+                   command=self._check_now).pack(side="left")
+        ttk.Button(brow, text="Refresh", command=self._refresh).pack(
+            side="left", padx=8)
+        _bstop = ttk.Button(brow, text="Stop", command=self._stop)
+        _bstop.pack(side="left", padx=8)
+        helptip.tip(_bstop, "Halts the current run after the video in progress.")
+        _bclr = ttk.Button(brow, text="Clear queue", command=self._clear_queue)
+        _bclr.pack(side="left", padx=8)
+        helptip.tip(_bclr, "Deletes every queued item (keeps your channels).")
+        _btest = ttk.Button(brow, text="Test notification",
+                            command=self._test_notify)
+        _btest.pack(side="left", padx=8)
+        helptip.tip(_btest, "Fires a sample toast so you can confirm "
+                    "notifications work on your PC.")
+        ttk.Button(brow, text="Close", command=self._on_close).pack(side="right")
+
+        self.status = ttk.Label(f, style="Dim.TLabel", text="")
+        self.status.pack(anchor="w", padx=8, pady=(0, 2))
+
         ttk.Label(f, text="Activity log", style="Section.TLabel").pack(
-            anchor="w", padx=8, pady=(4, 0))
-        self.log = theme.dark_text(f, wrap="word", height=12)
-        self.log.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+            anchor="w", padx=8, pady=(2, 0))
+        self.log = theme.dark_text(f, wrap="word", height=8)
+        self.log.pack(fill="x", padx=8, pady=(2, 8))
 
     def _build_add_tab(self, f):
         self._subnb = ttk.Notebook(f)
@@ -805,8 +805,7 @@ class WatcherWindow:
         self._log("Checking for new uploads…")
 
         def run():
-            done = watcher.run_once(self.cfg, self._log,
-                                    cancel=lambda: self._cancel)
+            done = watcher.run_once(self.cfg, cancel=lambda: self._cancel)
             self.win.after(0, self._refresh)
             if done:
                 notify.send(
