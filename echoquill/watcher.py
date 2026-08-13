@@ -293,12 +293,8 @@ def check_new(cfg, log=lambda s: None):
 
 
 def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
-    """Process every due pending/failed item once. Returns count newly done."""
-    global _BUSY
-    if _BUSY:
-        return 0
-    with _LOCK:
-        _BUSY = True
+    """Process every due pending/failed item once. Returns count newly done.
+    Serialized by run_once (do not call directly from two threads)."""
     done = 0
     try:
         from . import pipeline
@@ -371,13 +367,24 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
             save(fresh)
     finally:
         _set_activity(phase="idle", i=0, n=0, title="", wait_until=0)
-        _BUSY = False
     return done
 
 
 def run_once(cfg, log=lambda s: None, cancel=lambda: False):
-    check_new(cfg, log)
-    return process_pending(cfg, log, cancel)
+    """Scan + process as ONE serialized cycle. If a cycle is already running
+    (e.g. the timer fires during a manual Check now), this one is skipped so two
+    scans never race on the queue file or the shared proxy IP."""
+    global _BUSY
+    with _LOCK:
+        if _BUSY:
+            return 0
+        _BUSY = True
+    try:
+        check_new(cfg, log)
+        return process_pending(cfg, log, cancel)
+    finally:
+        with _LOCK:
+            _BUSY = False
 
 
 def clear_queue():

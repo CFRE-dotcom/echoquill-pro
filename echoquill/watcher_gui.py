@@ -102,6 +102,8 @@ class WatcherWindow:
         self._build_proxy_tab(tab_prx)
 
         notify.badge(False)   # opening the watcher clears the 'new results' dot
+        # also clear it whenever the (already-open) window gets focus
+        self.win.bind("<FocusIn>", lambda e: notify.badge(False))
         watcher.add_log_listener(self._log)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self.win.deiconify()

@@ -377,6 +377,15 @@ def load() -> dict:
     # migrate old Ollama Cloud base (ollama.com/v1 -> native /api, which works)
     if (cfg.get("ai_base_url", "") or "").rstrip("/") == "https://ollama.com/v1":
         cfg["ai_base_url"] = "https://ollama.com/api"
+    # one-time: the old default wrongly enabled mobile IPs. DataImpulse
+    # residential plans are RESIDENTIAL - force it off once.
+    if not cfg.get("_di_mobile_migrated"):
+        cfg["di_mobile"] = False
+        cfg["_di_mobile_migrated"] = True
+        try:
+            save(cfg)
+        except Exception:
+            pass
     return cfg
 
 

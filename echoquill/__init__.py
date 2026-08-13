@@ -1,3 +1,3 @@
 """EchoQuill — free, open-source, local-first voice dictation."""
 
-__version__ = "2.31.2"
+__version__ = "2.31.3"

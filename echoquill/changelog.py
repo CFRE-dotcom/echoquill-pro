@@ -8,6 +8,11 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.31.3  (2026-08-12)
+    - FORCE RESIDENTIAL: the mobile IPs were my doing, not yours. The username was getting ";type.mobile" appended because the di_mobile setting DEFAULTED to on (copied from the DataImpulse skill example) and saved into your config. A one-time migration now forces it OFF, so you get residential IPs. You can still turn mobile on deliberately in Settings if you ever want it.
+    - NO MORE OVERLAPPING RUNS: a background timer check and a manual "Check now" could run at the same time - two scans hitting the queue file and the shared proxy IP at once, which corrupted the watched-list counts (showing 0 despite work done) and could clobber an in-progress download's IP. Scans + processing now run as one serialized cycle; if one is already running, the other is skipped.
+    - The "new results" badge now also clears when the already-open Channel watcher window gets focus, not only when a new one is opened.
+
 v2.31.2  (2026-08-12)
     - Live monitor is back pinned at the VERY BOTTOM of the Channel watcher (constant bar), where it was. The run controls and status stay above the activity log.
     - The watcher.log (and the on-screen log) now explicitly show "clearing cache before firing a new IP…" for every IP attempt, followed by firing / verifying / verified-or-not - the full proxy procedure is recorded.
