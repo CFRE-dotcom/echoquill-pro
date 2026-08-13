@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.1  (2026-08-13)
+    The live monitor bar at the bottom of the Channel watcher now shows the destination folder on a second line ("folder: …\Transcriptions\…"), matching what the activity log already shows. So you can see where the current video is going in both places.
+
 v2.32.0  (2026-08-13)
     THE reason keyword searches returned nothing - fixed - plus manage/pause/wipe controls.
     - SEARCH FIX: the pinned yt-dlp does NOT support "ytsearchdate", and the Sort default is "Upload date" - so every date-sorted search raised an unsupported-scheme error that got swallowed into "0 results". Now relevance uses ytsearch and "Upload date" uses YouTube's own date-sorted results URL. Searches actually return now. (And a search only creates its folder once it downloads something - that's why no folder appeared when it returned 0.)

@@ -851,9 +851,11 @@ class WatcherWindow:
                     fg="#e0a030")
             else:
                 t = a.get("title") or ""
+                fld = a.get("folder") or ""
                 self.monitor.configure(
                     text=f"▶  Video {a.get('i',0)}/{a.get('n',0)}  ·  {ph}"
-                         f"{'  ·  ' + t if t else ''}",
+                         f"{'  ·  ' + t if t else ''}"
+                         f"{chr(10) + '     folder: ' + fld if fld else ''}",
                     fg="#4da3ff")
         except Exception:
             pass

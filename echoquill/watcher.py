@@ -11,7 +11,7 @@ _LOCK = threading.Lock()
 _BUSY = False
 
 # live progress the watcher window polls
-ACTIVITY = {"phase": "idle", "i": 0, "n": 0, "title": "", "wait_until": 0}
+ACTIVITY = {"phase": "idle", "i": 0, "n": 0, "title": "", "wait_until": 0, "folder": ""}
 
 
 def get_activity():
@@ -391,7 +391,7 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
             fresh["new_ready"] = fresh.get("new_ready", 0) + done
             save(fresh)
     finally:
-        _set_activity(phase="idle", i=0, n=0, title="", wait_until=0)
+        _set_activity(phase="idle", i=0, n=0, title="", wait_until=0, folder="")
     return done
 
 
