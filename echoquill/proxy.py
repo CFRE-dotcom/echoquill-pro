@@ -135,7 +135,7 @@ def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
     clear_active_sessid()
     mode = "mobile" if (cfg or {}).get("di_mobile", False) else "residential"
     for attempt in range(1, tries + 1):
-        log(f"    [IP {attempt}/{tries}] clearing cache…")
+        log(f"    [IP {attempt}/{tries}] clearing cache before firing a new IP…")
         clear_cache()          # fresh state BEFORE firing a new IP
         sid = uuid.uuid4().hex[:12]
         log(f"    [IP {attempt}/{tries}] firing a new {mode} IP…")

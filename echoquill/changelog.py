@@ -8,6 +8,12 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.31.2  (2026-08-12)
+    - Live monitor is back pinned at the VERY BOTTOM of the Channel watcher (constant bar), where it was. The run controls and status stay above the activity log.
+    - The watcher.log (and the on-screen log) now explicitly show "clearing cache before firing a new IP…" for every IP attempt, followed by firing / verifying / verified-or-not - the full proxy procedure is recorded.
+    - The watched-list stats now update LIVE: as each video finishes (or when you stop), the ✓done / queued counts and the hover stats refresh immediately, instead of only after a whole run ends.
+    - Exact-phrase search: you can type double quotes in the Keyword box (e.g. "medium parasite seo") and they pass straight through to YouTube, which honors quoted exact phrases. No change was needed - it already works.
+
 v2.31.1  (2026-08-12)
     Fixes a brand-new search wrongly reporting "already seen", and makes the proxy steps fully visible.
     - SEARCH/SCAN ON A VERIFIED IP: when the proxy is on, a scan now verifies a live IP BEFORE searching, so a keyword search isn't silently run through a blocked IP (which returned 0 results and then mislabeled it "already seen"). That's why "Programmatic SEO" looked already-seen on its first run - it was blocked, not seen.
