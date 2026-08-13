@@ -130,7 +130,7 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
                             _safe_stem, _unique_path, _video_description,
                             _video_comments, fetch_captions, _dated)
     from .transcriber import Transcriber
-    from . import ask_ai
+    from . import ask_ai, proxy
     from .auto_batch import normalize_name
 
     url = item["url"]
@@ -157,17 +157,34 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
 
         if item.get("save_video"):
             progress("Saving video")
-            try:
-                download_video(url, cfg, dest, log, name=dname)
-                item["video_needed"] = False
-            except Exception as e:
-                log(f"    video save failed: {e}")
-                item["video_needed"] = True   # keep trying on later cycles
+            from .media_gui import cleanup_parts
+            vtries = (int(cfg.get("di_verify_tries", 3) or 3)
+                      if cfg.get("di_enabled") else 1)
+            saved = False
+            for va in range(1, vtries + 1):
                 try:
-                    from .media_gui import cleanup_parts
-                    cleanup_parts(dest, dname)
-                except Exception:
-                    pass
+                    download_video(url, cfg, dest, log, name=dname)
+                    saved = True
+                    break
+                except Exception as e:
+                    log(f"    video save failed: {e}")
+                    try:
+                        cleanup_parts(dest, dname)
+                    except Exception:
+                        pass
+                    # a bad IP / SSL-EOF / connection drop? rotate + retry now
+                    if (cfg.get("di_enabled") and proxy.is_block(str(e))
+                            and va < vtries and not cancel()):
+                        log(f"    unstable IP/SSL — rotating to a new IP and "
+                            f"retrying the video (attempt {va + 1}/{vtries})")
+                        sid, _ip = proxy.acquire_verified(
+                            cfg, tries=int(cfg.get("di_verify_tries", 3) or 3),
+                            log=log)
+                        if not sid:
+                            break
+                        continue
+                    break
+            item["video_needed"] = not saved
         if item.get("save_audio") and apath and os.path.exists(apath):
             try:
                 ext = os.path.splitext(apath)[1] or ".m4a"

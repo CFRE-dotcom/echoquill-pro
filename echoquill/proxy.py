@@ -119,9 +119,15 @@ def is_block(msg):
     different IP might get past (vs. a permanent 'video unavailable')."""
     low = (msg or "").lower()
     return any(p in low for p in (
+        # bot-block / rate-limit
         "sign in to confirm", "not a bot", "confirm you", "--cookies",
         "http error 429", " 429", "too many requests", "rate limit",
-        "captcha", "http error 403", "forbidden"))
+        "captcha", "http error 403", "forbidden",
+        # dropped/unstable connection - usually a bad proxy exit IP; a fresh
+        # IP often fixes it, so rotate rather than give up
+        "unexpected_eof", "eof occurred", "ssl", "connection reset",
+        "connection aborted", "broken pipe", "tunnel connection failed",
+        "read timed out", "connection timed out", "remote end closed"))
 
 
 def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):

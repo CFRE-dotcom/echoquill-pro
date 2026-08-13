@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.6  (2026-08-13)
+    SSL / dropped-connection errors now rotate the IP instead of giving up. An "SSL UNEXPECTED_EOF" or connection-reset mid-download is almost always a flaky proxy exit IP, not a real problem - so it's now treated like a block: clear cache -> fire a new IP -> verify -> retry the video RIGHT THEN (up to your verify-tries), before falling back to the later-cycle retry. Genuine "not available"/"private"/format errors still do NOT rotate (a new IP wouldn't help).
+
 v2.32.5  (2026-08-13)
     A failed video download is no longer abandoned. When the transcript saves but the full-video download fails (e.g. "SSL UNEXPECTED_EOF … Giving up after 20 retries" - a mid-transfer connection drop, common on a proxy), the item is now flagged and the watcher retries JUST that video on later cycles - spaced by your "retry failed every N minutes" and paced like everything else - until it lands. So it keeps coming back for it tomorrow / next run instead of leaving it. (It skips the retry if the video is already on disk, verifies/rotates the proxy IP for the retry, and clears the flag once saved.)
 
