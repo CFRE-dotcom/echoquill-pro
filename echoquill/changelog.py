@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.33.0  (2026-08-13)
+    Fair queue + Focus + Randomize - so every source gets processed, not just the ones at the top.
+    - FAIR by default: the queue now takes one video per source in turn (round-robin) instead of draining the first source before touching the next. A search at the BOTTOM of your list now makes progress every cycle instead of starving.
+    - PROCESSING ORDER toggle (Schedule tab): Fair - spread across sources (default) · In order - top to bottom (the old behavior) · Random.
+    - ★ FOCUS button (Channels tab): select a source and Focus it to push its videos to the FRONT of the queue until it's caught up; click again to un-focus. Focused sources show a ★ and always go first, regardless of the order mode.
+    - RANDOMIZE button (next to Wipe): shuffles the pending queue on demand.
+
 v2.32.8  (2026-08-13)
     FIX: proxy ignored your US country setting and returned other countries (e.g. England). Cause was mine: the proxy username had a ";sessid.xxxx" parameter to pin the IP - but DataImpulse has NO such parameter (sticky IPs are PORT-based, ports 10000-20000). That invalid parameter made DataImpulse discard the whole parameter string, INCLUDING your "cr.us" country, so you got a random-country IP. Now the username is just "login__cr.us" (valid, honored), and the IP is pinned the correct way with a sticky port. So Country = us now actually gives US IPs, and verify + download still share the same IP.
 

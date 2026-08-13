@@ -144,6 +144,13 @@ class WatcherWindow:
         helptip.tip(_bw, "Clears this source's queued/finished items AND its "
                     "seen-list so it re-pulls fresh. Files already on disk are "
                     "NOT deleted.")
+        _bf = ttk.Button(lrow, text="★ Focus", command=self._toggle_focus)
+        _bf.pack(side="left", padx=6)
+        helptip.tip(_bf, "Push this source to the FRONT of the queue until it's "
+                    "caught up. Click again to un-focus. Marked with ★.")
+        _br = ttk.Button(lrow, text="Randomize", command=self._randomize)
+        _br.pack(side="left", padx=6)
+        helptip.tip(_br, "Shuffle the pending queue order right now.")
 
         # run controls + status sit ABOVE the log
         brow = ttk.Frame(f); brow.pack(fill="x", padx=8, pady=(4, 2))
@@ -368,7 +375,26 @@ class WatcherWindow:
                     "lower on a residential proxy.")
 
         ttk.Button(f, text="Save schedule", style="Accent.TButton",
-                   command=self._save_sched).pack(anchor="w", padx=10, pady=(10, 4))
+                   command=self._save_sched).pack(anchor="w", padx=10, pady=(10, 8))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=10, pady=(6, 2))
+        ttk.Label(r, text="Processing order:").pack(side="left")
+        self._order_labels = {"Fair — spread across sources": "fair",
+                              "In order — top to bottom": "order",
+                              "Random": "random"}
+        self._order_v2l = {v: k for k, v in self._order_labels.items()}
+        cur = self._order_v2l.get(self.cfg.get("watch_order", "fair"),
+                                  "Fair — spread across sources")
+        self.order_var = tk.StringVar(value=cur)
+        om = ttk.OptionMenu(r, self.order_var, cur,
+                            *self._order_labels.keys(),
+                            command=self._save_order)
+        om.configure(width=26)
+        om.pack(side="left", padx=(6, 0))
+        helptip.tip(r, "Fair = one video per source in turn, so every channel/"
+                    "search makes progress (recommended). In order = finish the "
+                    "top source before the next. Random = shuffle. Focus (on a "
+                    "source) always goes first regardless of this.")
 
     def _build_proxy_tab(self, f):
         self.proxy_on = tk.BooleanVar(value=bool(self.cfg.get("di_enabled")))
@@ -475,17 +501,21 @@ class WatcherWindow:
                     off = " (retired)" if ch.get("expired") else " (paused)"
                 else:
                     off = ""
+                star = "★ " if ch.get("focus") else ""
                 self.lb.insert("end",
-                               "  ⌕ " + ch.get("query", "") + "   [" + types
-                               + "] · " + win + " · " + life + off + tail)
+                               "  " + star + "⌕ " + ch.get("query", "")
+                               + "   [" + types + "] · " + win + " · "
+                               + life + off + tail)
             else:
                 kinds = ", ".join(ch.get("kinds") or [])
                 kw = f" · kw:{ch['keyword']}" if ch.get("keyword") else ""
                 st = ch.get("set_name") or "no set"
                 off = "" if ch.get("enabled", True) else " (paused)"
+                star = "★ " if ch.get("focus") else ""
                 self.lb.insert("end",
-                               "  ▸ " + ch.get("url", "") + "   [" + kinds
-                               + "]" + kw + " · " + st + off + tail)
+                               "  " + star + "▸ " + ch.get("url", "")
+                               + "   [" + kinds + "]" + kw + " · " + st
+                               + off + tail)
             self._chan_ids.append(ch.get("id"))
         c = watcher.counts()
         self.status.configure(text=(
@@ -756,6 +786,33 @@ class WatcherWindow:
         self.add_search_btn.configure(text="＋ Add search")
         self.cancel_search_btn.pack_forget()
         self._clear_search_form()
+
+    def _save_order(self, _label=None):
+        from . import config as _c
+        val = self._order_labels.get(self.order_var.get(), "fair")
+        self.cfg["watch_order"] = val
+        _c.save(self.cfg)
+        self._set_status(f"Processing order: {self.order_var.get()}.")
+
+    def _toggle_focus(self):
+        sel = self.lb.curselection()
+        if not sel:
+            self._set_status("Select a source first."); return
+        cid = self._chan_ids[sel[0]]
+        d = watcher.load()
+        ch = next((c for c in d["channels"] if c.get("id") == cid), None)
+        if not ch:
+            return
+        new_on = not ch.get("focus")
+        watcher.set_focus(cid, new_on)
+        self._refresh()
+        self._set_status("Focused — this source goes first." if new_on
+                         else "Un-focused.")
+
+    def _randomize(self):
+        watcher.randomize_queue()
+        self._refresh()
+        self._set_status("Queue order shuffled.")
 
     def _toggle_pause(self):
         sel = self.lb.curselection()

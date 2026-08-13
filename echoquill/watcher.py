@@ -384,6 +384,73 @@ def check_new(cfg, log=lambda s: None):
     return added
 
 
+def _is_due(q, now):
+    if q.get("status") in ("done", "unavailable"):
+        return False
+    if q.get("next_try", 0) > now:
+        return False
+    return True
+
+
+def _roundrobin(items):
+    """One item per source in turn (fair) - preserves each source's own order."""
+    from collections import OrderedDict
+    groups = OrderedDict()
+    for q in items:
+        groups.setdefault(q.get("channel_id"), []).append(q)
+    out = []
+    lists = list(groups.values())
+    while any(lists):
+        for lst in lists:
+            if lst:
+                out.append(lst.pop(0))
+    return out
+
+
+def _due_order(cfg, d):
+    """Due queue items in the order to process them: focused sources first, then
+    the rest by the chosen mode (fair round-robin / in-order / random)."""
+    import random as _rnd
+    now = time.time()
+    focus_ids = {c.get("id") for c in d["channels"] if c.get("focus")}
+    due = [q for q in d["queue"] if _is_due(q, now)]
+    focused = [q for q in due if q.get("channel_id") in focus_ids]
+    rest = [q for q in due if q.get("channel_id") not in focus_ids]
+    mode = (cfg or {}).get("watch_order", "fair")
+
+    def arrange(items):
+        if mode == "random":
+            items = list(items)
+            _rnd.shuffle(items)
+            return items
+        if mode == "order":
+            return items
+        return _roundrobin(items)          # 'fair' (default)
+
+    return arrange(focused) + arrange(rest)
+
+
+def set_focus(cid, on):
+    """Mark/unmark a source as focused (its videos jump the queue)."""
+    def fn(d):
+        for ch in d["channels"]:
+            if ch.get("id") == cid:
+                ch["focus"] = bool(on)
+                break
+    _mutate(fn)
+
+
+def randomize_queue():
+    """Shuffle the order of pending items in the stored queue."""
+    import random as _rnd
+
+    def fn(d):
+        q = d["queue"]
+        _rnd.shuffle(q)
+        d["queue"] = q
+    _mutate(fn)
+
+
 def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
     """Process every due pending/failed item once. Returns count newly done.
     Serialized by run_once (do not call directly from two threads)."""
@@ -394,22 +461,11 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
         per_cycle = int((cfg or {}).get("watch_per_cycle", 5) or 0)
         d = load()
         processed = 0
-        _now = time.time()
-        due = 0
-        for _it in d["queue"]:
-            if _it.get("status") in ("done", "unavailable"):
-                continue
-            if _it.get("next_try", 0) > _now:
-                continue
-            due += 1
-        n_total = min(due, per_cycle) if per_cycle else due
-        for item in d["queue"]:
+        ordered = _due_order(cfg, d)       # focus-first, then fair/order/random
+        n_total = min(len(ordered), per_cycle) if per_cycle else len(ordered)
+        for item in ordered:
             if cancel():
                 break
-            if item.get("status") in ("done", "unavailable"):
-                continue
-            if item.get("next_try", 0) > time.time():
-                continue
             if per_cycle and processed >= per_cycle:
                 break
             if processed > 0 and gap > 0:
