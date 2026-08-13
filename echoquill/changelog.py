@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.7  (2026-08-13)
+    watcher.log moved to your visible EchoQuill folder (base output folder, e.g. Documents\EchoQuill\watcher.log) instead of the hidden AppData dir - easy to find, and the "Open log file…" button points there. The old AppData copy is deleted automatically on first run.
+
 v2.32.6  (2026-08-13)
     SSL / dropped-connection errors now rotate the IP instead of giving up. An "SSL UNEXPECTED_EOF" or connection-reset mid-download is almost always a flaky proxy exit IP, not a real problem - so it's now treated like a block: clear cache -> fire a new IP -> verify -> retry the video RIGHT THEN (up to your verify-tries), before falling back to the later-cycle retry. Genuine "not available"/"private"/format errors still do NOT rotate (a new IP wouldn't help).
 

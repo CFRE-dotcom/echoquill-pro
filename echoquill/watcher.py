@@ -60,16 +60,46 @@ def remove_log_listener(fn):
         pass
 
 
+_LOGFILE = None
+
+
 def logfile_path():
-    from .config import app_data_dir
+    """watcher.log lives in your visible EchoQuill output folder (not the hidden
+    AppData dir), so it's easy to find and open."""
+    global _LOGFILE
+    if _LOGFILE:
+        return _LOGFILE
     import os
-    return os.path.join(str(app_data_dir()), "watcher.log")
+    try:
+        from .config import load as _cfgload
+        from .media_gui import base_dir
+        _LOGFILE = os.path.join(base_dir(_cfgload()), "watcher.log")
+    except Exception:
+        from .config import app_data_dir
+        _LOGFILE = os.path.join(str(app_data_dir()), "watcher.log")
+    return _LOGFILE
+
+
+def _cleanup_old_log():
+    """Remove the old AppData watcher.log once (moved to the output folder)."""
+    try:
+        import os
+        from .config import app_data_dir
+        old = os.path.join(str(app_data_dir()), "watcher.log")
+        if os.path.abspath(old) != os.path.abspath(logfile_path()) \
+                and os.path.exists(old):
+            os.remove(old)
+    except Exception:
+        pass
 
 
 def _to_logfile(msg):
     try:
         import os
         import datetime
+        if not globals().get("_LOG_MIGRATED"):
+            _cleanup_old_log()
+            globals()["_LOG_MIGRATED"] = True
         path = logfile_path()
         if os.path.exists(path) and os.path.getsize(path) > 2_000_000:
             try:
