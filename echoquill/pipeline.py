@@ -27,8 +27,48 @@ def _already_have(dest, name):
 
 def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
                   progress=lambda ph: None):
-    """Run one video end-to-end. Returns (status, message) where status is
-    'done', 'failed' (retryable) or 'unavailable' (permanent)."""
+    """Run one video end-to-end. When the proxy is on and YouTube bot-blocks a
+    download, rotate to a fresh verified IP and retry - up to di_verify_tries
+    IPs - before giving up. Returns (status, message)."""
+    from . import proxy
+    from .auto_batch import resolve_folder, normalize_name
+    dest = resolve_folder(cfg, item.get("folder", ""))
+    ttl = item.get("title", "")
+    early = normalize_name(ttl) if ttl else ""
+    if early and _already_have(dest, early):
+        log("    already in this folder — skipping download.")
+        return ("done", early)
+
+    proxy_on = bool(cfg.get("di_enabled"))
+    tries = int(cfg.get("di_verify_tries", 3) or 3) if proxy_on else 1
+    last = ""
+    for attempt in range(1, tries + 1):
+        if proxy_on:
+            progress("Verifying proxy IP")
+            sid, ip = proxy.acquire_verified(
+                cfg, tries=int(cfg.get("di_verify_tries", 3) or 3), log=log)
+            if not sid:
+                return ("failed", f"proxy: no live IP after {tries} tries - "
+                        "paused, will retry next cycle")
+        try:
+            status, msg = _do_video(cfg, item, dest, log, cancel, progress)
+        finally:
+            if proxy_on:
+                proxy.clear_active_sessid()
+        if status != "failed" or not proxy_on or not proxy.is_block(msg):
+            return (status, msg)
+        last = msg
+        if attempt < tries:
+            log(f"    YouTube blocked this IP (attempt {attempt}/{tries}) - "
+                "rotating to a NEW IP and retrying")
+    return ("failed", f"bot-blocked on {tries} different IPs - likely needs "
+            f"fresh YouTube cookies. Last: {last[:80]}")
+
+
+def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
+              progress=lambda ph: None):
+    """One download+transcribe pass on the CURRENTLY pinned proxy IP (if any).
+    Returns (status, message)."""
     import os
     import shutil
     import gc
@@ -36,29 +76,14 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
                             _safe_stem, _unique_path, _video_description,
                             _video_comments, fetch_captions, _dated)
     from .transcriber import Transcriber
-    from . import ask_ai, proxy
-    from .auto_batch import resolve_folder, normalize_name
+    from . import ask_ai
+    from .auto_batch import normalize_name
 
     url = item["url"]
     ttl = item.get("title", "")
     questions = item.get("questions") or []
     tmpdir = None
     try:
-        dest = resolve_folder(cfg, item.get("folder", ""))
-
-        early = normalize_name(ttl) if ttl else ""
-        if early and _already_have(dest, early):
-            log("    already in this folder — skipping download.")
-            return ("done", early)
-
-        if cfg.get("di_enabled"):
-            progress("Verifying proxy IP")
-            tries = int(cfg.get("di_verify_tries", 3) or 3)
-            sid, ip = proxy.acquire_verified(cfg, tries=tries, log=log)
-            if not sid:
-                return ("failed", "proxy: no live IP after "
-                        f"{tries} tries — paused, will retry next cycle")
-
         use_caps = str(item.get("transcript_mode", "")).lower().startswith(
             "youtube")
         cap_segs = cap_text = None
@@ -162,11 +187,6 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
                      or "does not exist" in low or "no longer available" in low)
         return ("unavailable" if permanent else "failed", msg)
     finally:
-        try:
-            from . import proxy as _px
-            _px.clear_active_sessid()
-        except Exception:
-            pass
         if tmpdir:
             shutil.rmtree(tmpdir, ignore_errors=True)
         gc.collect()

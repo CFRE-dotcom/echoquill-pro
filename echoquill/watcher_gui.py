@@ -74,18 +74,7 @@ class WatcherWindow:
         ttk.Label(top, text="Channel watcher", style="Title.TLabel").pack(
             side="left")
 
-        # ---- constant bottom bar: just the live monitor line ----
-        mon = tk.Frame(self.win, bg="#141414", bd=1, relief="solid")
-        mon.pack(side="bottom", fill="x", padx=16, pady=(2, 4))
-        self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
-                                font=("Segoe UI", 12, "bold"), anchor="w",
-                                justify="left", wraplength=740,
-                                text="●  Idle — nothing running")
-        self.monitor.pack(fill="x", padx=12, pady=8)
-        mon.bind("<Configure>", lambda e: self.monitor.configure(
-            wraplength=max(220, e.width - 28)))
-
-        # ---- tabs (fill the space above the constant bottom bar) ----
+        # ---- tabs fill the window ----
         self._nb = ttk.Notebook(self.win)
         self._nb.pack(side="top", fill="both", expand=True, padx=12, pady=(6, 4))
         self._tab_list = ttk.Frame(self._nb)
@@ -152,6 +141,16 @@ class WatcherWindow:
         helptip.tip(_btest, "Fires a sample toast so you can confirm "
                     "notifications work on your PC.")
         ttk.Button(brow, text="Close", command=self._on_close).pack(side="right")
+
+        mon = tk.Frame(f, bg="#141414", bd=1, relief="solid")
+        mon.pack(fill="x", padx=8, pady=(4, 2))
+        self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
+                                font=("Segoe UI", 12, "bold"), anchor="w",
+                                justify="left", wraplength=740,
+                                text="●  Idle — nothing running")
+        self.monitor.pack(fill="x", padx=12, pady=8)
+        mon.bind("<Configure>", lambda e: self.monitor.configure(
+            wraplength=max(220, e.width - 28)))
 
         self.status = ttk.Label(f, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=8, pady=(0, 2))

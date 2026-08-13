@@ -172,7 +172,7 @@ DEFAULTS = {
     "watch_retry_minutes": 30,
     "watch_gap_seconds": 600,
     "watch_per_cycle": 5,
-    "di_mobile": True,
+    "di_mobile": False,
     "di_gateway": "gw.dataimpulse.com:824",
     "di_verify_tries": 3,
     "custom_prompts": [],   # "" off, else chrome/edge/firefox/brave for member-only videos

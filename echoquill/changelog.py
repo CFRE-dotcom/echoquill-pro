@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.31.0  (2026-08-12)
+    Proxy: rotate on bot-block, residential by default, clearer logging - and the live monitor is back where it belongs.
+    - ROTATE ON BLOCK: when the proxy is on and YouTube bot-blocks a download ("Sign in to confirm you're not a bot"), it now rotates to a fresh verified IP and retries - up to your verify-tries (default 3) DIFFERENT IPs - before concluding it likely needs fresh cookies. Previously it verified one IP and gave up on the first block.
+    - RESIDENTIAL BY DEFAULT: the "Mobile IPs" toggle now defaults OFF. DataImpulse's residential plan is residential; the old default appended ";type.mobile", asking for a mobile IP from a residential product - a mismatch that also hurt big downloads. If your saved setting still has Mobile IPs checked, uncheck it in Settings ▸ Channel watcher / Transcription proxy.
+    - HONEST LOGGING: the "proxy IP verified" line now shows the mode (residential/mobile) AND the carrier/ISP (org) from ipinfo, so you can see exactly what you got - not just a label.
+    - The live monitor ("Video 2/5 · Transcribing …") now sits with the run controls above the activity log, not orphaned at the bottom.
+
 v2.30.3  (2026-08-12)
     You can now review the watcher's activity after the fact. Every run's log lines (including "video save failed: …") are written to watcher.log in your EchoQuill app-data folder, and the Channels tab has an "Open log file…" button next to the Activity log. So even if you look away, the record is there. (The file caps at ~2 MB and rolls over to watcher.log.old.)
 

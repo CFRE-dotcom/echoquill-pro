@@ -48,7 +48,7 @@ def build_username(cfg, sessid=None):
     state = (cfg.get("di_state", "") or "").strip().lower().replace(" ", "")
     if state:
         u += f";state.{state}"
-    if cfg.get("di_mobile", True):
+    if cfg.get("di_mobile", False):
         u += ";type.mobile"
     if sessid:
         u += f";sessid.{sessid}"
@@ -78,7 +78,7 @@ def _verify(cfg, sessid, timeout=30):
     Rejects on auth/timeout/empty/block per the skill's good-IP criteria."""
     url = _url(cfg, sessid)
     if not url:
-        return (False, "", "", "enter your DataImpulse username and password first")
+        return (False, "", "", "", "enter your DataImpulse username and password first")
     import yt_dlp
     ydl = yt_dlp.YoutubeDL({"proxy": url, "quiet": True, "no_warnings": True,
                             "socket_timeout": timeout})
@@ -86,31 +86,42 @@ def _verify(cfg, sessid, timeout=30):
         ip = ydl.urlopen("https://api.ipify.org").read().decode(
             "utf-8", "ignore").strip()
     except Exception as e:
-        return (False, "", "", f"{str(e)[:110]}")
+        return (False, "", "", "", f"{str(e)[:110]}")
     if not ip or " " in ip or len(ip) > 45:
-        return (False, "", "", "no exit IP returned")
-    geo = ""
+        return (False, "", "", "", "no exit IP returned")
+    geo = org = ""
     try:
         import json
         j = json.loads(ydl.urlopen("https://ipinfo.io/json").read().decode(
             "utf-8", "ignore"))
         geo = ", ".join(x for x in (j.get("city"), j.get("region"),
                                     j.get("country")) if x)
+        org = (j.get("org") or "").strip()
     except Exception:
         pass
-    return (True, ip, geo, "ok")
+    return (True, ip, geo, org, "ok")
 
 
 def test(cfg, timeout=45):
     """Manual 'Test' button: fire ONE fresh IP and verify it."""
     if not (((cfg or {}).get("di_base_username")) and (cfg or {}).get("di_password")):
         return (False, "Enter your DataImpulse username and password first.")
-    ok, ip, geo, msg = _verify(cfg, uuid.uuid4().hex[:12], timeout)
+    ok, ip, geo, org, msg = _verify(cfg, uuid.uuid4().hex[:12], timeout)
     if not ok:
         return (False, f"Proxy failed: {msg}")
-    mode = "mobile" if cfg.get("di_mobile", True) else "residential"
+    mode = "mobile" if cfg.get("di_mobile", False) else "residential"
     return (True, f"Works ✓  {ip}" + (f"  ·  {geo}" if geo else "")
-            + f"  ·  {mode}")
+            + f"  ·  {mode}" + (f"  ·  {org}" if org else ""))
+
+
+def is_block(msg):
+    """True if an error looks like a YouTube bot-block / rate-limit that a
+    different IP might get past (vs. a permanent 'video unavailable')."""
+    low = (msg or "").lower()
+    return any(p in low for p in (
+        "sign in to confirm", "not a bot", "confirm you", "--cookies",
+        "http error 429", " 429", "too many requests", "rate limit",
+        "captcha", "http error 403", "forbidden"))
 
 
 def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
@@ -122,14 +133,16 @@ def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
         return (None, None)
     tries = max(1, int(tries or 3))
     clear_active_sessid()
+    mode = "mobile" if (cfg or {}).get("di_mobile", False) else "residential"
     for attempt in range(1, tries + 1):
         clear_cache()          # fresh state BEFORE firing a new IP
         sid = uuid.uuid4().hex[:12]
-        ok, ip, geo, msg = _verify(cfg, sid, timeout)
+        ok, ip, geo, org, msg = _verify(cfg, sid, timeout)
         if ok:
             set_active_sessid(sid)
             log(f"    proxy IP verified: {ip}"
-                f"{'  ·  ' + geo if geo else ''}  (attempt {attempt})")
+                f"{'  ·  ' + geo if geo else ''}  ·  {mode}"
+                f"{'  ·  ' + org if org else ''}  (attempt {attempt})")
             return (sid, ip)
         log(f"    proxy attempt {attempt}/{tries} failed ({msg}) - rotating IP")
     clear_active_sessid()

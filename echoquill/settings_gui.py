@@ -430,7 +430,7 @@ class SettingsWindow:
         _dpw.pack(side="left")
         helptip.tip(_dpw, "Your DataImpulse account password. Kept in Windows "
                     "Credential Manager, never shown or uploaded.")
-        self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", True))
+        self.di_mobile = tk.BooleanVar(value=self.cfg.get("di_mobile", False))
         _dmb = ttk.Checkbutton(f, text="Mobile IPs (uncheck = residential)",
                                variable=self.di_mobile)
         _dmb.pack(anchor="w", pady=(2, 2))
