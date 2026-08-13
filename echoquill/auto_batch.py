@@ -163,12 +163,29 @@ def _entry_upload_ts(e, cfg):
     return None
 
 
+def _yt_sp(upload_days, sort_date=True):
+    """Build a YouTube 'sp' search-filter token: optional sort-by-upload-date
+    plus the nearest upload-date bucket for the requested window. YouTube then
+    filters by date server-side (fast + reliable) - no per-video date lookups.
+    Buckets: today / this week / this month / this year (YouTube has no exact
+    N-day option, so 60/90-day maps to 'this year')."""
+    import base64
+    buf = b""
+    if sort_date:
+        buf += b"\x08\x02"                       # field1 sort = 2 (upload date)
+    d = int(upload_days or 0)
+    bucket = 0 if d <= 0 else 2 if d <= 1 else 3 if d <= 7 else 4 if d <= 31 else 5
+    if bucket:
+        sub = bytes([0x08, bucket])               # submsg field1 = date bucket
+        buf += bytes([0x12, len(sub)]) + sub
+    return base64.urlsafe_b64encode(buf).decode()
+
+
 def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
                           upload_days=0, sort="Relevance", n=25,
                           log=lambda s: None):
     """YouTube search with client-side type/duration/upload-window filtering.
     Returns [(url, title), ...]. sort: 'Relevance' or 'Upload date'."""
-    import time
     import yt_dlp
     date_sorted = str(sort).lower().startswith("upload")
     pull = min(max(int(n) * 3, int(n)), 120)
@@ -186,11 +203,10 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
     from urllib.parse import quote
-    if date_sorted:
-        # ytsearchdate is NOT supported in this yt-dlp; use YouTube's own
-        # date-sorted results URL (sp=CAI%3D = "Sort by upload date").
+    sp = _yt_sp(int(upload_days or 0), sort_date=date_sorted)
+    if sp:
         target = ("https://www.youtube.com/results?search_query="
-                  + quote(query) + "&sp=CAI%3D")
+                  + quote(query) + "&sp=" + quote(sp))
     else:
         target = f"ytsearch{pull}:{query}"
     try:
@@ -203,9 +219,7 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     log(f"  YouTube returned {len(entries)} raw result(s); "
         f"filtering by type/duration/upload-window…")
     want = set(t.lower() for t in (types or ["Video"]))
-    now = time.time()
-    date_fetches = 0
-    drop_type = drop_dur = drop_date = 0
+    drop_type = drop_dur = 0
     out = []
     for e in entries:
         if not e:
@@ -235,23 +249,11 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
             if duration.startswith("Over") and not dur > 1200:
                 drop_dur += 1
                 continue
-        if upload_days and int(upload_days) > 0:
-            ts = None
-            if date_fetches < 45:
-                ts = _entry_upload_ts(e, cfg)
-                if ts is None:
-                    date_fetches += 1
-            if ts is not None:
-                if now - ts > int(upload_days) * 86400:
-                    drop_date += 1
-                    if date_sorted:
-                        break
-                    continue
         out.append((u, t))
         if len(out) >= int(n):
             break
-    log(f"  kept {len(out)} · dropped: type {drop_type}, duration {drop_dur}, "
-        f"upload-window {drop_date}")
+    log(f"  kept {len(out)} · dropped: type {drop_type}, duration {drop_dur} "
+        f"(date filtered by YouTube server-side)")
     return out
 
 

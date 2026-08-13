@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.3  (2026-08-13)
+    FIXES the "75 results, kept 0" search bug. The old code fetched each video's upload date one-by-one and, for date-sorted results, broke the whole loop the moment one looked older than your window - so a single bad date reading dropped all 75 hits. Now YouTube filters by date SERVER-SIDE via its own search-filter token (validated against YouTube's known tokens): your Upload window maps to today / this week / this month / this year (YouTube has no exact N-day option, so 60/90 days uses "this year"). It's faster (no per-video lookups) and it actually returns results. Type and duration are still filtered locally.
+
 v2.32.2  (2026-08-13)
     Search diagnostics so we can SEE why a search returns what it does. The log now reports, per search: the raw number of results YouTube returned, then how many were kept vs dropped and why ("kept 12 · dropped: type 3, duration 0, upload-window 8"), plus the actual error text if the search call itself failed. Also stopped double-quoting the query in the log (it now shows your keyword exactly as typed). This is on top of the 2.32.0 search fix (ytsearchdate is unsupported in this yt-dlp; relevance uses ytsearch, upload-date uses YouTube's date-sorted results URL).
 
