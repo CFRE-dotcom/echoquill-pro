@@ -1,36 +1,42 @@
 """DataImpulse residential/mobile proxy for yt-dlp.
 
-verify-before-execute: pin an exit IP with a sessid, verify that exact IP works
-THROUGH the proxy, and only then let a real download use the SAME IP. Rotate by
-choosing a new sessid; verify EVERY new IP before use; after N failed tries give
-up so the caller can pause + requeue (never download on an unverified IP).
-The password lives in Windows Credential Manager (config._SECRET_KEYS).
+Per DataImpulse docs:
+  - Country targeting is a username parameter:  login__cr.us   (valid, free).
+  - Sticky IPs are PORT-based (ports 10000-20000), NOT a username 'sessid'.
+So we pin an IP for a job by using a random sticky port (verify + download share
+that port = same IP), and rotate by picking a new port. verify-before-execute:
+check the exit IP THROUGH the chosen port before any real download uses it.
 """
 
 import uuid
+import random
 
-GATEWAY_DEFAULT = "gw.dataimpulse.com:824"
+GATEWAY_DEFAULT = "gw.dataimpulse.com:824"   # rotating SOCKS5 port
+STICKY_MIN, STICKY_MAX = 10000, 20000
 
-# sessid currently pinned for this run; proxy_url()/_apply_proxy use it so the
-# verified IP is the one that actually downloads. Runs are single-threaded.
-_ACTIVE_SESSID = None
-
-
-def set_active_sessid(sid):
-    global _ACTIVE_SESSID
-    _ACTIVE_SESSID = sid
+# the sticky port currently pinned for this job; proxy_url()/_apply_proxy use it
+# so the verified IP is the one that actually downloads. Runs are serialized.
+_ACTIVE_PORT = None
 
 
+def set_active_port(port):
+    global _ACTIVE_PORT
+    _ACTIVE_PORT = port
+
+
+def clear_active_port():
+    global _ACTIVE_PORT
+    _ACTIVE_PORT = None
+    clear_cache()
+
+
+# back-compat aliases (older call sites)
 def clear_active_sessid():
-    global _ACTIVE_SESSID
-    _ACTIVE_SESSID = None
-    clear_cache()          # wipe session state AFTER releasing an IP
+    clear_active_port()
 
 
 def clear_cache():
-    """Remove yt-dlp's on-disk cache (nsig/player tokens, etc.) so a new IP does
-    NOT reuse state minted under the previous IP - the no-browser equivalent of
-    a fresh context. Called after releasing an IP and before firing a new one."""
+    """Remove yt-dlp's on-disk cache so a new IP doesn't reuse old state."""
     try:
         import yt_dlp
         yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}).cache.remove()
@@ -38,9 +44,10 @@ def clear_cache():
         pass
 
 
-def build_username(cfg, sessid=None):
-    """cr.<country>;state.<state>;type.mobile[;sessid.<id>] - per the skill.
-    The sessid pins the exit IP (same sessid = same IP; new sessid = new IP)."""
+def build_username(cfg):
+    """base__cr.<country>[;state.<state>][;type.mobile] - real DataImpulse
+    params. Country is free 'default targeting'; state costs 2x ('target
+    filter'). NO 'sessid' - that's not a DataImpulse param and breaks parsing."""
     base = ((cfg or {}).get("di_base_username", "") or "").strip()
     if not base:
         return ""
@@ -50,33 +57,39 @@ def build_username(cfg, sessid=None):
         u += f";state.{state}"
     if cfg.get("di_mobile", False):
         u += ";type.mobile"
-    if sessid:
-        u += f";sessid.{sessid}"
     return u
 
 
-def _url(cfg, sessid=None):
+def _gw_host_port(cfg):
+    gw = ((cfg.get("di_gateway") or GATEWAY_DEFAULT)).strip()
+    if ":" in gw:
+        h, p = gw.rsplit(":", 1)
+        return h, p
+    return gw, "824"
+
+
+def _url(cfg, port=None):
     from urllib.parse import quote
-    user = build_username(cfg, sessid)
+    user = build_username(cfg)
     pw = ((cfg or {}).get("di_password", "") or "").strip()
     if not user or not pw:
         return ""
-    gw = ((cfg.get("di_gateway") or GATEWAY_DEFAULT)).strip()
-    return f"socks5://{quote(user, safe='')}:{quote(pw, safe='')}@{gw}"
+    host, rot_port = _gw_host_port(cfg)
+    use_port = str(port) if port else rot_port
+    return f"socks5://{quote(user, safe='')}:{quote(pw, safe='')}@{host}:{use_port}"
 
 
 def proxy_url(cfg):
     """socks5 URL for yt-dlp, or '' when disabled/unconfigured. Uses the active
-    pinned sessid so downloads exit through the already-verified IP."""
+    sticky port so downloads exit through the already-verified IP."""
     if not (cfg or {}).get("di_enabled"):
         return ""
-    return _url(cfg, _ACTIVE_SESSID)
+    return _url(cfg, _ACTIVE_PORT)
 
 
-def _verify(cfg, sessid, timeout=30):
-    """Check the exit IP THROUGH this exact sessid. Returns (ok, ip, geo, msg).
-    Rejects on auth/timeout/empty/block per the skill's good-IP criteria."""
-    url = _url(cfg, sessid)
+def _verify(cfg, port, timeout=30):
+    """Check the exit IP THROUGH this exact sticky port. (ok, ip, geo, org, msg)."""
+    url = _url(cfg, port)
     if not url:
         return (False, "", "", "", "enter your DataImpulse username and password first")
     import yt_dlp
@@ -106,7 +119,8 @@ def test(cfg, timeout=45):
     """Manual 'Test' button: fire ONE fresh IP and verify it."""
     if not (((cfg or {}).get("di_base_username")) and (cfg or {}).get("di_password")):
         return (False, "Enter your DataImpulse username and password first.")
-    ok, ip, geo, org, msg = _verify(cfg, uuid.uuid4().hex[:12], timeout)
+    port = random.randint(STICKY_MIN, STICKY_MAX)
+    ok, ip, geo, org, msg = _verify(cfg, port, timeout)
     if not ok:
         return (False, f"Proxy failed: {msg}")
     mode = "mobile" if cfg.get("di_mobile", False) else "residential"
@@ -115,45 +129,44 @@ def test(cfg, timeout=45):
 
 
 def is_block(msg):
-    """True if an error looks like a YouTube bot-block / rate-limit that a
-    different IP might get past (vs. a permanent 'video unavailable')."""
+    """True if an error looks like a bot-block / rate-limit OR a dropped/unstable
+    connection (SSL EOF, reset) - a fresh IP often gets past those. Genuine
+    'not available'/'private'/format errors are NOT included (a new IP won't
+    help)."""
     low = (msg or "").lower()
     return any(p in low for p in (
-        # bot-block / rate-limit
         "sign in to confirm", "not a bot", "confirm you", "--cookies",
         "http error 429", " 429", "too many requests", "rate limit",
         "captcha", "http error 403", "forbidden",
-        # dropped/unstable connection - usually a bad proxy exit IP; a fresh
-        # IP often fixes it, so rotate rather than give up
         "unexpected_eof", "eof occurred", "ssl", "connection reset",
         "connection aborted", "broken pipe", "tunnel connection failed",
         "read timed out", "connection timed out", "remote end closed"))
 
 
 def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
-    """Fire a fresh IP and verify it; if it fails, rotate to a NEW IP and verify
-    again; repeat up to `tries`. On success PIN it and return (sessid, ip). On
-    total failure return (None, None) so the caller pauses + requeues instead of
-    downloading on a bad IP. Verifies EVERY new IP before use."""
+    """Clear cache -> pick a fresh sticky port (a new IP) -> verify it; if it
+    fails, rotate to a new port and verify again; repeat up to `tries`. On
+    success PIN it (set active port) and return (port, ip). On total failure
+    return (None, None) so the caller pauses + requeues. Verifies EVERY IP."""
     if not (cfg or {}).get("di_enabled"):
         return (None, None)
     tries = max(1, int(tries or 3))
-    clear_active_sessid()
+    clear_active_port()
     mode = "mobile" if (cfg or {}).get("di_mobile", False) else "residential"
     for attempt in range(1, tries + 1):
         log(f"    [IP {attempt}/{tries}] clearing cache before firing a new IP…")
-        clear_cache()          # fresh state BEFORE firing a new IP
-        sid = uuid.uuid4().hex[:12]
+        clear_cache()
+        port = random.randint(STICKY_MIN, STICKY_MAX)
         log(f"    [IP {attempt}/{tries}] firing a new {mode} IP…")
         log(f"    [IP {attempt}/{tries}] verifying exit IP…")
-        ok, ip, geo, org, msg = _verify(cfg, sid, timeout)
+        ok, ip, geo, org, msg = _verify(cfg, port, timeout)
         if ok:
-            set_active_sessid(sid)
+            set_active_port(port)
             log(f"    [IP {attempt}/{tries}] verified ✓  {ip}"
                 f"{'  ·  ' + geo if geo else ''}  ·  {mode}"
                 f"{'  ·  ' + org if org else ''}")
-            return (sid, ip)
+            return (port, ip)
         log(f"    [IP {attempt}/{tries}] NOT verified ({msg}) — starting over")
     log(f"    no live IP after {tries} tries — giving up this pass")
-    clear_active_sessid()
+    clear_active_port()
     return (None, None)

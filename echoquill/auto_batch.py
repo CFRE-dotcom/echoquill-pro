@@ -787,7 +787,7 @@ class AutoBatchWindow:
                     self._log(f"    ERROR on this video: {e}")
                 finally:
                     try:
-                        proxy.clear_active_sessid()
+                        proxy.clear_active_port()
                     except Exception:
                         pass
                     if tmpdir:

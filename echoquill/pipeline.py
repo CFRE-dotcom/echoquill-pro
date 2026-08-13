@@ -59,11 +59,11 @@ def retry_video_only(cfg, item, log=lambda s: None, cancel=lambda: False,
             progress("Retrying video")
             download_video(url, cfg, dest, log, name=dname)
             if proxy_on:
-                proxy.clear_active_sessid()
+                proxy.clear_active_port()
             return True
         except Exception as e:
             if proxy_on:
-                proxy.clear_active_sessid()
+                proxy.clear_active_port()
             cleanup_parts(dest, dname)
             if proxy_on and proxy.is_block(str(e)) and attempt < tries:
                 log(f"    video blocked (attempt {attempt}/{tries}) - rotating IP")
@@ -108,7 +108,7 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
             status, msg = _do_video(cfg, item, dest, log, cancel, progress)
         finally:
             if proxy_on:
-                proxy.clear_active_sessid()
+                proxy.clear_active_port()
         if status != "failed" or not proxy_on or not proxy.is_block(msg):
             return (status, msg)
         last = msg

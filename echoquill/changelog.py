@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.8  (2026-08-13)
+    FIX: proxy ignored your US country setting and returned other countries (e.g. England). Cause was mine: the proxy username had a ";sessid.xxxx" parameter to pin the IP - but DataImpulse has NO such parameter (sticky IPs are PORT-based, ports 10000-20000). That invalid parameter made DataImpulse discard the whole parameter string, INCLUDING your "cr.us" country, so you got a random-country IP. Now the username is just "login__cr.us" (valid, honored), and the IP is pinned the correct way with a sticky port. So Country = us now actually gives US IPs, and verify + download still share the same IP.
+
 v2.32.7  (2026-08-13)
     watcher.log moved to your visible EchoQuill folder (base output folder, e.g. Documents\EchoQuill\watcher.log) instead of the hidden AppData dir - easy to find, and the "Open log file…" button points there. The old AppData copy is deleted automatically on first run.
 

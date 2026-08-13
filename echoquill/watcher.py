@@ -380,7 +380,7 @@ def check_new(cfg, log=lambda s: None):
         _mutate(_merge)
     finally:
         if proxy_on:
-            proxy.clear_active_sessid()
+            proxy.clear_active_port()
     return added
 
 
