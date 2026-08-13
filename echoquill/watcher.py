@@ -39,7 +39,30 @@ def remove_log_listener(fn):
         pass
 
 
+def logfile_path():
+    from .config import app_data_dir
+    import os
+    return os.path.join(str(app_data_dir()), "watcher.log")
+
+
+def _to_logfile(msg):
+    try:
+        import os
+        import datetime
+        path = logfile_path()
+        if os.path.exists(path) and os.path.getsize(path) > 2_000_000:
+            try:
+                os.replace(path, path + ".old")
+            except Exception:
+                pass
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+    except Exception:
+        pass
+
+
 def _emit(log, msg):
+    _to_logfile(msg)
     try:
         log(msg)
     except Exception:

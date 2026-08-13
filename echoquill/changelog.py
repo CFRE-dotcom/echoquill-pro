@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.30.3  (2026-08-12)
+    You can now review the watcher's activity after the fact. Every run's log lines (including "video save failed: …") are written to watcher.log in your EchoQuill app-data folder, and the Channels tab has an "Open log file…" button next to the Activity log. So even if you look away, the record is there. (The file caps at ~2 MB and rolls over to watcher.log.old.)
+
 v2.30.2  (2026-08-12)
     Fix half-finished video downloads (leftover .PART files). Video saves are large transfers; a single dropped connection (common over a proxy) aborted them with no retry, leaving a .part - and because the transcript still saved, dedup then skipped the video forever so it never finished. Now downloads resume the .part, retry hard (20x + fragment retries), transfer in 10 MB chunks, and use a 60s socket timeout, so a blip no longer kills the whole download. If a video save still fails, its orphaned .part/.ytdl files are cleaned up instead of left behind.
 

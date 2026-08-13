@@ -156,8 +156,14 @@ class WatcherWindow:
         self.status = ttk.Label(f, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=8, pady=(0, 2))
 
-        ttk.Label(f, text="Activity log", style="Section.TLabel").pack(
-            anchor="w", padx=8, pady=(2, 0))
+        logrow = ttk.Frame(f); logrow.pack(fill="x", padx=8, pady=(2, 0))
+        ttk.Label(logrow, text="Activity log",
+                  style="Section.TLabel").pack(side="left")
+        _blog = ttk.Button(logrow, text="Open log file…",
+                           command=self._open_logfile)
+        _blog.pack(side="right")
+        helptip.tip(_blog, "Opens watcher.log - every run's activity is saved "
+                    "there so you can review it later, even after closing.")
         self.log = theme.dark_text(f, wrap="word", height=8)
         self.log.pack(fill="x", padx=8, pady=(2, 8))
 
@@ -379,6 +385,13 @@ class WatcherWindow:
             self.win.destroy()
         except Exception:
             pass
+
+    def _open_logfile(self):
+        try:
+            import os
+            os.startfile(watcher.logfile_path())
+        except Exception as e:
+            self._set_status(f"Couldn't open log: {e}")
 
     def _goto_list(self):
         try:
