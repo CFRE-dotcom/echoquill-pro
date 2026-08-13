@@ -33,6 +33,7 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
     from . import proxy
     from .auto_batch import resolve_folder, normalize_name
     dest = resolve_folder(cfg, item.get("folder", ""))
+    log(f"    folder: {dest}")
     ttl = item.get("title", "")
     early = normalize_name(ttl) if ttl else ""
     if early and _already_have(dest, early):

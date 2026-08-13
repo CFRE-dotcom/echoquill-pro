@@ -170,10 +170,9 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     import time
     import yt_dlp
     date_sorted = str(sort).lower().startswith("upload")
-    prefix = "ytsearchdate" if date_sorted else "ytsearch"
     pull = min(max(int(n) * 3, int(n)), 120)
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
-            "skip_download": True}
+            "skip_download": True, "playlistend": pull}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
@@ -185,9 +184,17 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
             pass
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
+    from urllib.parse import quote
+    if date_sorted:
+        # ytsearchdate is NOT supported in this yt-dlp; use YouTube's own
+        # date-sorted results URL (sp=CAI%3D = "Sort by upload date").
+        target = ("https://www.youtube.com/results?search_query="
+                  + quote(query) + "&sp=CAI%3D")
+    else:
+        target = f"ytsearch{pull}:{query}"
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"{prefix}{pull}:{query}", download=False)
+            info = ydl.extract_info(target, download=False)
     except Exception:
         return []
     want = set(t.lower() for t in (types or ["Video"]))

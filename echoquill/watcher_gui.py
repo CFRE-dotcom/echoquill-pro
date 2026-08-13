@@ -130,11 +130,20 @@ class WatcherWindow:
         self.lb.bind("<Motion>", self._hover)
         self.lb.bind("<Leave>", lambda _e: self._hide_tip())
         lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 4))
-        _bd = ttk.Button(lrow, text="Delete selected (and its data)",
-                         command=self._delete)
+        _bd = ttk.Button(lrow, text="Delete", command=self._delete)
         _bd.pack(side="left")
         helptip.tip(_bd, "Removes the source AND everything stored for it "
                     "(seen list + queued items). Asks first.")
+        _bp = ttk.Button(lrow, text="Pause / Resume", command=self._toggle_pause)
+        _bp.pack(side="left", padx=6)
+        helptip.tip(_bp, "Pause stops it being scanned; Resume turns it back on "
+                    "(and un-retires an expired search). Takes effect next cycle.")
+        _bw = ttk.Button(lrow, text="Wipe its results",
+                         command=self._clear_source)
+        _bw.pack(side="left", padx=6)
+        helptip.tip(_bw, "Clears this source's queued/finished items AND its "
+                    "seen-list so it re-pulls fresh. Files already on disk are "
+                    "NOT deleted.")
 
         # run controls + status sit ABOVE the log
         brow = ttk.Frame(f); brow.pack(fill="x", padx=8, pady=(4, 2))
@@ -462,17 +471,21 @@ class WatcherWindow:
                 win = _UP_V2L.get(int(ch.get("upload_days", 0) or 0),
                                   "custom")
                 life = _fmt_left(watcher.expiry_info(ch))
-                off = "" if ch.get("enabled", True) else " (retired)"
+                if not ch.get("enabled", True):
+                    off = " (retired)" if ch.get("expired") else " (paused)"
+                else:
+                    off = ""
                 self.lb.insert("end",
-                               '  ⌕ "' + ch.get("query", "") + '"   [' + types
+                               "  ⌕ " + ch.get("query", "") + "   [" + types
                                + "] · " + win + " · " + life + off + tail)
             else:
                 kinds = ", ".join(ch.get("kinds") or [])
                 kw = f" · kw:{ch['keyword']}" if ch.get("keyword") else ""
                 st = ch.get("set_name") or "no set"
+                off = "" if ch.get("enabled", True) else " (paused)"
                 self.lb.insert("end",
                                "  ▸ " + ch.get("url", "") + "   [" + kinds
-                               + "]" + kw + " · " + st + tail)
+                               + "]" + kw + " · " + st + off + tail)
             self._chan_ids.append(ch.get("id"))
         c = watcher.counts()
         self.status.configure(text=(
@@ -495,7 +508,7 @@ class WatcherWindow:
             self._hide_tip(); return
         stx = watcher.stats(cid)
         if ch.get("kind") == "search":
-            head = (f'Search: "{ch.get("query","")}"\n'
+            head = (f'Search: {ch.get("query","")}\n'
                     f"Type: {', '.join(ch.get('types') or [])}"
                     f"   ·   window: {_UP_V2L.get(int(ch.get('upload_days',0) or 0),'custom')}\n"
                     f"Sort: {ch.get('sort','Relevance')}"
@@ -685,11 +698,15 @@ class WatcherWindow:
         if not data["types"]:
             self._set_status("Tick at least one Type."); return
         if self._editing_search:
+            import time as _t
+            data["enabled"] = True          # editing un-retires it
+            data["expired"] = False
+            data["created_at"] = _t.time()  # restart the lifespan clock
             watcher.update_channel(self._editing_search, data)
             self._cancel_search_edit()
             self._refresh()
             self._goto_list()
-            self._set_status("Search updated.")
+            self._set_status("Search updated (lifespan restarted).")
             return
         import time as _t
         data["created_at"] = _t.time()
@@ -739,6 +756,37 @@ class WatcherWindow:
         self.add_search_btn.configure(text="＋ Add search")
         self.cancel_search_btn.pack_forget()
         self._clear_search_form()
+
+    def _toggle_pause(self):
+        sel = self.lb.curselection()
+        if not sel:
+            self._set_status("Select a source first."); return
+        cid = self._chan_ids[sel[0]]
+        d = watcher.load()
+        ch = next((c for c in d["channels"] if c.get("id") == cid), None)
+        if not ch:
+            return
+        new_on = not ch.get("enabled", True)
+        watcher.set_enabled(cid, new_on)
+        self._refresh()
+        self._set_status("Resumed." if new_on else "Paused.")
+
+    def _clear_source(self):
+        sel = self.lb.curselection()
+        if not sel:
+            self._set_status("Select a source first."); return
+        cid = self._chan_ids[sel[0]]
+        name = self.lb.get(sel[0]).strip()
+        if not messagebox.askyesno(
+                "Wipe results",
+                f"Clear all queued/finished items and the seen-list for:\n\n"
+                f"{name}\n\nThe source stays and will re-pull fresh on the "
+                "next check. Files already saved to disk are NOT deleted.",
+                parent=self.win):
+            return
+        watcher.clear_source_queue(cid)
+        self._refresh()
+        self._set_status("Wiped this source's queue + seen list.")
 
     def _delete(self):
         sel = self.lb.curselection()

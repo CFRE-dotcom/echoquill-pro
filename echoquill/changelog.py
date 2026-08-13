@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.0  (2026-08-13)
+    THE reason keyword searches returned nothing - fixed - plus manage/pause/wipe controls.
+    - SEARCH FIX: the pinned yt-dlp does NOT support "ytsearchdate", and the Sort default is "Upload date" - so every date-sorted search raised an unsupported-scheme error that got swallowed into "0 results". Now relevance uses ytsearch and "Upload date" uses YouTube's own date-sorted results URL. Searches actually return now. (And a search only creates its folder once it downloads something - that's why no folder appeared when it returned 0.)
+    - Quotes were NOT being applied automatically - the quotes you saw in the list were just my cosmetic display. Removed them. To force an exact phrase, type the quotes yourself in the Keyword box (e.g. "programmatic seo") and they pass straight to YouTube.
+    - Every video now logs its destination folder ("folder: …\Transcriptions\…") so you can see where each one lands without hunting.
+    - New per-source buttons: Pause / Resume (stops/starts scanning; Resume also un-retires an expired search) and "Wipe its results" (clears that source's queue + seen-list so it re-pulls fresh; on-disk files are left alone). Editing a search now un-retires it and restarts its lifespan. Retired vs paused is shown in the list.
+
 v2.31.3  (2026-08-12)
     - FORCE RESIDENTIAL: the mobile IPs were my doing, not yours. The username was getting ";type.mobile" appended because the di_mobile setting DEFAULTED to on (copied from the DataImpulse skill example) and saved into your config. A one-time migration now forces it OFF, so you get residential IPs. You can still turn mobile on deliberately in Settings if you ever want it.
     - NO MORE OVERLAPPING RUNS: a background timer check and a manual "Check now" could run at the same time - two scans hitting the queue file and the shared proxy IP at once, which corrupted the watched-list counts (showing 0 despite work done) and could clobber an in-progress download's IP. Scans + processing now run as one serialized cycle; if one is already running, the other is skipped.

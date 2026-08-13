@@ -115,7 +115,9 @@ def add_channel(ch):
 
 
 def update_channel(cid, fields):
-    """Edit an existing watch in place (keeps id, seen list, enabled)."""
+    """Edit an existing watch in place (keeps id + seen list). If `fields`
+    includes 'enabled', it wins (lets an edit un-retire a source); otherwise
+    the previous enabled state is kept."""
     d = load()
     for ch in d["channels"]:
         if ch.get("id") == cid:
@@ -126,8 +128,31 @@ def update_channel(cid, fields):
             ch.update(fields)
             ch["id"] = keep_id
             ch["seen"] = seen
-            ch["enabled"] = en
+            ch.setdefault("enabled", en)
             break
+    save(d)
+
+
+def set_enabled(cid, on):
+    """Pause/resume a source. Resuming also clears an 'expired' flag."""
+    d = load()
+    for ch in d["channels"]:
+        if ch.get("id") == cid:
+            ch["enabled"] = bool(on)
+            if on:
+                ch["expired"] = False
+            break
+    save(d)
+
+
+def clear_source_queue(cid):
+    """Remove this source's queued/done items AND its seen list, so it can be
+    re-pulled fresh. Keeps the source itself."""
+    d = load()
+    d["queue"] = [q for q in d["queue"] if q.get("channel_id") != cid]
+    for ch in d["channels"]:
+        if ch.get("id") == cid:
+            ch["seen"] = []
     save(d)
 
 
