@@ -74,33 +74,12 @@ class WatcherWindow:
         ttk.Label(top, text="Channel watcher", style="Title.TLabel").pack(
             side="left")
 
-        # ---- tabs ----
-        nb = ttk.Notebook(self.win)
-        nb.pack(fill="x", padx=12, pady=(6, 4))
-        tab_ch = ttk.Frame(nb)
-        tab_sch = ttk.Frame(nb)
-        tab_prx = ttk.Frame(nb)
-        nb.add(tab_ch, text="  Channels  ")
-        nb.add(tab_sch, text="  Schedule & pacing  ")
-        nb.add(tab_prx, text="  Proxy  ")
+        # ---- constant bottom bar (packed first so it is always visible) ----
+        self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
+        self.status.pack(side="bottom", anchor="w", padx=16, pady=(0, 8))
 
-        self._build_channels_tab(tab_ch)
-        self._build_schedule_tab(tab_sch)
-        self._build_proxy_tab(tab_prx)
-
-        # ---- constant: monitor ----
-        mon = tk.Frame(self.win, bg="#141414", bd=1, relief="solid")
-        mon.pack(fill="x", padx=16, pady=(2, 2))
-        self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
-                                font=("Segoe UI", 12, "bold"), anchor="w",
-                                justify="left", wraplength=740,
-                                text="●  Idle — nothing running")
-        self.monitor.pack(fill="x", padx=12, pady=8)
-        mon.bind("<Configure>", lambda e: self.monitor.configure(
-            wraplength=max(220, e.width - 28)))
-
-        # ---- constant: run controls ----
-        brow = ttk.Frame(self.win); brow.pack(fill="x", padx=16, pady=(2, 2))
+        brow = ttk.Frame(self.win)
+        brow.pack(side="bottom", fill="x", padx=16, pady=(2, 2))
         ttk.Button(brow, text="Check now", style="Accent.TButton",
                    command=self._check_now).pack(side="left")
         ttk.Button(brow, text="Refresh", command=self._refresh).pack(
@@ -118,12 +97,31 @@ class WatcherWindow:
                     "notifications work on your PC.")
         ttk.Button(brow, text="Close", command=self._on_close).pack(side="right")
 
-        self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
-        self.status.pack(anchor="w", padx=16)
+        mon = tk.Frame(self.win, bg="#141414", bd=1, relief="solid")
+        mon.pack(side="bottom", fill="x", padx=16, pady=(2, 2))
+        self.monitor = tk.Label(mon, bg="#141414", fg="#4da3ff",
+                                font=("Segoe UI", 12, "bold"), anchor="w",
+                                justify="left", wraplength=740,
+                                text="●  Idle — nothing running")
+        self.monitor.pack(fill="x", padx=12, pady=8)
+        mon.bind("<Configure>", lambda e: self.monitor.configure(
+            wraplength=max(220, e.width - 28)))
 
-        # ---- constant: log ----
-        self.log = theme.dark_text(self.win, wrap="word", height=14)
-        self.log.pack(fill="both", expand=True, padx=16, pady=(2, 12))
+        # ---- tabs (fill the space above the constant bottom bar) ----
+        self._nb = ttk.Notebook(self.win)
+        self._nb.pack(side="top", fill="both", expand=True, padx=12, pady=(6, 4))
+        self._tab_list = ttk.Frame(self._nb)
+        self._tab_add = ttk.Frame(self._nb)
+        tab_sch = ttk.Frame(self._nb)
+        tab_prx = ttk.Frame(self._nb)
+        self._nb.add(self._tab_list, text="  Channels / keyword searches  ")
+        self._nb.add(self._tab_add, text="  Add a channel or keyword  ")
+        self._nb.add(tab_sch, text="  Schedule & pacing  ")
+        self._nb.add(tab_prx, text="  Proxy  ")
+        self._build_list_tab(self._tab_list)
+        self._build_add_tab(self._tab_add)
+        self._build_schedule_tab(tab_sch)
+        self._build_proxy_tab(tab_prx)
 
         notify.badge(False)   # opening the watcher clears the 'new results' dot
         watcher.add_log_listener(self._log)
@@ -137,10 +135,11 @@ class WatcherWindow:
         self._tick_monitor()
 
     # ================= tab builders =================
-    def _build_channels_tab(self, f):
+    def _build_list_tab(self, f):
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
-            "Channels and topic-searches you watch. Double-click to edit · "
-            "hover for stats.")).pack(anchor="w", padx=8, pady=(8, 2))
+            "Channels and topic-searches you watch. Double-click a row to edit "
+            "it (opens the Add tab) · hover for stats.")).pack(
+            anchor="w", padx=8, pady=(8, 2))
         lbf = ttk.Frame(f); lbf.pack(fill="x", padx=8, pady=(0, 4))
         self.lb = theme.dark_listbox(lbf, height=8)
         _lbsb = ttk.Scrollbar(lbf, orient="vertical", command=self.lb.yview)
@@ -150,15 +149,21 @@ class WatcherWindow:
         self.lb.bind("<Double-Button-1>", self._edit_selected)
         self.lb.bind("<Motion>", self._hover)
         self.lb.bind("<Leave>", lambda _e: self._hide_tip())
-        lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 6))
+        lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 4))
         _bd = ttk.Button(lrow, text="Delete selected (and its data)",
                          command=self._delete)
         _bd.pack(side="left")
         helptip.tip(_bd, "Removes the source AND everything stored for it "
                     "(seen list + queued items). Asks first.")
 
+        ttk.Label(f, text="Activity log", style="Section.TLabel").pack(
+            anchor="w", padx=8, pady=(4, 0))
+        self.log = theme.dark_text(f, wrap="word", height=12)
+        self.log.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+
+    def _build_add_tab(self, f):
         self._subnb = ttk.Notebook(f)
-        self._subnb.pack(fill="x", padx=4, pady=(2, 6))
+        self._subnb.pack(fill="both", expand=True, padx=4, pady=(6, 6))
         self._tab_addch = ttk.Frame(self._subnb)
         self._tab_search = ttk.Frame(self._subnb)
         self._subnb.add(self._tab_addch, text="  Add a channel  ")
@@ -375,6 +380,12 @@ class WatcherWindow:
         except Exception:
             pass
 
+    def _goto_list(self):
+        try:
+            self._nb.select(self._tab_list)
+        except Exception:
+            pass
+
     def _drop_topmost(self):
         try:
             self.win.attributes("-topmost", False)
@@ -555,11 +566,13 @@ class WatcherWindow:
             watcher.update_channel(self._editing, data)
             self._cancel_edit()
             self._refresh()
+            self._goto_list()
             self._set_status("Channel updated.")
             return
         watcher.add_channel(data)
         self._clear_form()
         self._refresh()
+        self._goto_list()
         self._set_status("Channel added. Use 'Check now' to pull its latest.")
 
     def _edit_selected(self, _e=None):
@@ -575,6 +588,7 @@ class WatcherWindow:
             self._edit_search(ch)
             return
         try:
+            self._nb.select(self._tab_add)
             self._subnb.select(self._tab_addch)
         except Exception:
             pass
@@ -659,6 +673,7 @@ class WatcherWindow:
             watcher.update_channel(self._editing_search, data)
             self._cancel_search_edit()
             self._refresh()
+            self._goto_list()
             self._set_status("Search updated.")
             return
         import time as _t
@@ -667,10 +682,12 @@ class WatcherWindow:
         watcher.add_channel(data)
         self._clear_search_form()
         self._refresh()
+        self._goto_list()
         self._set_status("Search added. Use 'Check now' to pull matches.")
 
     def _edit_search(self, ch):
         try:
+            self._nb.select(self._tab_add)
             self._subnb.select(self._tab_search)
         except Exception:
             pass

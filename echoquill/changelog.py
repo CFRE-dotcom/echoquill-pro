@@ -8,6 +8,13 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.30.0  (2026-08-12)
+    Channel watcher re-laid-out into four real tabs, and added to Settings.
+    - The watcher window is now four tabs: (1) "Channels / keyword searches" - the shared list on top and a big activity LOG filling the rest; (2) "Add a channel or keyword" - the add/edit forms (Add a channel / Search by keyword sub-tabs); (3) "Schedule & pacing"; (4) "Proxy". Moving the tall forms off the list page means the log is finally full-size and always visible.
+    - The live monitor line and the run controls (Check now / Stop / Clear queue / Test notification / Close) are now a CONSTANT bar pinned at the bottom - visible and usable from every tab.
+    - Double-click a row on tab 1 to edit: it jumps to the Add tab, opens the right sub-tab (channel vs search), and fills the form. Saving jumps you back to the list.
+    - Settings now has a "Channel watcher" tab (right after Transcription) with an Open button, so you can launch it from the main Settings tabs.
+
 v2.29.1  (2026-08-12)
     Smart-proxy hardening: clear state between IPs. Per the DataImpulse skill rule that "IP rotation and browser state are separate," the proxy now wipes yt-dlp's on-disk cache (nsig/player tokens) AFTER releasing an IP and BEFORE firing a new one - the no-browser equivalent of a fresh context - so a new IP never reuses state minted under the previous IP.
 

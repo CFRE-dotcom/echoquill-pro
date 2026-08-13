@@ -16,6 +16,7 @@ class SettingsWindow:
     SECTIONS = ["General", "AI Enhancement", "Clipboard", "Dictation",
                 "Dictionary", "Meeting", "Read aloud", "Transcription",
                 "History", "Stats", "License", "Help", "Feedback", "About",
+                "Channel watcher",
                 "What\u2019s New"]
 
     def __init__(self, root: tk.Tk, cfg: dict, dictionary, on_save,
@@ -85,7 +86,8 @@ class SettingsWindow:
                     "Help": self._build_help,
                     "Feedback": self._build_feedback,
                     "About": self._build_about,
-                    "What\u2019s New": self._build_whatsnew}
+                    "What\u2019s New": self._build_whatsnew,
+                    "Channel watcher": self._build_channel_watcher}
 
         def _mk(parent, name):
             if name in _noscroll:
@@ -101,6 +103,7 @@ class SettingsWindow:
             ("General", ["General"]),
             ("Dictation", ["Dictation", "Dictionary", "Clipboard"]),
             ("Transcription", ["Transcription"]),
+            ("Channel watcher", ["Channel watcher"]),
             ("AI", ["AI Enhancement"]),
             ("Meeting", ["Meeting"]),
             ("Read aloud", ["Read aloud"]),
@@ -207,6 +210,28 @@ class SettingsWindow:
         return r
 
     # ---------- sections ----------
+
+    def _build_channel_watcher(self, f):
+        self._title(f, "Channel watcher",
+                    "Watch YouTube channels and topic-searches; new uploads are "
+                    "auto-transcribed and run through your question sets.")
+        ttk.Label(f, style="Dim.TLabel", wraplength=460, text=(
+            "Add channels or keyword-searches, set the check schedule and "
+            "pacing, and optionally route downloads through your proxy - all "
+            "in the Channel watcher window.")).pack(anchor="w", pady=(0, 14))
+        ttk.Button(f, text="Open Channel watcher", style="Accent.TButton",
+                   command=self._open_watcher).pack(anchor="w")
+
+    def _open_watcher(self):
+        try:
+            from .watcher_gui import WatcherWindow
+            from . import watcher as _w
+            _w.clear_new_ready()
+            WatcherWindow(self.win, self.cfg)
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Channel watcher", f"Couldn't open the watcher:\n\n{e}")
 
     def _build_general(self, f):
         self._title(f, "General", "How you start dictating and where text goes.")
