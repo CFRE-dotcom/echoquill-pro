@@ -408,7 +408,8 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
             attempts = item.get("attempts", 0) + 1
             if status == "done":
                 upd = {"status": "done", "last_error": "",
-                       "done_at": time.time(), "attempts": attempts}
+                       "done_at": time.time(), "attempts": attempts,
+                       "video_needed": bool(item.get("video_needed"))}
                 done += 1
                 _emit(log, "    done ✓")
             elif status == "unavailable":
@@ -423,6 +424,54 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
                 _emit(log, f"    failed (will retry): {msg[:80]}")
             item.update(upd)   # keep the in-memory snapshot consistent
             _update_item(item.get("channel_id"), item.get("url"), upd)
+
+        # retry videos whose transcript is done but whose file never saved
+        for item in d["queue"]:
+            if cancel():
+                break
+            if per_cycle and processed >= per_cycle:
+                break
+            if not (item.get("save_video") and item.get("video_needed")
+                    and item.get("status") == "done"):
+                continue
+            if item.get("video_next_try", 0) > time.time():
+                continue
+            if processed > 0 and gap > 0:
+                _set_activity(phase="waiting", i=processed + 1, n=n_total,
+                              title=item.get("title") or item.get("url", ""),
+                              wait_until=time.time() + gap)
+                _emit(log, f"    waiting {gap}s before next video…")
+                for _ in range(gap):
+                    if cancel():
+                        break
+                    time.sleep(1)
+                if cancel():
+                    break
+            processed += 1
+            title = item.get("title") or item.get("url", "")
+            _set_activity(phase="Retrying video", i=processed, n=n_total,
+                          title=title, wait_until=0)
+            _emit(log, f"↻ retrying video that failed earlier: {title}")
+
+            def _prog2(ph, _t=title):
+                _set_activity(phase=ph)
+                _emit(log, f"    {ph}…")
+
+            cid = item.get("channel_id")
+            url = item.get("url")
+            ok = pipeline.retry_video_only(
+                cfg, item, lambda m: _emit(log, m), cancel, _prog2)
+            if ok:
+                _emit(log, "    video saved ✓")
+                _update_item(cid, url, {"video_needed": False,
+                                        "video_next_try": 0})
+            else:
+                mins = int((cfg or {}).get("watch_retry_minutes", 30) or 30)
+                _update_item(cid, url,
+                             {"video_next_try": time.time() + max(1, mins) * 60})
+                _emit(log, "    still couldn't save the video — will retry "
+                      "next cycle")
+
         if done:
             _mutate(lambda d: d.__setitem__(
                 "new_ready", d.get("new_ready", 0) + done))

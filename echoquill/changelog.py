@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.32.5  (2026-08-13)
+    A failed video download is no longer abandoned. When the transcript saves but the full-video download fails (e.g. "SSL UNEXPECTED_EOF … Giving up after 20 retries" - a mid-transfer connection drop, common on a proxy), the item is now flagged and the watcher retries JUST that video on later cycles - spaced by your "retry failed every N minutes" and paced like everything else - until it lands. So it keeps coming back for it tomorrow / next run instead of leaving it. (It skips the retry if the video is already on disk, verifies/rotates the proxy IP for the retry, and clears the flag once saved.)
+
 v2.32.4  (2026-08-13)
     FIXES vanishing channels/searches. A running scan or download cycle loaded the whole watcher file once and held it for minutes (the pacing gaps between videos), then saved that stale copy back - erasing any channel or search you added while it was running. Every write is now atomic: edits (add / delete / pause / wipe / edit) reload-modify-save under a lock, the scan merges its results into the CURRENT file instead of overwriting it, and each finished video updates just its own queue item. Adding sources mid-run is now safe.
 

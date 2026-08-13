@@ -25,6 +25,54 @@ def _already_have(dest, name):
     return False
 
 
+def retry_video_only(cfg, item, log=lambda s: None, cancel=lambda: False,
+                     progress=lambda ph: None):
+    """Download ONLY the video file for an item whose transcript already saved.
+    Verifies/rotates the proxy on a block. Returns True if the video is saved."""
+    import os
+    from .media_gui import download_video, cleanup_parts, _dated, _safe_stem
+    from .auto_batch import resolve_folder, normalize_name
+    from . import proxy
+    url = item["url"]
+    dest = resolve_folder(cfg, item.get("folder", ""))
+    name = normalize_name(item.get("title") or "video") or "video"
+    dname = _dated(name)
+    try:
+        base = _safe_stem(dname).lower()
+        for fn in os.listdir(dest):
+            low = fn.lower()
+            if low.startswith(base) and low.endswith((".mp4", ".mkv", ".webm")):
+                return True                    # already there
+    except Exception:
+        pass
+    proxy_on = bool(cfg.get("di_enabled"))
+    tries = int(cfg.get("di_verify_tries", 3) or 3) if proxy_on else 1
+    for attempt in range(1, tries + 1):
+        if cancel():
+            return False
+        if proxy_on:
+            sid, _ip = proxy.acquire_verified(
+                cfg, tries=int(cfg.get("di_verify_tries", 3) or 3), log=log)
+            if not sid:
+                return False
+        try:
+            progress("Retrying video")
+            download_video(url, cfg, dest, log, name=dname)
+            if proxy_on:
+                proxy.clear_active_sessid()
+            return True
+        except Exception as e:
+            if proxy_on:
+                proxy.clear_active_sessid()
+            cleanup_parts(dest, dname)
+            if proxy_on and proxy.is_block(str(e)) and attempt < tries:
+                log(f"    video blocked (attempt {attempt}/{tries}) - rotating IP")
+                continue
+            log(f"    video retry failed: {str(e)[:80]}")
+            return False
+    return False
+
+
 def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
                   progress=lambda ph: None):
     """Run one video end-to-end. When the proxy is on and YouTube bot-blocks a
@@ -111,8 +159,10 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
             progress("Saving video")
             try:
                 download_video(url, cfg, dest, log, name=dname)
+                item["video_needed"] = False
             except Exception as e:
                 log(f"    video save failed: {e}")
+                item["video_needed"] = True   # keep trying on later cycles
                 try:
                     from .media_gui import cleanup_parts
                     cleanup_parts(dest, dname)
