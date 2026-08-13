@@ -82,6 +82,11 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
                 download_video(url, cfg, dest, log, name=dname)
             except Exception as e:
                 log(f"    video save failed: {e}")
+                try:
+                    from .media_gui import cleanup_parts
+                    cleanup_parts(dest, dname)
+                except Exception:
+                    pass
         if item.get("save_audio") and apath and os.path.exists(apath):
             try:
                 ext = os.path.splitext(apath)[1] or ".m4a"

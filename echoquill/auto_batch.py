@@ -678,6 +678,11 @@ class AutoBatchWindow:
                             self._log("    video saved ✓")
                         except Exception as e:
                             self._log(f"    video save failed: {e}")
+                            try:
+                                from .media_gui import cleanup_parts
+                                cleanup_parts(dest, dname)
+                            except Exception:
+                                pass
 
                     # 4) audio file (dated)
                     if self.save_audio.get() and apath and os.path.exists(apath):

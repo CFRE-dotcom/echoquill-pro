@@ -325,7 +325,12 @@ def _apply_proxy(opts, cfg):
 
 def _media_opts(url, cfg, tmpl, fmt):
     opts = {"format": fmt, "outtmpl": tmpl,
-            "quiet": True, "no_warnings": True, "noplaylist": True}
+            "quiet": True, "no_warnings": True, "noplaylist": True,
+            # survive flaky/proxy connections on big downloads: resume the
+            # .part, retry hard, chunk the transfer, and don't hang forever.
+            "continuedl": True,
+            "retries": 20, "fragment_retries": 20, "file_access_retries": 10,
+            "socket_timeout": 60, "http_chunk_size": 10485760}
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
@@ -341,6 +346,24 @@ def _media_opts(url, cfg, tmpl, fmt):
             pass
     _apply_proxy(opts, cfg)
     return opts
+
+
+def cleanup_parts(dest_dir, name):
+    """Remove orphaned partial-download files (.part/.ytdl) for <name>."""
+    import glob
+    try:
+        base = _safe_stem(name or "")
+        if not base:
+            return
+        for fpath in glob.glob(os.path.join(dest_dir, glob.escape(base) + "*")):
+            low = fpath.lower()
+            if low.endswith(".part") or low.endswith(".ytdl") or ".part-frag" in low:
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def download_video(url, cfg, dest_dir, status_cb=lambda s: None, name=None) -> str:

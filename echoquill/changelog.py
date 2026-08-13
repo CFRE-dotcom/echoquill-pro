@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.30.2  (2026-08-12)
+    Fix half-finished video downloads (leftover .PART files). Video saves are large transfers; a single dropped connection (common over a proxy) aborted them with no retry, leaving a .part - and because the transcript still saved, dedup then skipped the video forever so it never finished. Now downloads resume the .part, retry hard (20x + fragment retries), transfer in 10 MB chunks, and use a 60s socket timeout, so a blip no longer kills the whole download. If a video save still fails, its orphaned .part/.ytdl files are cleaned up instead of left behind.
+
 v2.30.1  (2026-08-12)
     Watcher tweaks. (1) Fixed the doubled log lines - every "Scanning…/nothing new" was printed twice because the log was delivered both directly and through the window listener; now it's delivered once. (2) On the Channels tab the run controls (Check now / Stop / Clear queue / …) and the status line now sit ABOVE the activity log, and the log is smaller - the channel/search list takes the extra room instead. The live monitor line stays pinned at the very bottom.
 
