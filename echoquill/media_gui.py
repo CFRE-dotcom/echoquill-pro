@@ -664,7 +664,10 @@ class MediaWindow:
         try:
             self.win.after(0, lambda: self.out.delete("1.0", "end"))
             if is_url:
-                path, title = fetch_audio_info(source, self._set_status, self.cfg)
+                from . import proxy as _px
+                path, title = _px.run_download(
+                    self.cfg, self._set_status,
+                    lambda: fetch_audio_info(source, self._set_status, self.cfg))
             else:
                 path = source
                 title = os.path.splitext(os.path.basename(source))[0]
@@ -750,6 +753,11 @@ class MediaWindow:
             self._errored = True
             self._set_status(friendly_dl_error(e))
         finally:
+            try:
+                from . import proxy as _px
+                _px.clear_active_port()
+            except Exception:
+                pass
             _keep_awake(False)
             self.win.after(0, lambda: self.stop_btn.configure(state="disabled"))
             if getattr(self, "_cancel", False):
@@ -967,7 +975,10 @@ class BatchWindow:
                 break
             try:
                 self._log(f"[{i}/{len(urls)}] Downloading: {url}")
-                path, title = fetch_audio_info(url, lambda s: None, self.cfg)
+                from . import proxy as _px
+                path, title = _px.run_download(
+                    self.cfg, self._log,
+                    lambda: fetch_audio_info(url, lambda s: None, self.cfg))
                 self._log(f"[{i}/{len(urls)}] Transcribing: {title}")
                 if not hasattr(self, "_beng"):
                     from .transcriber import Transcriber
@@ -1004,6 +1015,12 @@ class BatchWindow:
                 self._log("    " + preview + "\n")
             except Exception as e:
                 self._log(f"[{i}/{len(urls)}] FAILED: " + friendly_dl_error(e))
+            finally:
+                try:
+                    from . import proxy as _px
+                    _px.clear_active_port()
+                except Exception:
+                    pass
         _keep_awake(False)
         if not getattr(self, "_bcancel", False):
             self._log(f"Batch finished — {done}/{len(urls)} saved to {self.folder}")

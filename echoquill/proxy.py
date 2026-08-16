@@ -170,3 +170,29 @@ def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
     log(f"    no live IP after {tries} tries — giving up this pass")
     clear_active_port()
     return (None, None)
+
+
+def run_download(cfg, log=lambda s: None, download_fn=None, tries=None):
+    """Run download_fn() through a VERIFIED proxy IP; on a block/SSL/EOF error
+    rotate to a fresh IP and retry - up to di_verify_tries. Holds the IP on
+    success (caller clears with clear_active_port() when fully done). Proxy off
+    = just run download_fn() once. This is the same verify+rotate procedure the
+    Channel watcher and Auto-batch use, shared so EVERY transcribe path behaves
+    identically."""
+    if not (cfg or {}).get("di_enabled"):
+        return download_fn()
+    tries = int(tries or (cfg or {}).get("di_verify_tries", 3) or 3)
+    for attempt in range(1, tries + 1):
+        sid, _ip = acquire_verified(cfg, tries=tries, log=log)
+        if not sid:
+            raise RuntimeError(f"proxy: no live IP after {tries} tries")
+        try:
+            return download_fn()
+        except Exception as e:
+            clear_active_port()
+            if is_block(str(e)) and attempt < tries:
+                log(f"    unstable IP/block - rotating to a new IP "
+                    f"({attempt + 1}/{tries})")
+                continue
+            raise
+    raise RuntimeError("proxy: exhausted retries")
