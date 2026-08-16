@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.34.1  (2026-08-13)
+    Fix "SSLV3_ALERT_HANDSHAKE_FAILURE" video/audio download errors. That is a TLS cipher rejection by the video's server, NOT a bad IP - which is why rotating IPs didn't help (every IP hit the same handshake wall). Downloads now pass legacy_server_connect, so servers that only offer legacy TLS/RSA key exchange connect instead of failing. Also: the audio download (fetch_audio_info) was never hardened - it now gets the same resume/retries/chunk/timeout treatment as the video download.
+
 v2.34.0  (2026-08-13)
     EVERY transcribe path now uses the same verify-before-download + rotate-on-block proxy procedure. Before, only the Channel watcher and Auto-batch verified the IP and rotated on a bad/blocked one; the single-video transcriber and the "Batch: many URLs" window just attached the proxy and hoped - so a bad IP failed with no recovery (the one-off failures you hit). Now all four - single video, batch URLs, Channel watcher, Auto-batch - fire a fresh IP, verify it, hold it for the download, and rotate + retry on a block/SSL drop (up to your verify-tries), then release it. One shared helper, identical behavior everywhere.
 

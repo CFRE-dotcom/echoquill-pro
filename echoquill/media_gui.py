@@ -103,6 +103,10 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
         "format": "bestaudio/best",
         "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
         "quiet": True, "no_warnings": True, "noplaylist": True,
+        "continuedl": True,
+        "retries": 20, "fragment_retries": 20, "file_access_retries": 10,
+        "socket_timeout": 60, "http_chunk_size": 10485760,
+        "legacy_server_connect": True,
     }
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
@@ -330,7 +334,10 @@ def _media_opts(url, cfg, tmpl, fmt):
             # .part, retry hard, chunk the transfer, and don't hang forever.
             "continuedl": True,
             "retries": 20, "fragment_retries": 20, "file_access_retries": 10,
-            "socket_timeout": 60, "http_chunk_size": 10485760}
+            "socket_timeout": 60, "http_chunk_size": 10485760,
+            # allow servers that only offer legacy TLS/RSA key exchange, else
+            # some CDNs fail with SSLV3_ALERT_HANDSHAKE_FAILURE
+            "legacy_server_connect": True}
     low = (url or "").lower()
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
