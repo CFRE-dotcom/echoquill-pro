@@ -94,7 +94,7 @@ class WatcherWindow:
         tab_sch = ttk.Frame(self._nb)
         tab_prx = ttk.Frame(self._nb)
         self._nb.add(self._tab_list, text="  Channels / keyword searches  ")
-        self._nb.add(self._tab_add, text="  Add a channel or keyword  ")
+        self._nb.add(self._tab_add, text="  Add channel / keyword / playlist  ")
         self._nb.add(tab_sch, text="  Schedule & pacing  ")
         self._nb.add(tab_prx, text="  Proxy  ")
         self._build_list_tab(self._tab_list)
