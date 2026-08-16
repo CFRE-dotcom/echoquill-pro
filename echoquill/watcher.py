@@ -314,6 +314,29 @@ def _scan_sources(cfg, d, log):
                 _emit(log, f"  found {len(items)} result(s), {got} new queued.")
             continue
 
+        if ch.get("kind") == "playlist":
+            from .auto_batch import fetch_playlist
+            _emit(log, f"Scanning playlist {ch.get('url','')}…")
+            kw = (ch.get("keyword", "") or "").strip().lower()
+            try:
+                items = fetch_playlist(ch["url"], limit, cfg)
+            except Exception as e:
+                _emit(log, f"  playlist failed: {str(e)[:70]}")
+                continue
+            if kw:
+                items = [(u, t) for (u, t) in items if kw in (t or "").lower()]
+            for (u, t) in items[:limit]:
+                if u in seen:
+                    continue
+                seen.add(u)
+                d["queue"].append(_queue_item(cfg, ch, u, t))
+                added += 1
+            ch["seen"] = list(seen)
+            got = added - before
+            _emit(log, f"  {got} new video(s) queued." if got
+                  else "  nothing new (all already seen).")
+            continue
+
         kinds = ch.get("kinds") or ["Videos"]
         _emit(log, f"Scanning {ch.get('url','')} ({', '.join(kinds)})…")
         kw = (ch.get("keyword", "") or "").strip().lower()

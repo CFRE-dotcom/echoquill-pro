@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.35.0  (2026-08-13)
+    Channel watcher can now watch PLAYLISTS. New "Add a playlist" sub-tab (next to Add a channel / Search by keyword): paste a YouTube playlist URL and it pulls the playlist's videos through the same pipeline - transcribe, question set, save options, folder, optional keyword filter, and "Newest N" cap. Playlists show a ▤ marker in the list, dedupe against a seen-list, and support edit / pause / focus / wipe / delete just like channels and searches. They also run through the same verified-proxy + rotation and fair-queue ordering.
+
 v2.34.1  (2026-08-13)
     Fix "SSLV3_ALERT_HANDSHAKE_FAILURE" video/audio download errors. That is a TLS cipher rejection by the video's server, NOT a bad IP - which is why rotating IPs didn't help (every IP hit the same handshake wall). Downloads now pass legacy_server_connect, so servers that only offer legacy TLS/RSA key exchange connect instead of failing. Also: the audio download (fetch_audio_info) was never hardened - it now gets the same resume/retries/chunk/timeout treatment as the video download.
 

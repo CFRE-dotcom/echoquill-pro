@@ -257,6 +257,50 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     return out
 
 
+def fetch_playlist(url, limit, cfg):
+    """List a YouTube playlist's videos (metadata only, no download).
+    Returns [(url, title), ...]."""
+    import yt_dlp
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+            "skip_download": True}
+    if limit:
+        opts["playlistend"] = int(limit)
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    elif br:
+        try:
+            opts["cookiesfrombrowser"] = (br,)
+        except Exception:
+            pass
+    from .media_gui import _apply_proxy
+    _apply_proxy(opts, cfg)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception:
+        return []
+    entries = info.get("entries") or []
+    flat = []
+    for e in entries:
+        if e and e.get("entries"):
+            flat.extend(e["entries"])
+        elif e:
+            flat.append(e)
+    out = []
+    for e in flat:
+        if not e:
+            continue
+        u = e.get("url") or e.get("webpage_url")
+        if not u and e.get("id"):
+            u = "https://www.youtube.com/watch?v=" + e["id"]
+        t = (e.get("title") or "").strip()
+        if u:
+            out.append((u, t))
+    return out
+
+
 def fetch_channel(channel, kind, limit, cfg):
     """List a YouTube channel's Videos/Shorts/Lives (metadata only, no
     download). Returns [(url, title), ...]."""

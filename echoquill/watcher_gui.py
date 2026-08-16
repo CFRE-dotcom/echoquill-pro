@@ -60,6 +60,7 @@ class WatcherWindow:
         self._cancel = False
         self._editing = None
         self._editing_search = None
+        self._editing_playlist = None
         self._tip = None
 
         self.win = tk.Toplevel(parent)
@@ -190,10 +191,13 @@ class WatcherWindow:
         self._subnb.pack(fill="both", expand=True, padx=4, pady=(6, 6))
         self._tab_addch = ttk.Frame(self._subnb)
         self._tab_search = ttk.Frame(self._subnb)
+        self._tab_playlist = ttk.Frame(self._subnb)
         self._subnb.add(self._tab_addch, text="  Add a channel  ")
         self._subnb.add(self._tab_search, text="  Search by keyword  ")
+        self._subnb.add(self._tab_playlist, text="  Add a playlist  ")
         self._build_add_channel_form(self._tab_addch)
         self._build_search_form(self._tab_search)
+        self._build_playlist_form(self._tab_playlist)
 
     def _build_add_channel_form(self, f):
         self.form_lbl = ttk.Label(f, text="Add a channel",
@@ -253,6 +257,62 @@ class WatcherWindow:
         self.add_btn.pack(side="left")
         self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
                                           command=self._cancel_edit)
+
+    def _build_playlist_form(self, f):
+        self.pl_form_lbl = ttk.Label(f, text="Add a playlist",
+                                     style="Section.TLabel")
+        self.pl_form_lbl.pack(anchor="w", padx=8, pady=(6, 2))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Playlist URL:").pack(side="left")
+        self.pl_url = tk.StringVar()
+        _entry(r, self.pl_url).pack(side="left", fill="x", expand=True,
+                                    padx=(6, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Keyword (optional):").pack(side="left")
+        self.pl_kw = tk.StringVar()
+        _entry(r, self.pl_kw, 16).pack(side="left", padx=(4, 12))
+        ttk.Label(r, text="Newest:").pack(side="left")
+        self.pl_count = tk.StringVar(value="25")
+        _entry(r, self.pl_count, 5).pack(side="left", padx=(4, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Question set:").pack(side="left")
+        self.pl_set = tk.StringVar(value="—")
+        self.pl_set_menu = ttk.OptionMenu(r, self.pl_set, "—")
+        self.pl_set_menu.configure(width=18)
+        self.pl_set_menu.pack(side="left", padx=(6, 12))
+        m = self.pl_set_menu["menu"]; m.delete(0, "end")
+        m.add_command(label="—", command=lambda: self.pl_set.set("—"))
+        for n in _pr.set_names(self.cfg):
+            m.add_command(label=n, command=lambda n=n: self.pl_set.set(n))
+        ttk.Label(r, text="Transcript:").pack(side="left")
+        self.pl_tmode = tk.StringVar(value="Whisper (accurate)")
+        ttk.OptionMenu(r, self.pl_tmode, "Whisper (accurate)",
+                       "Whisper (accurate)", "YouTube captions (fast)").pack(
+                       side="left", padx=(4, 0))
+
+        r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
+        ttk.Label(r, text="Folder:").pack(side="left")
+        self.pl_folder = tk.StringVar()
+        _entry(r, self.pl_folder, 22).pack(side="left", padx=(6, 12))
+        self.plv = tk.BooleanVar(value=False)
+        self.pla = tk.BooleanVar(value=False)
+        self.pld = tk.BooleanVar(value=False)
+        self.plc = tk.BooleanVar(value=False)
+        ttk.Checkbutton(r, text="Video", variable=self.plv).pack(side="left")
+        ttk.Checkbutton(r, text="Audio", variable=self.pla).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Desc", variable=self.pld).pack(side="left", padx=(6, 0))
+        ttk.Checkbutton(r, text="Comments", variable=self.plc).pack(side="left", padx=(6, 0))
+
+        arow = ttk.Frame(f); arow.pack(anchor="w", padx=8, pady=(4, 8))
+        self.add_playlist_btn = ttk.Button(arow, text="＋ Add playlist",
+                                           style="Accent.TButton",
+                                           command=self._add_playlist)
+        self.add_playlist_btn.pack(side="left")
+        self.cancel_playlist_btn = ttk.Button(arow, text="Cancel edit",
+                                              command=self._cancel_playlist_edit)
 
     def _build_search_form(self, f):
         self.s_form_lbl = ttk.Label(f, text="Search by keyword",
@@ -506,6 +566,14 @@ class WatcherWindow:
                                "  " + star + "⌕ " + ch.get("query", "")
                                + "   [" + types + "] · " + win + " · "
                                + life + off + tail)
+            elif ch.get("kind") == "playlist":
+                kw = f" · kw:{ch['keyword']}" if ch.get("keyword") else ""
+                st = ch.get("set_name") or "no set"
+                off = "" if ch.get("enabled", True) else " (paused)"
+                star = "★ " if ch.get("focus") else ""
+                self.lb.insert("end",
+                               "  " + star + "▤ " + ch.get("url", "")
+                               + "   [playlist]" + kw + " · " + st + off + tail)
             else:
                 kinds = ", ".join(ch.get("kinds") or [])
                 kw = f" · kw:{ch['keyword']}" if ch.get("keyword") else ""
@@ -645,6 +713,9 @@ class WatcherWindow:
         if ch.get("kind") == "search":
             self._edit_search(ch)
             return
+        if ch.get("kind") == "playlist":
+            self._edit_playlist(ch)
+            return
         try:
             self._nb.select(self._tab_add)
             self._subnb.select(self._tab_addch)
@@ -676,6 +747,75 @@ class WatcherWindow:
         self.add_btn.configure(text="＋ Add channel")
         self.cancel_edit_btn.pack_forget()
         self._clear_form()
+
+    # ---------- playlist sources ----------
+    def _form_data_playlist(self):
+        cv = self.pl_count.get().strip()
+        return {
+            "kind": "playlist",
+            "url": self.pl_url.get().strip(),
+            "keyword": self.pl_kw.get().strip(),
+            "count": int(cv) if cv.isdigit() else 25,
+            "set_name": ("" if self.pl_set.get() in ("—", "")
+                         else self.pl_set.get()),
+            "transcript_mode": self.pl_tmode.get(),
+            "folder": self.pl_folder.get().strip(),
+            "save_video": self.plv.get(), "save_audio": self.pla.get(),
+            "save_desc": self.pld.get(), "save_comments": self.plc.get(),
+        }
+
+    def _clear_playlist_form(self):
+        self.pl_url.set(""); self.pl_kw.set(""); self.pl_folder.set("")
+        self.pl_count.set("25"); self.pl_set.set("—")
+        self.pl_tmode.set("Whisper (accurate)")
+        for v in (self.plv, self.pla, self.pld, self.plc):
+            v.set(False)
+
+    def _add_playlist(self):
+        data = self._form_data_playlist()
+        if not data["url"]:
+            self._set_status("Paste a playlist URL first."); return
+        if self._editing_playlist:
+            watcher.update_channel(self._editing_playlist, data)
+            self._cancel_playlist_edit()
+            self._refresh()
+            self._goto_list()
+            self._set_status("Playlist updated.")
+            return
+        watcher.add_channel(data)
+        self._clear_playlist_form()
+        self._refresh()
+        self._goto_list()
+        self._set_status("Playlist added. Use 'Check now' to pull its videos.")
+
+    def _edit_playlist(self, ch):
+        try:
+            self._nb.select(self._tab_add)
+            self._subnb.select(self._tab_playlist)
+        except Exception:
+            pass
+        self._editing_playlist = ch.get("id")
+        self.pl_url.set(ch.get("url", ""))
+        self.pl_kw.set(ch.get("keyword", ""))
+        self.pl_folder.set(ch.get("folder", ""))
+        self.pl_count.set(str(ch.get("count", 25)))
+        self.pl_set.set(ch.get("set_name") or "—")
+        self.pl_tmode.set(ch.get("transcript_mode") or "Whisper (accurate)")
+        self.plv.set(ch.get("save_video", False))
+        self.pla.set(ch.get("save_audio", False))
+        self.pld.set(ch.get("save_desc", False))
+        self.plc.set(ch.get("save_comments", False))
+        self.pl_form_lbl.configure(text="Edit playlist")
+        self.add_playlist_btn.configure(text="✔ Save changes")
+        self.cancel_playlist_btn.pack(side="left", padx=8)
+        self._set_status("Editing playlist — change anything, then Save changes.")
+
+    def _cancel_playlist_edit(self):
+        self._editing_playlist = None
+        self.pl_form_lbl.configure(text="Add a playlist")
+        self.add_playlist_btn.configure(text="＋ Add playlist")
+        self.cancel_playlist_btn.pack_forget()
+        self._clear_playlist_form()
 
     # ---------- search sources ----------
     def _search_types(self):
