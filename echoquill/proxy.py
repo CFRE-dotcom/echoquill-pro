@@ -91,7 +91,7 @@ def _verify(cfg, port, timeout=30):
     """Check the exit IP THROUGH this exact sticky port. (ok, ip, geo, org, msg)."""
     url = _url(cfg, port)
     if not url:
-        return (False, "", "", "", "enter your DataImpulse username and password first")
+        return (False, "", "", "", "", "enter your DataImpulse username and password first")
     import yt_dlp
     ydl = yt_dlp.YoutubeDL({"proxy": url, "quiet": True, "no_warnings": True,
                             "socket_timeout": timeout})
@@ -99,10 +99,10 @@ def _verify(cfg, port, timeout=30):
         ip = ydl.urlopen("https://api.ipify.org").read().decode(
             "utf-8", "ignore").strip()
     except Exception as e:
-        return (False, "", "", "", f"{str(e)[:110]}")
+        return (False, "", "", "", "", f"{str(e)[:110]}")
     if not ip or " " in ip or len(ip) > 45:
-        return (False, "", "", "", "no exit IP returned")
-    geo = org = ""
+        return (False, "", "", "", "", "no exit IP returned")
+    geo = org = country = ""
     try:
         import json
         j = json.loads(ydl.urlopen("https://ipinfo.io/json").read().decode(
@@ -110,9 +110,10 @@ def _verify(cfg, port, timeout=30):
         geo = ", ".join(x for x in (j.get("city"), j.get("region"),
                                     j.get("country")) if x)
         org = (j.get("org") or "").strip()
+        country = (j.get("country") or "").strip().upper()
     except Exception:
         pass
-    return (True, ip, geo, org, "ok")
+    return (True, ip, geo, org, country, "ok")
 
 
 def test(cfg, timeout=45):
@@ -120,9 +121,13 @@ def test(cfg, timeout=45):
     if not (((cfg or {}).get("di_base_username")) and (cfg or {}).get("di_password")):
         return (False, "Enter your DataImpulse username and password first.")
     port = random.randint(STICKY_MIN, STICKY_MAX)
-    ok, ip, geo, org, msg = _verify(cfg, port, timeout)
+    ok, ip, geo, org, country, msg = _verify(cfg, port, timeout)
     if not ok:
         return (False, f"Proxy failed: {msg}")
+    want_cc = ((cfg or {}).get("di_country") or "us").strip().upper()
+    if want_cc and country and country != want_cc:
+        return (False, f"Got a {country} IP ({ip}), wanted {want_cc}. "
+                "Try Test again — it will keep rotating to a matching country.")
     mode = "mobile" if cfg.get("di_mobile", False) else "residential"
     return (True, f"Works ✓  {ip}" + (f"  ·  {geo}" if geo else "")
             + f"  ·  {mode}" + (f"  ·  {org}" if org else ""))
@@ -153,13 +158,20 @@ def acquire_verified(cfg, tries=3, log=lambda s: None, timeout=30):
     tries = max(1, int(tries or 3))
     clear_active_port()
     mode = "mobile" if (cfg or {}).get("di_mobile", False) else "residential"
+    want_cc = ((cfg or {}).get("di_country") or "us").strip().upper()
     for attempt in range(1, tries + 1):
         log(f"    [IP {attempt}/{tries}] clearing cache before firing a new IP…")
         clear_cache()
         port = random.randint(STICKY_MIN, STICKY_MAX)
         log(f"    [IP {attempt}/{tries}] firing a new {mode} IP…")
         log(f"    [IP {attempt}/{tries}] verifying exit IP…")
-        ok, ip, geo, org, msg = _verify(cfg, port, timeout)
+        ok, ip, geo, org, country, msg = _verify(cfg, port, timeout)
+        if ok and want_cc and country and country != want_cc:
+            # cr.<country> occasionally leaks another country - reject + rotate
+            log(f"    [IP {attempt}/{tries}] got {country} (wanted {want_cc}) — "
+                f"rejecting and rotating: {ip}"
+                f"{'  ·  ' + geo if geo else ''}")
+            continue
         if ok:
             set_active_port(port)
             log(f"    [IP {attempt}/{tries}] verified ✓  {ip}"
