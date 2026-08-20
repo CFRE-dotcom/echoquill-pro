@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.35.3  (2026-08-13)
+    Fix "The page needs to be reloaded" YouTube errors. Root cause: the app shipped a yt-dlp auto-updater (to keep the video engine current with YouTube) but it was NEVER called - so the app was frozen on the bundled yt-dlp and broke when YouTube changed. The updater now runs at startup: it activates any newer yt-dlp already downloaded and fetches the latest in the background (checked ~every 12h). This is NOT caused by the tab-rename or country-check updates - those don't touch downloading. Also note: the "Could not copy Chrome cookie database" errors mean Chrome was open (locked cookie DB) - use an exported cookies.txt file instead of live-browser cookies so it works with Chrome running.
+
 v2.35.2  (2026-08-13)
     Enforce the country on the exit IP. Removing the bad "sessid" param (2.32.8) fixed most of it, but DataImpulse's cr.us occasionally still leaks a non-US IP (that AS40403 UK provider). The verify step now checks the exit IP's actual country via ipinfo and REJECTS + rotates any IP whose country doesn't match your setting (US by default) - so a GB/Scotland IP gets tossed and it fires a new one until it gets a real US IP. The Test button reports it too. (Puerto Rico still counts as US - it's a US territory - so it won't be rejected.)
 

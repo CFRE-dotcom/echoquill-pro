@@ -743,6 +743,17 @@ def main():
         except Exception:
             pass
         return
+    # Keep the video engine (yt-dlp) current with YouTube. The bundled version
+    # falls behind and breaks with errors like "The page needs to be reloaded";
+    # activate any newer copy now, and fetch the newest in the background.
+    try:
+        from . import ytdlp_updater
+        ytdlp_updater.activate()
+        threading.Thread(
+            target=lambda: (ytdlp_updater.ensure(), ytdlp_updater.activate()),
+            daemon=True).start()
+    except Exception:
+        pass
     App().run()
 
 
