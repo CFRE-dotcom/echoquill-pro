@@ -115,14 +115,8 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
     # Optional: pull videos that require you to be logged in, using the cookies
     # from your browser (Settings > Transcription > "Sign in via browser").
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf          # exported cookies.txt (most reliable)
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     _apply_proxy(opts, cfg)
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -188,14 +182,8 @@ def fetch_captions(url, cfg, langs=("en", "en-US", "en-GB", "en-orig")):
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     _apply_proxy(opts, cfg)
     title = ""
     try:
@@ -230,14 +218,8 @@ def _video_comments(url, cfg, max_total=200):
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     _apply_proxy(opts, cfg)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -277,14 +259,8 @@ def _video_description(url, cfg):
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     _apply_proxy(opts, cfg)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -343,14 +319,8 @@ def _media_opts(url, cfg, tmpl, fmt):
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf          # exported cookies.txt (most reliable)
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     _apply_proxy(opts, cfg)
     return opts
 

@@ -192,14 +192,8 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
             "skip_download": True, "playlistend": pull}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
     from urllib.parse import quote
@@ -266,14 +260,8 @@ def fetch_playlist(url, limit, cfg):
     if limit:
         opts["playlistend"] = int(limit)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
     try:
@@ -313,14 +301,8 @@ def fetch_channel(channel, kind, limit, cfg):
     if limit:
         opts["playlistend"] = int(limit)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -352,14 +334,8 @@ def fetch_search(query, n, cfg):
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
             "skip_download": True}
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
-    br = ((cfg or {}).get("yt_cookies_browser", "") or "").strip().lower()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
-    elif br:
-        try:
-            opts["cookiesfrombrowser"] = (br,)
-        except Exception:
-            pass
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
     target = f"ytsearch{int(n)}:{query}"
