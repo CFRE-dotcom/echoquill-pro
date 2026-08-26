@@ -61,8 +61,9 @@ def normalize_folder(s):
     return "\\".join(x for x in segs if x)
 
 
-def resolve_folder(cfg, raw):
-    """Return an existing directory for this line's folder field (created)."""
+def resolve_folder(cfg, raw, create=True):
+    """Return the directory for this line's folder field. Created unless
+    create=False (peek at a path without making an empty folder)."""
     from .media_gui import transcripts_dir
     raw = (raw or "").strip().strip('"')
     if not raw:
@@ -77,7 +78,8 @@ def resolve_folder(cfg, raw):
         rel = [normalize_name(x) for x in _segments(raw)]
         rel = [x for x in rel if x]
         d = os.path.join(transcripts_dir(cfg), *rel) if rel else transcripts_dir(cfg)
-    os.makedirs(d, exist_ok=True)
+    if create:
+        os.makedirs(d, exist_ok=True)
     return d
 
 

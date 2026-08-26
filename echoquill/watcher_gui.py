@@ -128,6 +128,7 @@ class WatcherWindow:
         _lbsb.pack(side="right", fill="y")
         self.lb.pack(side="left", fill="both", expand=True)
         self.lb.bind("<Double-Button-1>", self._edit_selected)
+        self.lb.bind("<Button-3>", self._on_right_click)
         self.lb.bind("<Motion>", self._hover)
         self.lb.bind("<Leave>", lambda _e: self._hide_tip())
         lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 4))
@@ -700,6 +701,49 @@ class WatcherWindow:
         self._refresh()
         self._goto_list()
         self._set_status("Channel added. Use 'Check now' to pull its latest.")
+
+    def _on_right_click(self, e):
+        """Right-click a row -> context menu with Open folder."""
+        try:
+            idx = self.lb.nearest(e.y)
+        except Exception:
+            return
+        if idx < 0 or idx >= len(getattr(self, "_chan_ids", [])):
+            return
+        self.lb.selection_clear(0, "end")
+        self.lb.selection_set(idx)
+        self.lb.activate(idx)
+        cid = self._chan_ids[idx]
+        m = tk.Menu(self.lb, tearoff=0)
+        m.add_command(label="Open folder",
+                      command=lambda: self._open_folder(cid))
+        try:
+            m.tk_popup(e.x_root, e.y_root)
+        finally:
+            m.grab_release()
+
+    def _open_folder(self, cid):
+        """Open this source's Transcriptions folder in File Explorer."""
+        import os
+        d = watcher.load()
+        ch = next((c for c in d["channels"] if c.get("id") == cid), None)
+        if not ch:
+            return
+        from . import auto_batch
+        path = auto_batch.resolve_folder(self.cfg, ch.get("folder", ""),
+                                         create=False)
+        has_files = False
+        try:
+            has_files = os.path.isdir(path) and any(os.scandir(path))
+        except Exception:
+            has_files = False
+        if not has_files:
+            messagebox.showinfo("EchoQuill", "Nothing saved yet.")
+            return
+        try:
+            os.startfile(path)
+        except Exception as ex:
+            messagebox.showinfo("EchoQuill", f"Could not open folder:\n{ex}")
 
     def _edit_selected(self, _e=None):
         sel = self.lb.curselection()
