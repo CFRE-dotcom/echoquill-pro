@@ -597,9 +597,14 @@ class WatcherWindow:
                                + off + tail)
             self._chan_ids.append(ch.get("id"))
         c = watcher.counts()
+        in_queue = c['done'] + c['pending'] + c['failed'] + c['unavailable']
+        sep = "   \u2503   "   # heavy vertical bar
         self.status.configure(text=(
-            f"{c['channels']} channels · queue: {c['done']} done · "
-            f"{c['pending']} pending · {c['failed']} retrying · "
+            f"{c['channels']} channels" + sep +
+            f"{in_queue} in queue" + sep +
+            f"{c['done']} done" + sep +
+            f"{c['pending']} pending" + sep +
+            f"{c['failed']} retrying" + sep +
             f"{c['unavailable']} unavailable"))
 
     # ---------- hover tooltip ----------
