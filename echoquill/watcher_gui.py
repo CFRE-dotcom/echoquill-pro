@@ -117,10 +117,20 @@ class WatcherWindow:
 
     # ================= tab builders =================
     def _build_list_tab(self, f):
-        ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
+        hdr = ttk.Frame(f); hdr.pack(fill="x", padx=8, pady=(8, 2))
+        ttk.Label(hdr, style="Dim.TLabel", wraplength=520, text=(
             "Channels and topic-searches you watch. Double-click a row to edit "
             "it (opens the Add tab) · hover for stats.")).pack(
-            anchor="w", padx=8, pady=(8, 2))
+            side="left", anchor="w")
+        self._sort_labels = ["Most recent", "Order added", "Name A-Z",
+                             "Type", "Set", "Most videos", "Active first"]
+        self.sort_var = tk.StringVar(
+            value=self.cfg.get("watch_list_sort", "Most recent"))
+        _som = ttk.OptionMenu(hdr, self.sort_var, self.sort_var.get(),
+                              *self._sort_labels, command=self._on_sort_change)
+        _som.pack(side="right")
+        helptip.tip(_som, "Reorder the list view only (does not change "
+                    "processing order). Most recent = newest download on top.")
         lbf = ttk.Frame(f); lbf.pack(fill="both", expand=True, padx=8, pady=(0, 4))
         self.lb = theme.dark_listbox(lbf, height=8)
         _lbsb = ttk.Scrollbar(lbf, orient="vertical", command=self.lb.yview)
@@ -544,7 +554,7 @@ class WatcherWindow:
         d = watcher.load()
         self.lb.delete(0, "end")
         self._chan_ids = []
-        for ch in d["channels"]:
+        for ch in self._sort_channels(d["channels"]):
             stx = watcher.stats(ch.get("id"))
             tail = " · ✓" + str(stx["done"])
             if stx["last7"]:
@@ -701,6 +711,47 @@ class WatcherWindow:
         self._refresh()
         self._goto_list()
         self._set_status("Channel added. Use 'Check now' to pull its latest.")
+
+    def _chan_name(self, ch):
+        if ch.get("kind") == "search":
+            return (ch.get("query") or "").lower()
+        return (ch.get("url") or "").lower()
+
+    def _sort_channels(self, channels):
+        mode = self.sort_var.get() if getattr(self, "sort_var", None) \
+            else "Most recent"
+        chans = list(channels)
+        if mode == "Order added":
+            return chans
+        st = lambda c: watcher.stats(c.get("id"))
+        if mode == "Most recent":
+            chans.sort(key=lambda c: st(c)["last"], reverse=True)
+        elif mode == "Name A-Z":
+            chans.sort(key=self._chan_name)
+        elif mode == "Type":
+            order = {"channel": 0, "search": 1, "playlist": 2}
+            chans.sort(key=lambda c: (order.get(c.get("kind", "channel"), 3),
+                                      self._chan_name(c)))
+        elif mode == "Set":
+            chans.sort(key=lambda c: ((c.get("set_name") or "~").lower(),
+                                      self._chan_name(c)))
+        elif mode == "Most videos":
+            chans.sort(key=lambda c: st(c)["done"], reverse=True)
+        elif mode == "Active first":
+            def act(c):
+                on = bool(c.get("enabled", True)) and not c.get("expired")
+                return (0 if on else 1, -st(c)["last"])
+            chans.sort(key=act)
+        return chans
+
+    def _on_sort_change(self, _v=None):
+        try:
+            from . import config as _c
+            self.cfg["watch_list_sort"] = self.sort_var.get()
+            _c.save(self.cfg)
+        except Exception:
+            pass
+        self._refresh()
 
     def _on_right_click(self, e):
         """Right-click a row -> context menu with Open folder."""

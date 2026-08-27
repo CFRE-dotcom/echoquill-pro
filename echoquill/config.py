@@ -257,6 +257,7 @@ DEFAULTS = {
     "command_prefix": "computer",
     # Where batch video transcripts are saved
     "transcripts_dir": "",
+    "watch_list_sort": "Most recent",
     # Pro license (key is stored DPAPI-encrypted, like the API key)
     "pro_license_key": "",
     "pro_instance_id": "",
