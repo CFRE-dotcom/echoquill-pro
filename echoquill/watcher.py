@@ -485,7 +485,14 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
         d = load()
         processed = 0
         ordered = _due_order(cfg, d)       # focus-first, then fair/order/random
-        n_total = min(len(ordered), per_cycle) if per_cycle else len(ordered)
+        _now = time.time()
+        retry_cands = [x for x in d["queue"]
+                       if x.get("save_video") and x.get("video_needed")
+                       and x.get("status") == "done"
+                       and x.get("video_next_try", 0) <= _now]
+        n_total = len(ordered) + len(retry_cands)
+        if per_cycle:
+            n_total = min(n_total, per_cycle)
         for item in ordered:
             if cancel():
                 break

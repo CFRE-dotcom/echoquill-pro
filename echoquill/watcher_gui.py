@@ -597,7 +597,7 @@ class WatcherWindow:
                                + off + tail)
             self._chan_ids.append(ch.get("id"))
         c = watcher.counts()
-        in_queue = c['done'] + c['pending'] + c['failed'] + c['unavailable']
+        in_queue = c['pending'] + c['failed']   # still to process
         sep = "   \u2503   "   # heavy vertical bar
         self.status.configure(text=(
             f"{c['channels']} channels" + sep +
