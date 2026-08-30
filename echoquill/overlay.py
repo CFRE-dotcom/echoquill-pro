@@ -92,6 +92,7 @@ class Overlay:
         self._levels = deque([0.0] * N_BARS, maxlen=N_BARS)
         self._smooth = 0.0
         self._badge = False
+        self._done = False
         self._cur_w = 0
 
     # ---------- window ----------
@@ -207,6 +208,27 @@ class Overlay:
         except Exception:
             pass
 
+    def _draw_done(self):
+        """A small green dot (top-left) meaning a research project finished."""
+        if not getattr(self, "_done", False):
+            return
+        try:
+            r = 6
+            self.canvas.create_oval(8, 4, 8 + 2 * r, 4 + 2 * r,
+                                    fill="#28c840", outline="#0a3a12",
+                                    tags="donedot")
+        except Exception:
+            pass
+
+    def set_done(self, on):
+        self._done = bool(on)
+        try:
+            self._ensure()
+            self.canvas.delete("donedot")
+            self._draw_done()
+        except Exception:
+            pass
+
     def _draw_pill(self, w, h, fill=BG, outline="#3a3a3c"):
         self.canvas.delete("all")
         try:
@@ -223,6 +245,7 @@ class Overlay:
         self.canvas.create_text(w / 2, h / 2, text=self.idle_text,
                                 fill="#ffffff", font=("Segoe UI Emoji", 13))
         self._draw_badge()
+        self._draw_done()
 
     def _draw_live(self):
         w, h = self.LIVE_W, self.LIVE_H

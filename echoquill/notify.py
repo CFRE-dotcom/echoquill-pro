@@ -7,6 +7,7 @@ registers a handler on startup; anything can call notify.send(title, msg).
 
 _HANDLER = None
 _BADGE = None
+_DONE = None
 
 
 def set_handler(fn):
@@ -32,6 +33,22 @@ def set_badge_handler(fn):
 def badge(on):
     """Turn the 'new results' dot on the pill + tray on or off."""
     fn = _BADGE
+    if not fn:
+        return
+    try:
+        fn(bool(on))
+    except Exception:
+        pass
+
+
+def set_done_handler(fn):
+    global _DONE
+    _DONE = fn
+
+
+def done(on=True):
+    """Turn the green 'research complete' dot on the pill on or off."""
+    fn = _DONE
     if not fn:
         return
     try:

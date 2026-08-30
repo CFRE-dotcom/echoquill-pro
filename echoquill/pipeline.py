@@ -74,7 +74,7 @@ def retry_video_only(cfg, item, log=lambda s: None, cancel=lambda: False,
 
 
 def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
-                  progress=lambda ph: None):
+                  progress=lambda ph: None, sink=None):
     """Run one video end-to-end. When the proxy is on and YouTube bot-blocks a
     download, rotate to a fresh verified IP and retry - up to di_verify_tries
     IPs - before giving up. Returns (status, message)."""
@@ -105,7 +105,7 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
                 return ("failed", f"proxy: no live IP after {tries} tries - "
                         "paused, will retry next cycle")
         try:
-            status, msg = _do_video(cfg, item, dest, log, cancel, progress)
+            status, msg = _do_video(cfg, item, dest, log, cancel, progress, sink)
         finally:
             if proxy_on:
                 proxy.clear_active_port()
@@ -120,7 +120,7 @@ def process_video(cfg, item, log=lambda s: None, cancel=lambda: False,
 
 
 def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
-              progress=lambda ph: None):
+              progress=lambda ph: None, sink=None):
     """One download+transcribe pass on the CURRENTLY pinned proxy IP (if any).
     Returns (status, message)."""
     import os
@@ -226,6 +226,14 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
         tpath = _unique_path(os.path.join(dest, safe_filename(dname)))
         with open(tpath, "w", encoding="utf-8") as f:
             f.write(f"{name}\n{url}\n\n{body}")
+        if sink is not None:
+            try:
+                sink({"name": name, "url": url, "segs": list(segs),
+                      "text": text,
+                      "desc": (desc if item.get("save_desc") else ""),
+                      "path": tpath})
+            except Exception:
+                pass
 
         if item.get("save_comments"):
             progress("Saving comments")

@@ -177,6 +177,13 @@ class App:
             pass
         self._set_tray_badge(on)
 
+    def _set_done(self, on):
+        """Show/clear the green 'research complete' dot on the pill."""
+        try:
+            self.overlay.set_done(on)
+        except Exception:
+            pass
+
     def _tray_thread(self):
         try:
             import pystray
@@ -215,6 +222,7 @@ class App:
         self.root.after(120000, self._watcher_tick)   # first channel check ~2 min in
         notify.set_handler(self._notify)
         notify.set_badge_handler(self._set_new_results)
+        notify.set_done_handler(self._set_done)
         self.root.mainloop()
 
     def _notify(self, title, msg):
