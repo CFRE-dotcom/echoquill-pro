@@ -357,7 +357,7 @@ def fetch_search(query, n, cfg):
 
 
 class AutoBatchWindow:
-    def __init__(self, parent, cfg):
+    def __init__(self, parent, cfg, research=False):
         self.cfg = cfg
         self._cancel = False
         self._busy = False
@@ -377,8 +377,10 @@ class AutoBatchWindow:
 
         nb = ttk.Notebook(self.win)
         nb.pack(fill="both", expand=True, padx=12, pady=(6, 4))
+        self._nb = nb
         tab_build = ttk.Frame(nb)
         tab_run = ttk.Frame(nb)
+        self._tab_run = tab_run
         nb.add(tab_build, text="  Build list  ")
         nb.add(tab_run, text="  Run options  ")
 
@@ -527,6 +529,13 @@ class AutoBatchWindow:
         self.log = theme.dark_text(self.win, wrap="word", height=8)
         self.log.pack(fill="x", padx=18, pady=(2, 12))
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+        if research:
+            try:
+                self.research_on.set(True)
+                self._toggle_research()
+                self._nb.select(self._tab_run)
+            except Exception:
+                pass
         self.win.transient(parent)
         self.win.lift()
         self.win.focus_force()

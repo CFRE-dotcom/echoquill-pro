@@ -483,6 +483,8 @@ class MediaWindow:
                    command=self._open_batch); _b_batch.pack(side="left", padx=8)
         _b_auto = ttk.Button(row2, text="Auto-batch + Ask AI…",
                    command=self._open_autobatch); _b_auto.pack(side="left", padx=8)
+        _b_rez = ttk.Button(row2, text="Research project…",
+                   command=self._open_research); _b_rez.pack(side="left", padx=8)
         helptip.tip(_b_auto, "Paste many URLs, each with an optional title and "
                     "folder; every video is downloaded and saved, transcribed, "
                     "then run through a saved question set - all automatic.")
@@ -575,6 +577,10 @@ class MediaWindow:
     def _open_autobatch(self):
         from .auto_batch import AutoBatchWindow
         AutoBatchWindow(self.win, self.cfg)
+
+    def _open_research(self):
+        from .auto_batch import AutoBatchWindow
+        AutoBatchWindow(self.win, self.cfg, research=True)
 
     def _go_url(self):
         url = normalize_url(self.url_var.get())

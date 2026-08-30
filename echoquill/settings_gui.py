@@ -16,7 +16,7 @@ class SettingsWindow:
     SECTIONS = ["General", "AI Enhancement", "Clipboard", "Dictation",
                 "Dictionary", "Meeting", "Read aloud", "Transcription",
                 "History", "Stats", "License", "Help", "Feedback", "About",
-                "Channel watcher",
+                "Channel watcher", "Research project",
                 "What\u2019s New"]
 
     def __init__(self, root: tk.Tk, cfg: dict, dictionary, on_save,
@@ -87,7 +87,8 @@ class SettingsWindow:
                     "Feedback": self._build_feedback,
                     "About": self._build_about,
                     "What\u2019s New": self._build_whatsnew,
-                    "Channel watcher": self._build_channel_watcher}
+                    "Channel watcher": self._build_channel_watcher,
+                    "Research project": self._build_research}
 
         def _mk(parent, name):
             if name in _noscroll:
@@ -104,6 +105,7 @@ class SettingsWindow:
             ("Dictation", ["Dictation", "Dictionary", "Clipboard"]),
             ("Transcription", ["Transcription"]),
             ("Channel watcher", ["Channel watcher"]),
+            ("Research", ["Research project"]),
             ("AI", ["AI Enhancement"]),
             ("Meeting", ["Meeting"]),
             ("Read aloud", ["Read aloud"]),
@@ -232,6 +234,28 @@ class SettingsWindow:
             from tkinter import messagebox
             messagebox.showerror(
                 "Channel watcher", f"Couldn't open the watcher:\n\n{e}")
+
+    def _build_research(self, f):
+        self._title(f, "Research project",
+                    "Download + transcribe a set of videos into one titled "
+                    "folder, then answer your whole question set across ALL of "
+                    "them in a single clickable HTML report with citations.")
+        ttk.Label(f, style="Dim.TLabel", wraplength=460, text=(
+            "Opens Auto-batch with research mode on: build your video list "
+            "(YouTube search or channel), name the project, add your questions, "
+            "then Start. Needs AI Enhancement set up. Pro only.")).pack(
+            anchor="w", pady=(0, 14))
+        ttk.Button(f, text="Open Research project", style="Accent.TButton",
+                   command=self._open_research).pack(anchor="w")
+
+    def _open_research(self):
+        try:
+            from .auto_batch import AutoBatchWindow
+            AutoBatchWindow(self.win, self.cfg, research=True)
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Research project", f"Couldn't open Research:\n\n{e}")
 
     def _build_general(self, f):
         self._title(f, "General", "How you start dictating and where text goes.")

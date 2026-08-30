@@ -61,6 +61,7 @@ class App:
             on_meeting=lambda: self.events.put("meeting"),
             on_read_aloud=lambda: self.events.put("read_aloud"),
             on_watch=lambda: self.events.put("watch"),
+            on_research=lambda: self.events.put("research"),
             level_provider=lambda: (self.recorder.level if self.recorder else 0.0),
         )
 
@@ -178,11 +179,17 @@ class App:
         self._set_tray_badge(on)
 
     def _set_done(self, on):
-        """Show/clear the green 'research complete' dot on the pill."""
+        """Show/clear the green 'research complete' dot on the pill.
+        Marshalled to the Tk thread (callers may be worker threads)."""
+        def _do():
+            try:
+                self.overlay.set_done(on)
+            except Exception:
+                pass
         try:
-            self.overlay.set_done(on)
+            self.root.after(0, _do)
         except Exception:
-            pass
+            _do()
 
     def _tray_thread(self):
         try:
@@ -198,6 +205,7 @@ class App:
                 pystray.MenuItem("Voice command", lambda: self.events.put("toggle_command")),
                 pystray.MenuItem("Transcribe video / URL", lambda: self.events.put("media")),
                 pystray.MenuItem("Channel watcher…", lambda: self.events.put("watch")),
+                pystray.MenuItem("Research project…", lambda: self.events.put("research")),
                 pystray.MenuItem("Settings…", lambda: self.events.put("settings")),
                 pystray.MenuItem("Meeting / Record", lambda: self.events.put("meeting")),
                 pystray.MenuItem("Read aloud (Text-to-speech)", lambda: self.events.put("read_aloud")),
@@ -359,6 +367,12 @@ class App:
         elif ev == "media":
             from .media_gui import MediaWindow
             MediaWindow(self.root, self.transcriber, self.cfg)
+        elif ev == "research":
+            try:
+                from .auto_batch import AutoBatchWindow
+                AutoBatchWindow(self.root, self.cfg, research=True)
+            except Exception as e:
+                self._log_crash("open research", e)
         elif ev == "read_aloud":
             from .tts_gui import ReadAloudWindow
             ReadAloudWindow(self.root, self.cfg)
