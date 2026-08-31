@@ -538,6 +538,8 @@ class AutoBatchWindow:
                 pass
         self.win.transient(parent)
         self.win.lift()
+        self.win.attributes("-topmost", True)
+        self.win.after(500, lambda: self.win.attributes("-topmost", False))
         self.win.focus_force()
 
     # ---------- helpers ----------

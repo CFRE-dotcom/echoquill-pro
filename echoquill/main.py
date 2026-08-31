@@ -373,6 +373,13 @@ class App:
                 AutoBatchWindow(self.root, self.cfg, research=True)
             except Exception as e:
                 self._log_crash("open research", e)
+                try:
+                    from tkinter import messagebox
+                    messagebox.showerror(
+                        "Research project",
+                        f"Couldn't open Research project:\n\n{e}")
+                except Exception:
+                    pass
         elif ev == "read_aloud":
             from .tts_gui import ReadAloudWindow
             ReadAloudWindow(self.root, self.cfg)
