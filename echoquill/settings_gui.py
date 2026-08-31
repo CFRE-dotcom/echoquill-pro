@@ -2115,12 +2115,27 @@ class SettingsWindow:
                 if ollama_native:
                     root = base[:-4] if base.endswith("/api") else base
                     hdr = {"Authorization": f"Bearer {key}"} if key else {}
-                    r = requests.get(root + "/api/tags", headers=hdr,
-                                     timeout=30)
-                    r.raise_for_status()
-                    data = r.json()
-                    ids = sorted({m.get("name") for m in
-                                  (data.get("models") or []) if m.get("name")})
+                    ids, last = [], ""
+                    for url, kind in ((root + "/api/tags", "tags"),
+                                      (root + "/v1/models", "models")):
+                        try:
+                            r = requests.get(url, headers=hdr, timeout=30)
+                            r.raise_for_status()
+                            data = r.json()
+                            if kind == "tags":
+                                ids = sorted({m.get("name") for m in
+                                              (data.get("models") or [])
+                                              if m.get("name")})
+                            else:
+                                its = data.get("data") or data.get("models") or []
+                                ids = sorted({m.get("id") for m in its
+                                              if m.get("id")})
+                            if ids:
+                                break
+                        except Exception as ex:
+                            last = str(ex)
+                    if not ids and last:
+                        raise Exception(last)
                 else:
                     if "anthropic.com" in base and key:
                         hdr = {"x-api-key": key,

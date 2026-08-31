@@ -942,7 +942,8 @@ class AutoBatchGrid:
         ttk.Label(chrow, text="Add from:").pack(side="left")
         self.source_var = tk.StringVar(value="YouTube channel")
         _srcm = ttk.OptionMenu(chrow, self.source_var, "YouTube channel",
-                       "YouTube channel", "Search YouTube")
+                       "YouTube channel", "Search YouTube",
+                       command=self._on_source_change)
         _srcm.pack(side="left", padx=(6, 6))
         helptip.tip(_srcm, "Add videos from a channel/@handle, or from a "
                     "YouTube search.")
@@ -962,18 +963,29 @@ class AutoBatchGrid:
         chrow2.pack(fill="x", padx=16, pady=(0, 2))
         ttk.Label(chrow2, text="Type:").pack(side="left")
         self.kind_var = tk.StringVar(value="Videos")
-        ttk.OptionMenu(chrow2, self.kind_var, "Videos", "Videos", "Shorts",
-                       "Lives", "All").pack(side="left", padx=(4, 12))
-        ttk.Label(chrow2, text="Keyword:").pack(side="left")
+        _kindm = ttk.OptionMenu(chrow2, self.kind_var, "Videos", "Videos",
+                       "Shorts", "Lives", "All")
+        _kindm.pack(side="left", padx=(4, 12))
+        helptip.tip(_kindm, "Which uploads to list (channel mode): Videos, "
+                    "Shorts, Lives, or All.")
+        self._kw_frame = ttk.Frame(chrow2)
+        ttk.Label(self._kw_frame, text="Keyword:").pack(side="left")
         self.keyword_var = tk.StringVar()
-        tk.Entry(chrow2, textvariable=self.keyword_var, width=16, bg=theme.FIELD,
-                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=(4, 12))
-        ttk.Label(chrow2, text="How many:").pack(side="left")
+        _kwe = tk.Entry(self._kw_frame, textvariable=self.keyword_var, width=16,
+                 bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
+                 relief="solid", borderwidth=1)
+        _kwe.pack(side="left", padx=(4, 12))
+        helptip.tip(_kwe, "Channel mode only: keep only videos whose title "
+                    "contains this word. Hidden in search mode.")
+        self._kw_frame.pack(side="left")
+        self._hm_lbl = ttk.Label(chrow2, text="How many:")
+        self._hm_lbl.pack(side="left")
         self.count_var = tk.StringVar(value="10")
-        ttk.OptionMenu(chrow2, self.count_var, "10", "5", "10", "15", "All",
-                       "Other\u2026", command=self._count_pick).pack(
-                       side="left", padx=(4, 10))
+        _cntm = ttk.OptionMenu(chrow2, self.count_var, "10", "5", "10", "15",
+                       "All", "Other\u2026", command=self._count_pick)
+        _cntm.pack(side="left", padx=(4, 10))
+        helptip.tip(_cntm, "How many to fetch. 'All' pulls everything; "
+                    "'Other…' lets you type a number.")
         self.chan_status = ttk.Label(chrow2, style="Dim.TLabel", text="")
         self.chan_status.pack(side="left", padx=(6, 0))
 
@@ -1030,6 +1042,16 @@ class AutoBatchGrid:
         self._recount()
         self.status.configure(
             text=f"Applied '{folder}' to all {len(urls)} rows.")
+
+    def _on_source_change(self, *_):
+        """Hide the Keyword filter in Search mode (it only works for channels)."""
+        try:
+            if self.source_var.get().lower().startswith("search"):
+                self._kw_frame.pack_forget()
+            else:
+                self._kw_frame.pack(side="left", before=self._hm_lbl)
+        except Exception:
+            pass
 
     def _count_pick(self, v):
         if v == "Other\u2026":
