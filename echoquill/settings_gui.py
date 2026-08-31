@@ -35,8 +35,8 @@ class SettingsWindow:
         self.win.title("EchoQuill Settings")
         self.win.geometry("880x620")
         self.win.minsize(760, 540)
-        self.win.attributes("-topmost", True)
         theme.apply(self.win)
+        theme.bring_to_front(self.win)
 
         # ----- layout: native tabs (grouped) -----
         header = tk.Frame(self.win, bg=theme.PANEL)
@@ -148,11 +148,7 @@ class SettingsWindow:
         """Actually bring the window to the front (Windows fights this)."""
         try:
             self.win.deiconify()
-            self.win.lift()
-            self.win.attributes("-topmost", True)
-            self.win.focus_force()
-            # nudge Windows' foreground lock with a quick topmost pulse
-            self.win.after(150, lambda: self.win.attributes("-topmost", True))
+            theme.bring_to_front(self.win)
         except Exception:
             pass
 

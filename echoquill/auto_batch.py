@@ -537,10 +537,7 @@ class AutoBatchWindow:
             except Exception:
                 pass
         self.win.transient(parent)
-        self.win.lift()
-        self.win.attributes("-topmost", True)
-        self.win.after(500, lambda: self.win.attributes("-topmost", False))
-        self.win.focus_force()
+        theme.bring_to_front(self.win)
 
     # ---------- helpers ----------
     def _open_grid(self):
@@ -1093,8 +1090,7 @@ class AutoBatchGrid:
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16, pady=(0, 8))
         self.win.transient(parent)
-        self.win.lift()
-        self.win.focus_force()
+        theme.bring_to_front(self.win)
 
     def _apply_folder(self):
         """Take the first non-empty folder and put it on every URL row."""

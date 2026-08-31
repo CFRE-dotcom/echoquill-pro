@@ -108,10 +108,7 @@ class WatcherWindow:
         watcher.add_log_listener(self._log)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self.win.deiconify()
-        self.win.lift()
-        self.win.attributes("-topmost", True)
-        self.win.focus_force()
-        self.win.after(400, self._drop_topmost)
+        theme.bring_to_front(self.win)
         self._refresh()
         self._tick_monitor()
 

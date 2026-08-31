@@ -102,8 +102,7 @@ class QuestionsDialog:
             self._add(q)
         self._recount()
         self.win.transient(parent)
-        self.win.lift()
-        self.win.focus_force()
+        theme.bring_to_front(self.win)
 
     # ---------------------------------------------------------------- rows
     def _wheel(self, e):
@@ -220,8 +219,7 @@ class Picker:
         ttk.Button(bar, text="Cancel",
                    command=self.win.destroy).pack(side="right", padx=8)
         self.win.transient(parent)
-        self.win.lift()
-        self.win.focus_force()
+        theme.bring_to_front(self.win)
 
     def _pick(self):
         sel = self.lb.curselection()

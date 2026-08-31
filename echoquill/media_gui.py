@@ -421,7 +421,7 @@ class MediaWindow:
         self.win.title("EchoQuill — Transcribe video or audio")
         self.win.geometry("900x600")
         self.win.minsize(820, 520)
-        self.win.attributes("-topmost", True)
+        theme.bring_to_front(self.win)
         theme.apply(self.win)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -861,7 +861,7 @@ class BatchWindow:
         self.win.title("EchoQuill — Batch transcription")
         self.win.geometry("660x560")
         self.win.minsize(560, 480)
-        self.win.attributes("-topmost", True)
+        theme.bring_to_front(self.win)
         theme.apply(self.win)
 
         ttk.Label(self.win, text="Batch transcription",
@@ -1026,7 +1026,7 @@ class AskWindow:
         self.win.title("Ask AI — about this video")
         self.win.geometry("620x480")
         self.win.minsize(520, 400)
-        self.win.attributes("-topmost", True)
+        theme.bring_to_front(self.win)
         theme.apply(self.win)
 
         _ask_top = ttk.Frame(self.win); _ask_top.pack(fill="x", padx=18, pady=(14, 2))
