@@ -468,8 +468,11 @@ class MediaWindow:
         row = ttk.Frame(self.win)
         row.pack(fill="x", padx=18, pady=(12, 4))
         self.url_var = tk.StringVar()
-        ttk.Entry(row, textvariable=self.url_var).pack(
-            side="left", fill="x", expand=True)
+        _url_e = ttk.Entry(row, textvariable=self.url_var)
+        _url_e.pack(side="left", fill="x", expand=True)
+        helptip.tip(_url_e, "Paste a video or audio link — YouTube (incl. "
+                    "Shorts), TikTok, Vimeo, and ~1,800 sites. For Skool, paste "
+                    "the embedded or .m3u8 link.")
         _b_url = ttk.Button(row, text="Transcribe URL", style="Accent.TButton",
                    command=self._go_url); _b_url.pack(side="left", padx=(8, 0))
         helptip.tip(_b_url, "Download and transcribe the video/audio at this URL.")
@@ -485,6 +488,9 @@ class MediaWindow:
                    command=self._open_autobatch); _b_auto.pack(side="left", padx=8)
         _b_rez = ttk.Button(row2, text="Research project…",
                    command=self._open_research); _b_rez.pack(side="left", padx=8)
+        helptip.tip(_b_rez, "Find videos on a topic, ask your questions, and "
+                    "get one clickable report answered across all of them with "
+                    "citations.")
         helptip.tip(_b_auto, "Paste many URLs, each with an optional title and "
                     "folder; every video is downloaded and saved, transcribed, "
                     "then run through a saved question set - all automatic.")
@@ -537,7 +543,12 @@ class MediaWindow:
         se = ttk.Entry(keeprow, textvariable=self.search_var, width=28)
         se.pack(side="right", padx=6)
         se.bind("<KeyRelease>", lambda e: self._search())
-        ttk.Label(keeprow, text="Find in transcript:").pack(side="right")
+        helptip.tip(se, "Type a word or phrase to highlight every place it "
+                    "appears in the transcript, with timestamps.")
+        _fl = ttk.Label(keeprow, text="Find in transcript:")
+        _fl.pack(side="right")
+        helptip.tip(_fl, "Search the transcript above for a word or phrase and "
+                    "jump between matches.")
 
         self.out = theme.dark_text(self.win, wrap="word")
         self.out.pack(fill="both", expand=True, padx=18, pady=(8, 4))

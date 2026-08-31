@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox, simpledialog
 from . import config as cfgmod
 from . import history as historymod
 from . import theme
+from . import helptip
 
 
 class SettingsWindow:
@@ -512,6 +513,9 @@ class SettingsWindow:
             "normal - leave it in; it's just the cookies.txt format.")).pack(anchor="w")
         self.cookie_box = theme.dark_text(f, wrap="none", height=6)
         self.cookie_box.pack(fill="x", pady=(4, 4))
+        helptip.tip(self.cookie_box, "Paste the full cookies.txt here (exported "
+                    "while logged into YouTube/Skool). Lets EchoQuill download "
+                    "login-gated and age-restricted videos.")
         try:
             import os as _os
             _cfp = self.cfg.get("yt_cookies_file", "")
@@ -543,9 +547,13 @@ class SettingsWindow:
             self.cookie_box.delete("1.0", "end")
             self.cfg["yt_cookies_file"] = ""; _c.save(self.cfg)
             self.cookie_status.configure(text="Cleared")
-        ttk.Button(crow2, text="Save cookies", style="Accent.TButton",
-                   command=_save_cookies).pack(side="left")
-        ttk.Button(crow2, text="Clear", command=_clear_cookies).pack(side="left", padx=6)
+        _bsc = ttk.Button(crow2, text="Save cookies", style="Accent.TButton",
+                   command=_save_cookies); _bsc.pack(side="left")
+        helptip.tip(_bsc, "Save these cookies to a file EchoQuill uses for every "
+                    "download.")
+        _bcc = ttk.Button(crow2, text="Clear", command=_clear_cookies)
+        _bcc.pack(side="left", padx=6)
+        helptip.tip(_bcc, "Remove the saved cookies.")
         self.cookie_status.pack(side="left", padx=8)
 
 
@@ -1000,6 +1008,8 @@ class SettingsWindow:
         pv = ttk.Combobox(r, textvariable=self.ai_provider_var, width=42,
                           state="readonly", values=providers)
         pv.pack(side="left")
+        helptip.tip(pv, "Which AI service to use. Picking one fills in its "
+                    "default base URL and models.")
         self.ai_hint = ttk.Label(f, style="Dim.TLabel", wraplength=460)
         self.ai_hint.pack(anchor="w")
 
@@ -1008,10 +1018,16 @@ class SettingsWindow:
         self.ai_model_box = ttk.Combobox(r, textvariable=self.ai_model_var,
                                          width=30)   # editable: type any model
         self.ai_model_box.pack(side="left")
-        ttk.Button(r, text="↻ Refresh",
-                   command=self._ai_refresh_models).pack(side="left", padx=(6, 0))
-        ttk.Button(r, text="Test",
-                   command=self._ai_test).pack(side="left", padx=(6, 0))
+        helptip.tip(self.ai_model_box, "The model to use. Type one, or press "
+                    "Refresh to pull the live list from your provider.")
+        _brm = ttk.Button(r, text="↻ Refresh", command=self._ai_refresh_models)
+        _brm.pack(side="left", padx=(6, 0))
+        helptip.tip(_brm, "Ask the provider for its current model list and fill "
+                    "the dropdown (works with Ollama, OpenRouter, and more).")
+        _bts = ttk.Button(r, text="Test", command=self._ai_test)
+        _bts.pack(side="left", padx=(6, 0))
+        helptip.tip(_bts, "Send a tiny request to check your provider, key, and "
+                    "model actually work.")
         self.ai_test_status = ttk.Label(f, style="Dim.TLabel", wraplength=460)
         self.ai_test_status.pack(anchor="w")
 
@@ -1030,7 +1046,10 @@ class SettingsWindow:
 
         r = self._row(f, "API key")
         self.ai_key_var = tk.StringVar(value=self.cfg["ai_api_key"])
-        ttk.Entry(r, textvariable=self.ai_key_var, width=44, show="•").pack(side="left")
+        _ke = ttk.Entry(r, textvariable=self.ai_key_var, width=44, show="•")
+        _ke.pack(side="left")
+        helptip.tip(_ke, "Your API key from the provider. Stored locally; not "
+                    "needed for local Ollama.")
 
         self.ai_client_var = tk.StringVar(
             value=self.cfg.get("ai_oauth_client_id", ""))
@@ -1055,7 +1074,10 @@ class SettingsWindow:
 
         r = self._row(f, "API base URL")
         self.ai_url_var = tk.StringVar(value=self.cfg["ai_base_url"])
-        ttk.Entry(r, textvariable=self.ai_url_var, width=44).pack(side="left")
+        _ue = ttk.Entry(r, textvariable=self.ai_url_var, width=44)
+        _ue.pack(side="left")
+        helptip.tip(_ue, "The provider's API endpoint. Auto-filled when you "
+                    "pick a provider; only change it for a custom service.")
 
         def _provider_changed(_e=None, first=False):
             info = cfgmod.AI_PROVIDERS.get(self.ai_provider_var.get(), {})

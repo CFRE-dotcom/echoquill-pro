@@ -385,10 +385,13 @@ class AutoBatchWindow:
 
         # ---------- Build list tab ----------
         brow = ttk.Frame(tab_build); brow.pack(fill="x", padx=8, pady=(8, 2))
-        ttk.Button(brow, text="▦ Build from columns…",
-                   command=self._open_grid).pack(side="left")
-        ttk.Button(brow, text="⭱ Load .xlsx…",
-                   command=self._load_xlsx).pack(side="left", padx=6)
+        _bcol = ttk.Button(brow, text="▦ Build from columns…",
+                   command=self._open_grid); _bcol.pack(side="left")
+        helptip.tip(_bcol, "Open the column builder to paste or fetch a whole "
+                    "list of videos at once.")
+        _blx = ttk.Button(brow, text="⭱ Load .xlsx…",
+                   command=self._load_xlsx); _blx.pack(side="left", padx=6)
+        helptip.tip(_blx, "Load a previously saved video list (.xlsx).")
         ttk.Label(tab_build, style="Dim.TLabel", wraplength=720, text=(
             "One line per video:   URL | Title | folder\\subfolder      "
             "(Title and folder optional; blank title uses the video's own "
@@ -410,8 +413,9 @@ class AutoBatchWindow:
         self.setmenu.configure(width=24)
         self.setmenu.pack(side="left", padx=(6, 8))
         self._refresh_sets()
-        ttk.Button(opt, text="⚙ Manage sets…",
-                   command=self._manage_sets).pack(side="left", padx=(0, 12))
+        _bms = ttk.Button(opt, text="⚙ Manage sets…",
+                   command=self._manage_sets); _bms.pack(side="left", padx=(0, 12))
+        helptip.tip(_bms, "Create, edit, or delete saved question sets.")
         helptip.tip(self.setmenu, "The saved set of questions to ask every "
                     "video. Create sets in Ask AI → 'Ask several' → 'Save "
                     "checked as set'.")
@@ -432,10 +436,14 @@ class AutoBatchWindow:
         self.save_desc = tk.BooleanVar(value=False)
         saverow = ttk.Frame(tab_run)
         saverow.pack(fill="x", padx=8, pady=(8, 2))
-        ttk.Checkbutton(saverow, text="Save video",
-                        variable=self.save_video).pack(side="left")
-        ttk.Checkbutton(saverow, text="Save audio",
-                        variable=self.save_audio).pack(side="left", padx=(12, 0))
+        _svv = ttk.Checkbutton(saverow, text="Save video",
+                        variable=self.save_video); _svv.pack(side="left")
+        helptip.tip(_svv, "Also download and save each full video file.")
+        _sva = ttk.Checkbutton(saverow, text="Save audio",
+                        variable=self.save_audio)
+        _sva.pack(side="left", padx=(12, 0))
+        helptip.tip(_sva, "Also save each downloaded audio file next to its "
+                    "transcript.")
         _cbd = ttk.Checkbutton(saverow, text="Video Description",
                                variable=self.save_desc)
         _cbd.pack(side="left", padx=(12, 0))
@@ -454,14 +462,17 @@ class AutoBatchWindow:
         thr.pack(fill="x", padx=8, pady=(8, 2))
         ttk.Label(thr, text="Pause every").pack(side="left")
         self.thr_n = tk.StringVar(value="5")
-        tk.Entry(thr, textvariable=self.thr_n, width=4, bg=theme.FIELD,
+        _thrn = tk.Entry(thr, textvariable=self.thr_n, width=4, bg=theme.FIELD,
                  fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=4)
+                 borderwidth=1); _thrn.pack(side="left", padx=4)
+        helptip.tip(_thrn, "Pause after this many videos to free memory "
+                    "(0 = never pause).")
         ttk.Label(thr, text="videos for").pack(side="left")
         self.thr_s = tk.StringVar(value="60")
-        tk.Entry(thr, textvariable=self.thr_s, width=5, bg=theme.FIELD,
+        _thrs = tk.Entry(thr, textvariable=self.thr_s, width=5, bg=theme.FIELD,
                  fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=4)
+                 borderwidth=1); _thrs.pack(side="left", padx=4)
+        helptip.tip(_thrs, "How long each pause lasts, in seconds.")
         ttk.Label(thr, text="seconds   (0 = no pause; memory is released "
                   "during each pause)", style="Dim.TLabel").pack(side="left")
 
@@ -482,14 +493,21 @@ class AutoBatchWindow:
         self.start_btn = ttk.Button(bar, text="Start", style="Accent.TButton",
                                     command=self._start)
         self.start_btn.pack(side="left")
+        helptip.tip(self.start_btn, "Download, transcribe, and run the question "
+                    "set on every video in the list.")
         self.stop_btn = ttk.Button(bar, text="Stop", command=self._stop,
                                    state="disabled")
         self.stop_btn.pack(side="left", padx=8)
-        ttk.Button(bar, text="Clear all",
-                   command=self._clear_all).pack(side="left", padx=8)
-        ttk.Button(bar, text="Open folder",
-                   command=self._open_folder).pack(side="left", padx=8)
-        ttk.Button(bar, text="Close", command=self.win.destroy).pack(side="right")
+        helptip.tip(self.stop_btn, "Stop after the current video finishes.")
+        _bca = ttk.Button(bar, text="Clear all", command=self._clear_all)
+        _bca.pack(side="left", padx=8)
+        helptip.tip(_bca, "Empty the video list and the log.")
+        _bof = ttk.Button(bar, text="Open folder", command=self._open_folder)
+        _bof.pack(side="left", padx=8)
+        helptip.tip(_bof, "Open your Transcriptions folder in File Explorer.")
+        _bcl = ttk.Button(bar, text="Close", command=self.win.destroy)
+        _bcl.pack(side="right")
+        helptip.tip(_bcl, "Close this window.")
 
         self.status = ttk.Label(self.win, text="", style="Dim.TLabel")
         self.status.pack(anchor="w", padx=18)
@@ -915,22 +933,30 @@ class AutoBatchGrid:
                   style="Title.TLabel").pack(side="left")
         helptip.attach(self.win, top, "Columns - help", GRID_HELP).pack(
             side="left", padx=8)
-        ttk.Button(top, text="Clear all",
-                   command=self._clear_all).pack(side="right")
+        _gca = ttk.Button(top, text="Clear all", command=self._clear_all)
+        _gca.pack(side="right")
+        helptip.tip(_gca, "Empty all three columns.")
 
         chrow = ttk.Frame(self.win)
         chrow.pack(fill="x", padx=16, pady=(2, 1))
         ttk.Label(chrow, text="Add from:").pack(side="left")
         self.source_var = tk.StringVar(value="YouTube channel")
-        ttk.OptionMenu(chrow, self.source_var, "YouTube channel",
-                       "YouTube channel", "Search YouTube").pack(
-                       side="left", padx=(6, 6))
+        _srcm = ttk.OptionMenu(chrow, self.source_var, "YouTube channel",
+                       "YouTube channel", "Search YouTube")
+        _srcm.pack(side="left", padx=(6, 6))
+        helptip.tip(_srcm, "Add videos from a channel/@handle, or from a "
+                    "YouTube search.")
         self.chan_var = tk.StringVar()
-        tk.Entry(chrow, textvariable=self.chan_var, bg=theme.FIELD, fg=theme.FG,
-                 insertbackground=theme.FG, relief="solid", borderwidth=1).pack(
-                 side="left", fill="x", expand=True, padx=(0, 6))
-        ttk.Button(chrow, text="Fetch", style="Accent.TButton",
-                   command=self._fetch_channel).pack(side="left")
+        _chane = tk.Entry(chrow, textvariable=self.chan_var, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1)
+        _chane.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        helptip.tip(_chane, "Channel URL or @handle (channel mode), or your "
+                    'search words (search mode). Use "quotes" for exact phrase.')
+        _gf = ttk.Button(chrow, text="Fetch", style="Accent.TButton",
+                   command=self._fetch_channel)
+        _gf.pack(side="left")
+        helptip.tip(_gf, "Pull the videos and add them to the columns below.")
 
         chrow2 = ttk.Frame(self.win)
         chrow2.pack(fill="x", padx=16, pady=(0, 2))
@@ -963,14 +989,23 @@ class AutoBatchGrid:
 
         bar = ttk.Frame(self.win)
         bar.pack(fill="x", padx=16, pady=(2, 8))
-        ttk.Button(bar, text="Load .xlsx…", command=self._load).pack(side="left")
-        ttk.Button(bar, text="Folder \u2192 all rows",
-                   command=self._apply_folder).pack(side="left", padx=8)
-        ttk.Button(bar, text="Start ▸", style="Accent.TButton",
-                   command=self._start_run).pack(side="right")
-        ttk.Button(bar, text="Save", command=self._save).pack(side="right", padx=8)
-        ttk.Button(bar, text="Close",
-                   command=self.win.destroy).pack(side="right", padx=(0, 8))
+        _gld = ttk.Button(bar, text="Load .xlsx…", command=self._load)
+        _gld.pack(side="left")
+        helptip.tip(_gld, "Load a previously saved list into the columns.")
+        _gfa = ttk.Button(bar, text="Folder \u2192 all rows",
+                   command=self._apply_folder)
+        _gfa.pack(side="left", padx=8)
+        helptip.tip(_gfa, "Copy the first Folder cell down to every row.")
+        _gsr = ttk.Button(bar, text="Start ▸", style="Accent.TButton",
+                   command=self._start_run)
+        _gsr.pack(side="right")
+        helptip.tip(_gsr, "Save the list, then load it into Auto-batch to run.")
+        _gsv = ttk.Button(bar, text="Save", command=self._save)
+        _gsv.pack(side="right", padx=8)
+        helptip.tip(_gsv, "Save these columns as an .xlsx list you can reuse.")
+        _gcl = ttk.Button(bar, text="Close", command=self.win.destroy)
+        _gcl.pack(side="right", padx=(0, 8))
+        helptip.tip(_gcl, "Close this window.")
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16, pady=(0, 8))
         self.win.transient(parent)

@@ -47,10 +47,19 @@ def _fmt_left(info):
     return f"{secs // 86400}d left"
 
 
-def _entry(parent, var, width=None):
-    return tk.Entry(parent, textvariable=var, width=width or 0, bg=theme.FIELD,
-                    fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                    borderwidth=1)
+def _entry(parent, var, width=None, tip=None):
+    e = tk.Entry(parent, textvariable=var, width=width or 0, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1)
+    if tip:
+        helptip.tip(e, tip)
+    return e
+
+
+def _tip(w, text):
+    """Attach a tooltip and return the widget (for inline .pack chaining)."""
+    helptip.tip(w, text)
+    return w
 
 
 class WatcherWindow:
@@ -163,10 +172,11 @@ class WatcherWindow:
 
         # run controls + status sit ABOVE the log
         brow = ttk.Frame(f); brow.pack(fill="x", padx=8, pady=(4, 2))
-        ttk.Button(brow, text="Check now", style="Accent.TButton",
-                   command=self._check_now).pack(side="left")
-        ttk.Button(brow, text="Refresh", command=self._refresh).pack(
-            side="left", padx=8)
+        _tip(ttk.Button(brow, text="Check now", style="Accent.TButton",
+                   command=self._check_now), "Scan all sources now for new "
+             "uploads and start transcribing them.").pack(side="left")
+        _tip(ttk.Button(brow, text="Refresh", command=self._refresh),
+             "Reload the list and counts.").pack(side="left", padx=8)
         _bstop = ttk.Button(brow, text="Stop", command=self._stop)
         _bstop.pack(side="left", padx=8)
         helptip.tip(_bstop, "Halts the current run after the video in progress.")
@@ -215,7 +225,7 @@ class WatcherWindow:
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Channel URL / @handle:").pack(side="left")
         self.url_var = tk.StringVar()
-        _entry(r, self.url_var).pack(side="left", fill="x", expand=True,
+        _entry(r, self.url_var, tip="Channel URL or @handle to watch for new uploads.").pack(side="left", fill="x", expand=True,
                                      padx=(6, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
@@ -228,10 +238,10 @@ class WatcherWindow:
         ttk.Checkbutton(r, text="Lives", variable=self.k_lives).pack(side="left", padx=(8, 12))
         ttk.Label(r, text="Keyword:").pack(side="left")
         self.kw_var = tk.StringVar()
-        _entry(r, self.kw_var, 16).pack(side="left", padx=(4, 12))
+        _entry(r, self.kw_var, 16, tip="Optional: only keep new videos whose title contains this word.").pack(side="left", padx=(4, 12))
         ttk.Label(r, text="Newest:").pack(side="left")
         self.count_var = tk.StringVar(value="15")
-        _entry(r, self.count_var, 5).pack(side="left", padx=(4, 0))
+        _entry(r, self.count_var, 5, tip="How many recent videos to check each scan.").pack(side="left", padx=(4, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Question set:").pack(side="left")
@@ -242,27 +252,29 @@ class WatcherWindow:
         self._refresh_sets()
         ttk.Label(r, text="Transcript:").pack(side="left")
         self.tmode_var = tk.StringVar(value="Whisper (accurate)")
-        ttk.OptionMenu(r, self.tmode_var, "Whisper (accurate)",
-                       "Whisper (accurate)", "YouTube captions (fast)").pack(
-                       side="left", padx=(4, 0))
+        _tip(ttk.OptionMenu(r, self.tmode_var, "Whisper (accurate)",
+                       "Whisper (accurate)", "YouTube captions (fast)"),
+             "Whisper = accurate local speech-to-text. YouTube captions = fast, uses the video's existing captions.").pack(side="left", padx=(4, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Folder:").pack(side="left")
         self.folder_var = tk.StringVar()
-        _entry(r, self.folder_var, 22).pack(side="left", padx=(6, 12))
+        _entry(r, self.folder_var, 22, tip="Subfolder under Transcriptions to save this source (backslashes nest).").pack(side="left", padx=(6, 12))
         self.sv = tk.BooleanVar(value=False)
         self.sa = tk.BooleanVar(value=False)
         self.sd = tk.BooleanVar(value=False)
         self.sc = tk.BooleanVar(value=False)
-        ttk.Checkbutton(r, text="Video", variable=self.sv).pack(side="left")
-        ttk.Checkbutton(r, text="Audio", variable=self.sa).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Desc", variable=self.sd).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Comments", variable=self.sc).pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Video", variable=self.sv), "Also download and save the full video file.").pack(side="left")
+        _tip(ttk.Checkbutton(r, text="Audio", variable=self.sa), "Also save the downloaded audio file.").pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Desc", variable=self.sd), "Also save the video's description.").pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Comments", variable=self.sc), "Also save the video's top comments.").pack(side="left", padx=(6, 0))
 
         arow = ttk.Frame(f); arow.pack(anchor="w", padx=8, pady=(4, 8))
         self.add_btn = ttk.Button(arow, text="＋ Add channel",
                                   style="Accent.TButton", command=self._add)
         self.add_btn.pack(side="left")
+        helptip.tip(self.add_btn, "Add this channel to the watch list (or save "
+                    "your edits).")
         self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
                                           command=self._cancel_edit)
 
@@ -274,16 +286,16 @@ class WatcherWindow:
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Playlist URL:").pack(side="left")
         self.pl_url = tk.StringVar()
-        _entry(r, self.pl_url).pack(side="left", fill="x", expand=True,
+        _entry(r, self.pl_url, tip="Playlist URL to watch for new videos.").pack(side="left", fill="x", expand=True,
                                     padx=(6, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Keyword (optional):").pack(side="left")
         self.pl_kw = tk.StringVar()
-        _entry(r, self.pl_kw, 16).pack(side="left", padx=(4, 12))
+        _entry(r, self.pl_kw, 16, tip="Optional title keyword filter.").pack(side="left", padx=(4, 12))
         ttk.Label(r, text="Newest:").pack(side="left")
         self.pl_count = tk.StringVar(value="25")
-        _entry(r, self.pl_count, 5).pack(side="left", padx=(4, 0))
+        _entry(r, self.pl_count, 5, tip="How many recent playlist items to check each scan.").pack(side="left", padx=(4, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Question set:").pack(side="left")
@@ -297,28 +309,30 @@ class WatcherWindow:
             m.add_command(label=n, command=lambda n=n: self.pl_set.set(n))
         ttk.Label(r, text="Transcript:").pack(side="left")
         self.pl_tmode = tk.StringVar(value="Whisper (accurate)")
-        ttk.OptionMenu(r, self.pl_tmode, "Whisper (accurate)",
-                       "Whisper (accurate)", "YouTube captions (fast)").pack(
-                       side="left", padx=(4, 0))
+        _tip(ttk.OptionMenu(r, self.pl_tmode, "Whisper (accurate)",
+                       "Whisper (accurate)", "YouTube captions (fast)"),
+             "Whisper = accurate local speech-to-text. YouTube captions = fast, uses the video's existing captions.").pack(side="left", padx=(4, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Folder:").pack(side="left")
         self.pl_folder = tk.StringVar()
-        _entry(r, self.pl_folder, 22).pack(side="left", padx=(6, 12))
+        _entry(r, self.pl_folder, 22, tip="Subfolder under Transcriptions for this playlist.").pack(side="left", padx=(6, 12))
         self.plv = tk.BooleanVar(value=False)
         self.pla = tk.BooleanVar(value=False)
         self.pld = tk.BooleanVar(value=False)
         self.plc = tk.BooleanVar(value=False)
-        ttk.Checkbutton(r, text="Video", variable=self.plv).pack(side="left")
-        ttk.Checkbutton(r, text="Audio", variable=self.pla).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Desc", variable=self.pld).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Comments", variable=self.plc).pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Video", variable=self.plv), "Also download and save the full video file.").pack(side="left")
+        _tip(ttk.Checkbutton(r, text="Audio", variable=self.pla), "Also save the downloaded audio file.").pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Desc", variable=self.pld), "Also save the video's description.").pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Comments", variable=self.plc), "Also save the video's top comments.").pack(side="left", padx=(6, 0))
 
         arow = ttk.Frame(f); arow.pack(anchor="w", padx=8, pady=(4, 8))
         self.add_playlist_btn = ttk.Button(arow, text="＋ Add playlist",
                                            style="Accent.TButton",
                                            command=self._add_playlist)
         self.add_playlist_btn.pack(side="left")
+        helptip.tip(self.add_playlist_btn, "Add this playlist to the watch list "
+                    "(or save your edits).")
         self.cancel_playlist_btn = ttk.Button(arow, text="Cancel edit",
                                               command=self._cancel_playlist_edit)
 
@@ -330,7 +344,7 @@ class WatcherWindow:
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Keyword:").pack(side="left")
         self.s_query = tk.StringVar()
-        _entry(r, self.s_query).pack(side="left", fill="x", expand=True,
+        _entry(r, self.s_query, tip="Search words to watch. Use quotes for an exact phrase.").pack(side="left", fill="x", expand=True,
                                      padx=(6, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
@@ -353,15 +367,15 @@ class WatcherWindow:
                        *[l for l, _ in UPLOAD_OPTS]).pack(side="left", padx=(4, 12))
         ttk.Label(r, text="Duration:").pack(side="left")
         self.s_dur = tk.StringVar(value="Any")
-        ttk.OptionMenu(r, self.s_dur, "Any", *DUR_OPTS).pack(side="left", padx=(4, 12))
+        _tip(ttk.OptionMenu(r, self.s_dur, "Any", *DUR_OPTS), "Only videos of this length.").pack(side="left", padx=(4, 12))
         ttk.Label(r, text="Sort:").pack(side="left")
         self.s_sort = tk.StringVar(value="Upload date")
-        ttk.OptionMenu(r, self.s_sort, "Upload date", *SORT_OPTS).pack(side="left", padx=(4, 0))
+        _tip(ttk.OptionMenu(r, self.s_sort, "Upload date", *SORT_OPTS), "How YouTube ranks results for this watch.").pack(side="left", padx=(4, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Newest:").pack(side="left")
         self.s_count = tk.StringVar(value="25")
-        _entry(r, self.s_count, 5).pack(side="left", padx=(4, 12))
+        _entry(r, self.s_count, 5, tip="How many search results to check each scan.").pack(side="left", padx=(4, 12))
         ttk.Label(r, text="Lifespan:").pack(side="left")
         self.s_life = tk.StringVar(value="30 days")
         ttk.OptionMenu(r, self.s_life, "30 days",
@@ -381,28 +395,30 @@ class WatcherWindow:
             m.add_command(label=n, command=lambda n=n: self.s_set.set(n))
         ttk.Label(r, text="Transcript:").pack(side="left")
         self.s_tmode = tk.StringVar(value="Whisper (accurate)")
-        ttk.OptionMenu(r, self.s_tmode, "Whisper (accurate)",
-                       "Whisper (accurate)", "YouTube captions (fast)").pack(
-                       side="left", padx=(4, 0))
+        _tip(ttk.OptionMenu(r, self.s_tmode, "Whisper (accurate)",
+                       "Whisper (accurate)", "YouTube captions (fast)"),
+             "Whisper = accurate local speech-to-text. YouTube captions = fast, uses the video's existing captions.").pack(side="left", padx=(4, 0))
 
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Folder:").pack(side="left")
         self.s_folder = tk.StringVar()
-        _entry(r, self.s_folder, 22).pack(side="left", padx=(6, 12))
+        _entry(r, self.s_folder, 22, tip="Subfolder under Transcriptions for this search.").pack(side="left", padx=(6, 12))
         self.ssv = tk.BooleanVar(value=False)
         self.ssa = tk.BooleanVar(value=False)
         self.ssd = tk.BooleanVar(value=False)
         self.ssc = tk.BooleanVar(value=False)
-        ttk.Checkbutton(r, text="Video", variable=self.ssv).pack(side="left")
-        ttk.Checkbutton(r, text="Audio", variable=self.ssa).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Desc", variable=self.ssd).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(r, text="Comments", variable=self.ssc).pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Video", variable=self.ssv), "Also download and save the full video file.").pack(side="left")
+        _tip(ttk.Checkbutton(r, text="Audio", variable=self.ssa), "Also save the downloaded audio file.").pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Desc", variable=self.ssd), "Also save the video's description.").pack(side="left", padx=(6, 0))
+        _tip(ttk.Checkbutton(r, text="Comments", variable=self.ssc), "Also save the video's top comments.").pack(side="left", padx=(6, 0))
 
         arow = ttk.Frame(f); arow.pack(anchor="w", padx=8, pady=(4, 8))
         self.add_search_btn = ttk.Button(arow, text="＋ Add search",
                                          style="Accent.TButton",
                                          command=self._add_search)
         self.add_search_btn.pack(side="left")
+        helptip.tip(self.add_search_btn, "Add this keyword search to the watch "
+                    "list (or save your edits).")
         self.cancel_search_btn = ttk.Button(arow, text="Cancel edit",
                                             command=self._cancel_search_edit)
 
