@@ -994,12 +994,22 @@ class SettingsWindow:
                     "seconds per dictation — a cloud API key is much faster, "
                     "or pick a small local model like llama3.2:1b.")
         self.ai_var = tk.BooleanVar(value=self.cfg["ai_enhancement"])
-        ttk.Checkbutton(f, text="Enable AI enhancement (connect a provider below)",
-                        variable=self.ai_var).pack(anchor="w", pady=(0, 2))
+        _aien = ttk.Checkbutton(f,
+                        text="Enable AI enhancement (connect a provider below)",
+                        variable=self.ai_var)
+        _aien.pack(anchor="w", pady=(0, 2))
+        helptip.tip(_aien, "The master switch. When OFF, NO AI runs anywhere in "
+                    "EchoQuill (dictation, Ask AI, Research all use no AI). Turn "
+                    "this ON to use any AI feature. On its own it does not slow "
+                    "dictation — that's the box below.")
         self.ai_dictation_var = tk.BooleanVar(value=self.cfg.get("ai_on_dictation", False))
-        ttk.Checkbutton(f, variable=self.ai_dictation_var,
-                        text="Format dictation with AI (off = instant plain text)"
-                        ).pack(anchor="w", pady=(0, 8))
+        _aidict = ttk.Checkbutton(f, variable=self.ai_dictation_var,
+                        text="Format dictation with AI (off = instant plain text)")
+        _aidict.pack(anchor="w", pady=(0, 8))
+        helptip.tip(_aidict, "ONLY affects everyday voice-to-text. When ON (and "
+                    "the master above is ON), every dictation is sent to the AI "
+                    "to polish before it appears — this adds a delay. Leave it "
+                    "OFF for instant plain text; Research and Ask AI still work.")
 
         r = self._row(f, "Provider")
         providers = sorted(cfgmod.AI_PROVIDERS.keys())
