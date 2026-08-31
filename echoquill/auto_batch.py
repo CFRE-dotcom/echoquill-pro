@@ -200,11 +200,8 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     _apply_proxy(opts, cfg)
     from urllib.parse import quote
     sp = _yt_sp(int(upload_days or 0), sort_date=date_sorted)
-    if sp:
-        target = ("https://www.youtube.com/results?search_query="
-                  + quote(query) + "&sp=" + quote(sp))
-    else:
-        target = f"ytsearch{pull}:{query}"
+    target = ("https://www.youtube.com/results?search_query=" + quote(query)
+              + ("&sp=" + quote(sp) if sp else ""))
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(target, download=False)
@@ -340,7 +337,9 @@ def fetch_search(query, n, cfg):
         opts["cookiefile"] = cf
     from .media_gui import _apply_proxy
     _apply_proxy(opts, cfg)
-    target = f"ytsearch{int(n)}:{query}"
+    from urllib.parse import quote
+    opts["playlistend"] = int(n)
+    target = ("https://www.youtube.com/results?search_query=" + quote(query))
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(target, download=False)
     out = []
@@ -451,36 +450,6 @@ class AutoBatchWindow:
                     "'<name> - Description.txt' (off by default). Says "
                     "'No video description' if there is none.")
 
-        # ---------- research project ----------
-        self.research_on = tk.BooleanVar(value=False)
-        self._research_questions = []
-        rez = ttk.Frame(tab_run)
-        rez.pack(fill="x", padx=8, pady=(10, 2))
-        _rc = ttk.Checkbutton(rez, text="Make this a research project",
-                              variable=self.research_on,
-                              command=self._toggle_research)
-        _rc.pack(side="left")
-        helptip.tip(_rc, "Instead of a plain batch, download + transcribe "
-                    "every video into ONE titled project folder, then answer "
-                    "your whole question set across ALL of them in a single "
-                    "clickable HTML report with citations.")
-        self.rez_row = ttk.Frame(tab_run)
-        ttk.Label(self.rez_row, text="Project name:").pack(side="left")
-        self.research_name = tk.StringVar()
-        _rn = tk.Entry(self.rez_row, textvariable=self.research_name, width=26,
-                       bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
-                       relief="solid", borderwidth=1)
-        _rn.pack(side="left", padx=(6, 10))
-        helptip.tip(_rn, "Names the project and its folder under "
-                    "Transcriptions\\Research. The report is saved inside it.")
-        _rq = ttk.Button(self.rez_row, text="Questions…",
-                         command=self._edit_questions)
-        _rq.pack(side="left")
-        helptip.tip(_rq, "Write your research questions (as many as you like, "
-                    "each multi-line). Saveable as reusable sets.")
-        self.rez_count = ttk.Label(self.rez_row, style="Dim.TLabel", text="")
-        self.rez_count.pack(side="left", padx=(10, 0))
-
         thr = ttk.Frame(tab_run)
         thr.pack(fill="x", padx=8, pady=(8, 2))
         ttk.Label(thr, text="Pause every").pack(side="left")
@@ -529,13 +498,6 @@ class AutoBatchWindow:
         self.log = theme.dark_text(self.win, wrap="word", height=8)
         self.log.pack(fill="x", padx=18, pady=(2, 12))
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
-        if research:
-            try:
-                self.research_on.set(True)
-                self._toggle_research()
-                self._nb.select(self._tab_run)
-            except Exception:
-                pass
         self.win.transient(parent)
         theme.bring_to_front(self.win)
 
@@ -654,67 +616,6 @@ class AutoBatchWindow:
         self._set("Stopping after this step…")
 
     # ---------- run ----------
-    def _toggle_research(self):
-        if self.research_on.get():
-            self.rez_row.pack(fill="x", padx=8, pady=(2, 2))
-        else:
-            self.rez_row.pack_forget()
-
-    def _edit_questions(self):
-        from .research_gui import QuestionsDialog
-
-        def apply(qs):
-            self._research_questions = qs
-            self.rez_count.configure(text=f"{len(qs)} questions")
-        QuestionsDialog(self.win, self._research_questions, apply)
-
-    def _research_worker(self, rows, name, questions):
-        from . import research, notify
-        try:
-            try:
-                notify.done(False)   # clear any stale green dot
-            except Exception:
-                pass
-            items = [{"url": r["url"], "title": r["title"],
-                      "transcript_mode": self.transcript_mode.get(),
-                      "save_video": self.save_video.get(),
-                      "save_audio": self.save_audio.get()} for r in rows]
-
-            def prog(ph, i, n):
-                if ph == "transcribe":
-                    self._set(f"Transcribing {i}/{n}…")
-                else:
-                    self._set(f"Synthesizing across transcripts {i}/{n}…")
-
-            def on_done(path):
-                self._log(f"Report: {path}")
-                try:
-                    notify.done(True)
-                    notify.send("Research complete", name)
-                except Exception:
-                    pass
-                try:
-                    import os
-                    if path:
-                        os.startfile(path)
-                except Exception:
-                    pass
-
-            research.run(self.cfg, name, questions, items,
-                         log=self._log, cancel=lambda: self._cancel,
-                         progress=prog, on_done=on_done)
-            self._set("Research project finished ✓"
-                      if not self._cancel else "Research project stopped.")
-        finally:
-            self._eng = None
-            self._busy = False
-            try:
-                self.win.after(0, lambda: (
-                    self.start_btn.configure(state="normal"),
-                    self.stop_btn.configure(state="disabled")))
-            except Exception:
-                pass
-
     def _start(self):
         if self._busy:
             return
@@ -725,23 +626,6 @@ class AutoBatchWindow:
         from . import license as _lic
         if not _lic.is_pro(self.cfg):
             self._set("Auto-batch is a Pro feature.")
-            return
-        if self.research_on.get():
-            rname = (self.research_name.get() or "").strip()
-            if not rname:
-                self._set("Name the research project first.")
-                return
-            if not self._research_questions:
-                self._set("Add research questions first (Questions…).")
-                return
-            self._cancel = False
-            self._busy = True
-            self.start_btn.configure(state="disabled")
-            self.stop_btn.configure(state="normal")
-            threading.Thread(
-                target=self._research_worker,
-                args=(rows, rname, list(self._research_questions)),
-                daemon=True).start()
             return
         name = self.setvar.get()
         questions = _pr.get_set(self.cfg, name) if name not in ("—", "") else []

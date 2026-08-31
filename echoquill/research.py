@@ -65,6 +65,124 @@ def _windows(segs, max_chars=6000):
     return out or [""]
 
 
+# ---------------------------------------------------------------- search
+def _sp(sort, days):
+    """YouTube 'sp' filter token: sort field + optional upload-date bucket.
+    sort field: 0 relevance, 1 rating, 2 upload date (newest), 3 view count."""
+    import base64
+    field = {"relevance": 0, "rating": 1, "newest": 2, "upload date": 2,
+             "most viewed": 3, "view count": 3, "views": 3}.get(
+                 (sort or "").strip().lower(), 0)
+    buf = b""
+    if field:
+        buf += bytes([0x08, field])
+    d = int(days or 0)
+    bucket = 0 if d <= 0 else 2 if d <= 1 else 3 if d <= 7 else 4 if d <= 31 else 5
+    if bucket:
+        sub = bytes([0x08, bucket])
+        buf += bytes([0x12, len(sub)]) + sub
+    return base64.urlsafe_b64encode(buf).decode() if buf else ""
+
+
+WINDOW_DAYS = {"any": 0, "today": 1, "this week": 7, "this month": 31,
+               "this year": 365}
+
+
+def fetch_search_web(query, cfg, sort="Most viewed", window="Any", n=25,
+                     log=lambda s: None):
+    """Search YouTube through the real web results URL so EXACT-PHRASE quotes
+    are honored (yt-dlp's ytsearch: path ignores them). Returns [(url,title)]."""
+    import os
+    import yt_dlp
+    from urllib.parse import quote
+    days = WINDOW_DAYS.get((window or "any").strip().lower(), 0)
+    sp = _sp(sort, days)
+    base = "https://www.youtube.com/results?search_query=" + quote(query or "")
+    target = base + ("&sp=" + quote(sp) if sp else "")
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+            "skip_download": True, "playlistend": max(int(n), 1)}
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+    from .media_gui import _apply_proxy
+    _apply_proxy(opts, cfg)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(target, download=False)
+    except Exception as e:
+        log(f"  search error: {str(e)[:120]}")
+        return []
+    out = []
+    for e in (info.get("entries") or []):
+        if not e:
+            continue
+        u = e.get("url") or e.get("webpage_url")
+        if not u and e.get("id"):
+            u = "https://www.youtube.com/watch?v=" + e["id"]
+        t = (e.get("title") or "").strip()
+        if u:
+            out.append((u, t))
+        if len(out) >= int(n):
+            break
+    return out
+
+
+# ---------------------------------------------------------------- AI: questions
+def generate_questions(cfg, goal, existing=None, log=lambda s: None):
+    """Ask the AI to produce research questions for a goal. If existing is
+    given, ask for MORE, non-duplicate questions (the Expand button)."""
+    existing = existing or []
+    if existing:
+        sysmsg = (
+            "You expand a research question set. Given the user's goal and the "
+            "questions already written, produce ADDITIONAL questions that fill "
+            "gaps and go deeper. Do NOT repeat existing ones. Output one "
+            "question per line, no numbering, no preamble.")
+        user = ("GOAL:\n" + goal + "\n\nEXISTING QUESTIONS:\n"
+                + "\n".join(existing)
+                + "\n\nWrite only NEW questions, one per line.")
+    else:
+        sysmsg = (
+            "You generate a comprehensive, exhaustive list of research "
+            "questions someone should ask to fully understand their goal. "
+            "Cover every important angle. Output one question per line, no "
+            "numbering, no preamble, no closing remarks.")
+        user = "GOAL:\n" + goal + "\n\nWrite the questions, one per line."
+    ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.4)
+    if not ok:
+        log("  question generation failed: " + reply[:100])
+        return []
+    out = []
+    for line in reply.splitlines():
+        q = line.strip().lstrip("-*0123456789.) ").strip()
+        if q and (("?" in q and len(q) > 3) or len(q) > 8):
+            out.append(q)
+    seen = set(x.strip().lower() for x in existing)
+    uniq = []
+    for q in out:
+        k = q.lower()
+        if k not in seen:
+            seen.add(k)
+            uniq.append(q)
+    return uniq
+
+
+def suggest_keywords(cfg, unanswered, goal, log=lambda s: None):
+    """Ask the AI for ONE better YouTube search query to find videos that
+    answer the still-unanswered questions."""
+    sysmsg = (
+        "You suggest ONE concise YouTube search query (a few words; you may use "
+        "double quotes for an exact phrase) most likely to surface videos that "
+        "answer the listed unanswered questions. Output ONLY the query text.")
+    user = ("GOAL:\n" + goal + "\n\nUNANSWERED QUESTIONS:\n"
+            + "\n".join("- " + q for q in unanswered)
+            + "\n\nGive one search query.")
+    ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.3)
+    if not ok or not reply:
+        return ""
+    return reply.strip().splitlines()[0].strip().strip('"').strip()
+
+
 # ---------------------------------------------------------------- synthesis
 def _extract_for_video(cfg, questions, vid, log):
     """Phase 1: pull, from ONE video, the findings relevant to each question.
@@ -123,11 +241,14 @@ def _answer_question(cfg, question, per_video, log):
     if not lines:
         return "The videos in this project do not address this question."
     sysmsg = (
-        "You write one clear, well-organized answer to a research question, "
-        "using ONLY the findings provided. Cite sources inline by copying the "
-        "exact bracket tokens shown (e.g. [[V2|754]]). When several findings "
-        "support the same point, cite ALL of them together. Do not invent "
-        "tokens or facts. Write in plain paragraphs.")
+        "You answer a research question using ONLY the findings provided from "
+        "video transcripts. Absolute rules: use no outside knowledge; invent "
+        "nothing; no hyperbole, no editorializing, no filler. State only what "
+        "the findings support. Cite sources inline by copying the exact "
+        "bracket tokens shown (e.g. [[V2|754]]); when several findings support "
+        "a point, cite ALL of them together. If the findings do not actually "
+        "answer the question, reply with exactly: NOT_COVERED. Write in plain "
+        "paragraphs, nothing else.")
     user = (f"QUESTION: {question}\n\nFINDINGS (each begins with its citation "
             f"token):\n" + "\n".join(lines) +
             "\n\nWrite the answer now, placing the exact tokens after the "
@@ -145,33 +266,53 @@ def _answer_question(cfg, question, per_video, log):
     return reply.strip()
 
 
-def synthesize(cfg, questions, videos, log=lambda s: None,
-               cancel=lambda: False, progress=lambda a, b: None):
-    """Run both phases. Returns [{"q":..., "answer_html":...}] plus fills a
-    citation map. progress(done, total) reports phase-1 video progress."""
-    # phase 1 — per video
-    extracts = {}      # vk -> {qi: [findings]}
+NOT_ANSWERED = "Not addressed by the videos in this project."
+
+
+def extract_all(cfg, questions, videos, start=0, log=lambda s: None,
+                cancel=lambda: False, progress=lambda a, b: None):
+    """Phase 1 for videos[start:]. Returns list aligned with videos: each entry
+    is {qi: [findings]}. Videos before `start` are skipped (already done)."""
+    out = []
     total = len(videos)
-    for vk, vid in enumerate(videos):
+    for vk in range(start, total):
         if cancel():
             break
         progress(vk, total)
-        log(f"    reading transcript {vk+1}/{total}: {vid.get('name','')}")
-        extracts[vk] = _extract_for_video(cfg, questions, vid, log)
-    # phase 2 — per question
+        log("    reading transcript " + str(vk + 1) + "/" + str(total)
+            + ": " + videos[vk].get("name", ""))
+        out.append(_extract_for_video(cfg, questions, videos[vk], log))
+    return out
+
+
+def answer_all(cfg, questions, videos, extracts, log=lambda s: None,
+               cancel=lambda: False):
+    """Phase 2. extracts aligned with videos. Returns list of
+    {q, answer, answered}."""
     results = []
     for qi, q in enumerate(questions):
         if cancel():
             break
         per_video = []
         for vk, vid in enumerate(videos):
-            items = (extracts.get(vk) or {}).get(qi) or []
+            items = (extracts[vk] if vk < len(extracts) else {}).get(qi) or []
             if items:
                 per_video.append((vk, vid.get("name", ""), items))
-        log(f"    answering question {qi+1}/{len(questions)}")
+        log("    answering question " + str(qi + 1) + "/" + str(len(questions)))
+        answered = bool(per_video)
         ans = _answer_question(cfg, q, per_video, log)
-        results.append({"q": q, "answer": ans})
+        if ans.strip() == "NOT_COVERED" or not per_video:
+            ans = NOT_ANSWERED
+            answered = False
+        results.append({"q": q, "answer": ans, "answered": answered})
     return results
+
+
+def synthesize(cfg, questions, videos, log=lambda s: None,
+               cancel=lambda: False, progress=lambda a, b: None):
+    """Convenience: full phase-1 + phase-2 over all videos."""
+    extracts = extract_all(cfg, questions, videos, 0, log, cancel, progress)
+    return answer_all(cfg, questions, videos, extracts, log, cancel)
 
 
 # ---------------------------------------------------------------- report
@@ -263,10 +404,14 @@ color:var(--mut);background:var(--bg);padding:8px;border-radius:8px}
 .seg{display:flex;gap:10px;padding:2px 0;font-size:14px}
 .seg .ts{flex:none;min-width:56px;color:var(--acc);text-decoration:none}
 .seg:target{background:#fff3cd;border-radius:6px}
+.gap{background:#fff8e6;border:1px solid #f0d98a;border-radius:12px;padding:14px 20px;margin:0 0 18px}
+.gap h2{font-size:16px;margin:0 0 8px}.gap li{margin:2px 0}
+.gap code{background:#fff;padding:2px 6px;border-radius:6px}
 """
 
 
-def build_report(project_name, questions_results, videos):
+def build_report(project_name, questions_results, videos, unanswered=None,
+                 suggestion=""):
     toc = "".join(
         f'<a href="#q{i}">{i+1}. {html.escape(r["q"])}</a>'
         for i, r in enumerate(questions_results))
@@ -275,6 +420,14 @@ def build_report(project_name, questions_results, videos):
         qs += (f'<div class="q" id="q{i}"><h2>{i+1}. '
                f'{html.escape(r["q"])}</h2>'
                f'{_render_answer(r["answer"], videos)}</div>')
+    gap = ""
+    unanswered = unanswered or []
+    if unanswered:
+        items = "".join("<li>" + html.escape(q) + "</li>" for q in unanswered)
+        sug = ("<p>Suggested next search: <code>" + html.escape(suggestion)
+               + "</code></p>") if suggestion else ""
+        gap = ('<div class="gap"><h2>Not answered by these videos</h2>'
+               '<ul>' + items + '</ul>' + sug + '</div>')
     trs = "".join(_render_transcript(vk, v) for vk, v in enumerate(videos))
     when = time.strftime("%B %-d, %Y") if os.name != "nt" else \
         time.strftime("%B %d, %Y")
@@ -287,6 +440,7 @@ def build_report(project_name, questions_results, videos):
         f"""{len(questions_results)} questions · {when}</div>
 <div class="toc"><strong>Questions</strong>{toc}</div>
 {qs}
+{gap}
 <h1 class="appx">Sources &amp; transcripts</h1>
 {trs}
 </div></body></html>"""
@@ -304,49 +458,97 @@ def project_dir(cfg, name):
 
 def run(cfg, name, questions, video_items, log=lambda s: None,
         cancel=lambda: False, progress=lambda ph, i, n: None,
-        on_done=lambda path: None):
-    """Full research project: download+transcribe each video into the project
-    folder, then synthesize and write report.html. Returns the report path."""
+        on_done=lambda path: None, folder=None, goal="",
+        auto_rounds=0, refetch=None):
+    """Full research project. Downloads+transcribes each video into `folder`
+    (default Transcriptions/Research/<name>), answers every question across all
+    transcripts, and — if auto_rounds>0 and refetch is given — keeps searching
+    for more videos to fill unanswered questions (up to auto_rounds times).
+    Returns {"report":path, "unanswered":[...], "suggestion":str}."""
     from . import pipeline
-    folder = project_dir(cfg, name)
-    log(f"Research project: {name}")
-    log(f"  folder: {folder}")
+    if not folder:
+        folder = project_dir(cfg, name)
+    else:
+        os.makedirs(folder, exist_ok=True)
+    log("Research project: " + name)
+    log("  folder: " + folder)
     collected = []
+    seen = set()
 
-    total = len(video_items)
-    for i, item in enumerate(video_items):
-        if cancel():
-            break
-        it = dict(item)
-        it["folder"] = folder
-        it["save_desc"] = True
-        it["save_comments"] = False
-        it["questions"] = []          # no per-video Q&A; we synthesize instead
-        progress("transcribe", i + 1, total)
-        log(f"→ [{i+1}/{total}] {it.get('title') or it.get('url','')}")
-        pipeline.process_video(cfg, it, log, cancel,
-                               progress=lambda ph: None,
-                               sink=collected.append)
+    def transcribe(items):
+        n = len(items)
+        for i, item in enumerate(items):
+            if cancel():
+                break
+            u = item.get("url", "")
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            it = dict(item)
+            it["folder"] = folder
+            it["save_desc"] = True
+            it["save_comments"] = False
+            it["questions"] = []
+            progress("transcribe", i + 1, n)
+            log("→ " + (it.get("title") or u))
+            pipeline.process_video(cfg, it, log, cancel,
+                                   progress=lambda ph: None,
+                                   sink=collected.append)
 
+    transcribe(video_items)
     if cancel():
         log("  cancelled.")
-        return ""
+        return {"report": "", "unanswered": [], "suggestion": ""}
     if not collected:
         log("  no transcripts produced — nothing to synthesize.")
-        return ""
+        return {"report": "", "unanswered": [], "suggestion": ""}
 
-    log(f"  synthesizing across {len(collected)} transcripts…")
-    results = synthesize(
-        cfg, questions, collected, log, cancel,
-        progress=lambda d, t: progress("synthesize", d, t))
+    log("  synthesizing across " + str(len(collected)) + " transcripts…")
+    extracts = extract_all(cfg, questions, collected, 0, log, cancel,
+                           lambda d, t: progress("synthesize", d, t))
+    results = answer_all(cfg, questions, collected, extracts, log, cancel)
 
-    html_doc = build_report(name, results, collected)
+    rounds = 0
+    while (auto_rounds and rounds < auto_rounds and refetch
+           and not cancel()):
+        unanswered = [r["q"] for r in results if not r.get("answered")]
+        if not unanswered:
+            break
+        log("  " + str(len(unanswered)) + " unanswered — auto-search round "
+            + str(rounds + 1) + "/" + str(auto_rounds))
+        kw = suggest_keywords(cfg, unanswered, goal, log)
+        if not kw:
+            break
+        log("  searching more with: " + kw)
+        more = [it for it in (refetch(kw) or [])
+                if it.get("url") not in seen]
+        if not more:
+            log("  no new videos found.")
+            break
+        before = len(collected)
+        transcribe(more)
+        if len(collected) == before:
+            break
+        new_ex = extract_all(cfg, questions, collected, before, log, cancel,
+                             lambda d, t: progress("synthesize", d, t))
+        extracts += new_ex
+        results = answer_all(cfg, questions, collected, extracts, log, cancel)
+        rounds += 1
+
+    unanswered_final = [r["q"] for r in results if not r.get("answered")]
+    suggestion = ""
+    if unanswered_final and not cancel():
+        suggestion = suggest_keywords(cfg, unanswered_final, goal, log)
+
+    html_doc = build_report(name, results, collected, unanswered_final,
+                            suggestion)
     rpath = os.path.join(folder, "report.html")
     with open(rpath, "w", encoding="utf-8") as f:
         f.write(html_doc)
-    # save a manifest for the record
     try:
-        man = {"name": name, "created": time.time(), "questions": questions,
+        man = {"name": name, "created": time.time(), "goal": goal,
+               "questions": questions,
+               "unanswered": unanswered_final,
                "videos": [{"name": c["name"], "url": c["url"],
                            "path": c.get("path", "")} for c in collected]}
         with open(os.path.join(folder, "project.json"), "w",
@@ -354,6 +556,7 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
             json.dump(man, f, indent=2)
     except Exception:
         pass
-    log(f"  report written: {rpath}")
+    log("  report written: " + rpath)
     on_done(rpath)
-    return rpath
+    return {"report": rpath, "unanswered": unanswered_final,
+            "suggestion": suggestion}

@@ -246,8 +246,8 @@ class SettingsWindow:
 
     def _open_research(self):
         try:
-            from .auto_batch import AutoBatchWindow
-            AutoBatchWindow(self.win, self.cfg, research=True)
+            from .research_gui import ResearchWindow
+            ResearchWindow(self.win, self.cfg)
         except Exception as e:
             from tkinter import messagebox
             messagebox.showerror(

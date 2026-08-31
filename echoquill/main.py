@@ -369,8 +369,8 @@ class App:
             MediaWindow(self.root, self.transcriber, self.cfg)
         elif ev == "research":
             try:
-                from .auto_batch import AutoBatchWindow
-                AutoBatchWindow(self.root, self.cfg, research=True)
+                from .research_gui import ResearchWindow
+                ResearchWindow(self.root, self.cfg)
             except Exception as e:
                 self._log_crash("open research", e)
                 try:

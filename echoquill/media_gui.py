@@ -579,8 +579,8 @@ class MediaWindow:
         AutoBatchWindow(self.win, self.cfg)
 
     def _open_research(self):
-        from .auto_batch import AutoBatchWindow
-        AutoBatchWindow(self.win, self.cfg, research=True)
+        from .research_gui import ResearchWindow
+        ResearchWindow(self.win, self.cfg)
 
     def _go_url(self):
         url = normalize_url(self.url_var.get())
