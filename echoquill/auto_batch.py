@@ -961,13 +961,30 @@ class AutoBatchGrid:
 
         chrow2 = ttk.Frame(self.win)
         chrow2.pack(fill="x", padx=16, pady=(0, 2))
-        ttk.Label(chrow2, text="Type:").pack(side="left")
+        self._type_frame = ttk.Frame(chrow2)
+        ttk.Label(self._type_frame, text="Type:").pack(side="left")
         self.kind_var = tk.StringVar(value="Videos")
-        _kindm = ttk.OptionMenu(chrow2, self.kind_var, "Videos", "Videos",
-                       "Shorts", "Lives", "All")
+        _kindm = ttk.OptionMenu(self._type_frame, self.kind_var, "Videos",
+                       "Videos", "Shorts", "Lives", "All")
         _kindm.pack(side="left", padx=(4, 12))
         helptip.tip(_kindm, "Which uploads to list (channel mode): Videos, "
                     "Shorts, Lives, or All.")
+        self._type_frame.pack(side="left")
+        # search-mode options (Sort + time window) — same as Research
+        self._search_opts = ttk.Frame(chrow2)
+        ttk.Label(self._search_opts, text="Sort:").pack(side="left")
+        self.g_sort = tk.StringVar(value="Most viewed")
+        _gsm = ttk.OptionMenu(self._search_opts, self.g_sort, "Most viewed",
+                       "Most viewed", "Newest", "Relevance", "Rating")
+        _gsm.pack(side="left", padx=(4, 10))
+        helptip.tip(_gsm, "How YouTube ranks search results. Most viewed "
+                    "surfaces the highest-value videos.")
+        ttk.Label(self._search_opts, text="From:").pack(side="left")
+        self.g_win = tk.StringVar(value="Any")
+        _gwm = ttk.OptionMenu(self._search_opts, self.g_win, "Any", "Any",
+                       "Today", "This week", "This month", "This year")
+        _gwm.pack(side="left", padx=(4, 10))
+        helptip.tip(_gwm, "Only videos uploaded within this window.")
         self._kw_frame = ttk.Frame(chrow2)
         ttk.Label(self._kw_frame, text="Keyword:").pack(side="left")
         self.keyword_var = tk.StringVar()
@@ -1044,11 +1061,15 @@ class AutoBatchGrid:
             text=f"Applied '{folder}' to all {len(urls)} rows.")
 
     def _on_source_change(self, *_):
-        """Hide the Keyword filter in Search mode (it only works for channels)."""
+        """Channel mode shows Type + Keyword; Search mode shows Sort + window."""
         try:
             if self.source_var.get().lower().startswith("search"):
+                self._type_frame.pack_forget()
                 self._kw_frame.pack_forget()
+                self._search_opts.pack(side="left", before=self._hm_lbl)
             else:
+                self._search_opts.pack_forget()
+                self._type_frame.pack(side="left", before=self._hm_lbl)
                 self._kw_frame.pack(side="left", before=self._hm_lbl)
         except Exception:
             pass
@@ -1080,7 +1101,10 @@ class AutoBatchGrid:
         def run():
             try:
                 if is_search:
-                    items = fetch_search(q, want or 25, self.cfg)
+                    from . import research
+                    items = research.fetch_search_web(
+                        q, self.cfg, self.g_sort.get(), self.g_win.get(),
+                        want or 25)
                 else:
                     fetch_n = (min(want * 8, 300) if (want and keyword)
                                else want)
