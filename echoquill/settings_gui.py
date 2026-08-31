@@ -2086,13 +2086,30 @@ class SettingsWindow:
                     pass
             try:
                 import requests
-                r = requests.get(base + "/models",
-                                 headers={"Authorization": f"Bearer {key}"},
-                                 timeout=30)
-                r.raise_for_status()
-                data = r.json()
-                items = data.get("data") or data.get("models") or []
-                ids = sorted({m.get("id") for m in items if m.get("id")})
+                # Ollama native API (Ollama Cloud / any base ending in /api)
+                # lists models at /api/tags, not the OpenAI /models path.
+                ollama_native = base.endswith("/api") or (
+                    "ollama.com" in base and not base.endswith("/v1"))
+                if ollama_native:
+                    root = base[:-4] if base.endswith("/api") else base
+                    hdr = {"Authorization": f"Bearer {key}"} if key else {}
+                    r = requests.get(root + "/api/tags", headers=hdr,
+                                     timeout=30)
+                    r.raise_for_status()
+                    data = r.json()
+                    ids = sorted({m.get("name") for m in
+                                  (data.get("models") or []) if m.get("name")})
+                else:
+                    if "anthropic.com" in base and key:
+                        hdr = {"x-api-key": key,
+                               "anthropic-version": "2023-06-01"}
+                    else:
+                        hdr = {"Authorization": f"Bearer {key}"}
+                    r = requests.get(base + "/models", headers=hdr, timeout=30)
+                    r.raise_for_status()
+                    data = r.json()
+                    items = data.get("data") or data.get("models") or []
+                    ids = sorted({m.get("id") for m in items if m.get("id")})
                 if ids:
                     self.win.after(0, lambda: (
                         self.ai_model_box.configure(values=ids),
