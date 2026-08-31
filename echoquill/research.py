@@ -212,9 +212,10 @@ def _extract_for_video(cfg, questions, vid, log):
         "does not address. Reply with STRICT JSON only, shape: "
         '{"1":[{"t":123,"point":"..."}], "2":[...]}  (keys are question '
         "numbers). No prose, no code fences.")
-    for win in _windows(vid.get("segs") or []):
-        if not win.strip():
-            continue
+    wins = [w for w in _windows(vid.get("segs") or []) if w.strip()]
+    for wi, win in enumerate(wins):
+        if len(wins) > 1:
+            log(f"      reading part {wi+1}/{len(wins)}\u2026")
         user = (f"QUESTIONS:\n{qlist}\n\nTRANSCRIPT (of "
                 f"\"{vid.get('name','')}\"):\n{win}")
         ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.1)
