@@ -234,6 +234,7 @@ class Picker:
 class ResearchWindow:
     SORTS = ["Most viewed", "Newest", "Relevance", "Rating"]
     WINDOWS = ["Any", "Today", "This week", "This month", "This year"]
+    DURATIONS = ["Any length", "Under 4 min", "4\u201320 min", "Over 20 min"]
 
     def __init__(self, parent, cfg):
         self.cfg = cfg
@@ -315,6 +316,12 @@ class ResearchWindow:
         _w.pack(side="left", padx=(4, 12))
         helptip.tip(_w, "Only videos uploaded within this window. Combine with "
                     "Most viewed for the best recent videos.")
+        ttk.Label(op, text="Length:").pack(side="left")
+        self.dur_var = tk.StringVar(value="Any length")
+        _dm = ttk.OptionMenu(op, self.dur_var, "Any length", *self.DURATIONS)
+        _dm.pack(side="left", padx=(4, 12))
+        helptip.tip(_dm, "Filter by video length. 'Any length' pulls all; use "
+                    "4\u201320 min or Under 4 min to skip very long videos.")
         ttk.Label(op, text="How many:").pack(side="left")
         self.count_var = tk.StringVar(value="")
         _c = tk.Entry(op, textvariable=self.count_var, width=5, bg=theme.FIELD,
@@ -494,12 +501,14 @@ class ResearchWindow:
         self.fetch_btn.configure(state="disabled")
         self._set("Searching YouTube…")
         sort, win = self.sort_var.get(), self.window_var.get()
+        dur = self.dur_var.get()
 
         def run():
             from . import research
             try:
                 items = research.fetch_search_web(q, self.cfg, sort, win, n,
-                                                  log=self._logline)
+                                                  log=self._logline,
+                                                  duration=dur)
             except Exception as e:
                 items = []
                 self._logline("search failed: " + str(e)[:100])
@@ -665,13 +674,15 @@ class ResearchWindow:
             goal = self.goal.get("1.0", "end").strip()
             auto_rounds = int(self.auto_max.get()) if self.auto_on.get() else 0
             sort, win = self.sort_var.get(), self.window_var.get()
+            dur = self.dur_var.get()
             cv = self.count_var.get().strip()
             per = int(cv) if cv.isdigit() and int(cv) > 0 else 15
 
             def refetch(kw):
                 return [{"url": u, "title": t} for u, t in
                         research.fetch_search_web(kw, self.cfg, sort, win, per,
-                                                  log=self._logline)]
+                                                  log=self._logline,
+                                                  duration=dur)]
 
             def prog(ph, i, n):
                 if ph == "transcribe":

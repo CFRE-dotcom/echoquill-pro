@@ -985,6 +985,13 @@ class AutoBatchGrid:
                        "Today", "This week", "This month", "This year")
         _gwm.pack(side="left", padx=(4, 10))
         helptip.tip(_gwm, "Only videos uploaded within this window.")
+        ttk.Label(self._search_opts, text="Length:").pack(side="left")
+        self.g_dur = tk.StringVar(value="Any length")
+        _gdm = ttk.OptionMenu(self._search_opts, self.g_dur, "Any length",
+                       "Any length", "Under 4 min", "4\u201320 min",
+                       "Over 20 min")
+        _gdm.pack(side="left", padx=(4, 10))
+        helptip.tip(_gdm, "Filter by video length. 'Any length' pulls all.")
         self._kw_frame = ttk.Frame(chrow2)
         ttk.Label(self._kw_frame, text="Keyword:").pack(side="left")
         self.keyword_var = tk.StringVar()
@@ -1104,7 +1111,7 @@ class AutoBatchGrid:
                     from . import research
                     items = research.fetch_search_web(
                         q, self.cfg, self.g_sort.get(), self.g_win.get(),
-                        want or 25)
+                        want or 25, duration=self.g_dur.get())
                 else:
                     fetch_n = (min(want * 8, 300) if (want and keyword)
                                else want)

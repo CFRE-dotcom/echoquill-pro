@@ -66,9 +66,19 @@ def _windows(segs, max_chars=6000):
 
 
 # ---------------------------------------------------------------- search
-def _sp(sort, days):
-    """YouTube 'sp' filter token: sort field + optional upload-date bucket.
-    sort field: 0 relevance, 1 rating, 2 upload date (newest), 3 view count."""
+# YouTube duration filter codes: 1=short (<4 min), 2=long (>20 min),
+# 3=medium (4-20 min).
+DURATION_CODE = {"any": 0, "any length": 0,
+                 "under 4 min": 1, "under 4 minutes": 1, "short": 1,
+                 "4-20 min": 3, "4\u201320 min": 3, "medium": 3,
+                 "over 20 min": 2, "over 20 minutes": 2, "long": 2}
+
+
+def _sp(sort, days, duration=0):
+    """YouTube 'sp' filter token: sort field + a filters sub-message holding
+    the upload-date bucket and/or duration.
+    sort: 0 relevance, 1 rating, 2 upload date (newest), 3 view count.
+    duration: 0 any, 1 short(<4m), 2 long(>20m), 3 medium(4-20m)."""
     import base64
     field = {"relevance": 0, "rating": 1, "newest": 2, "upload date": 2,
              "most viewed": 3, "view count": 3, "views": 3}.get(
@@ -78,8 +88,12 @@ def _sp(sort, days):
         buf += bytes([0x08, field])
     d = int(days or 0)
     bucket = 0 if d <= 0 else 2 if d <= 1 else 3 if d <= 7 else 4 if d <= 31 else 5
+    sub = b""
     if bucket:
-        sub = bytes([0x08, bucket])
+        sub += bytes([0x08, bucket])          # field 1: upload date
+    if int(duration or 0):
+        sub += bytes([0x18, int(duration)])   # field 3: duration
+    if sub:
         buf += bytes([0x12, len(sub)]) + sub
     return base64.urlsafe_b64encode(buf).decode() if buf else ""
 
@@ -89,14 +103,15 @@ WINDOW_DAYS = {"any": 0, "today": 1, "this week": 7, "this month": 31,
 
 
 def fetch_search_web(query, cfg, sort="Most viewed", window="Any", n=25,
-                     log=lambda s: None):
+                     log=lambda s: None, duration="Any"):
     """Search YouTube through the real web results URL so EXACT-PHRASE quotes
     are honored (yt-dlp's ytsearch: path ignores them). Returns [(url,title)]."""
     import os
     import yt_dlp
     from urllib.parse import quote
     days = WINDOW_DAYS.get((window or "any").strip().lower(), 0)
-    sp = _sp(sort, days)
+    dur = DURATION_CODE.get((duration or "any").strip().lower(), 0)
+    sp = _sp(sort, days, dur)
     base = "https://www.youtube.com/results?search_query=" + quote(query or "")
     target = base + ("&sp=" + quote(sp) if sp else "")
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
