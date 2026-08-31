@@ -268,7 +268,12 @@ class ResearchWindow:
         self._build_runbar()
 
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.win.transient(parent)
+        try:
+            if parent is not None and parent.winfo_viewable():
+                self.win.transient(parent)   # only when parent is visible;
+                # a transient of the hidden root won't show (pill/tray launch)
+        except Exception:
+            pass
         theme.bring_to_front(self.win)
 
     # ------------------------------------------------------------- tab 1
