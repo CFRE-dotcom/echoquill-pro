@@ -346,12 +346,17 @@ class ResearchWindow:
 
         lf = ttk.Frame(f); lf.pack(fill="both", expand=True, padx=10, pady=(6, 2))
         self.vids = theme.dark_listbox(lf, height=7)
+        self.vids.configure(selectmode="extended")
         _sb = ttk.Scrollbar(lf, orient="vertical", command=self.vids.yview)
         self.vids.configure(yscrollcommand=_sb.set)
+        self.vids.bind("<Button-3>", self._vids_right_click)
+        self.vids.bind("<Delete>", lambda e: self._remove_selected())
         _sb.pack(side="right", fill="y")
         self.vids.pack(side="left", fill="both", expand=True)
-        helptip.tip(self.vids, "The videos that will be transcribed. Fetch adds "
-                    "to this list; Clear empties it.")
+        helptip.tip(self.vids, "The videos that will be transcribed. Select "
+                    "rows (Ctrl-click for several) and Remove selected to drop "
+                    "the long ones; right-click also removes. Delete key works "
+                    "too.")
 
         br = ttk.Frame(f); br.pack(fill="x", padx=10, pady=(0, 6))
         self.vcount = ttk.Label(br, style="Dim.TLabel", text="0 videos")
@@ -359,6 +364,11 @@ class ResearchWindow:
         _clr = ttk.Button(br, text="Clear list", command=self._clear_videos)
         _clr.pack(side="right")
         helptip.tip(_clr, "Remove all fetched videos and start over.")
+        _rms = ttk.Button(br, text="Remove selected",
+                          command=self._remove_selected)
+        _rms.pack(side="right", padx=6)
+        helptip.tip(_rms, "Drop the highlighted video(s) from this run — e.g. a "
+                    "very long one. Doesn't touch anything on disk.")
 
     # ------------------------------------------------------------- tab 2
     def _build_questions(self, f):
@@ -480,6 +490,33 @@ class ResearchWindow:
                                     initialdir=transcripts_dir(self.cfg))
         if d:
             self.folder_var.set(d)
+
+    def _remove_selected(self):
+        sel = list(self.vids.curselection())
+        if not sel:
+            self._set("Select a video in the list first.")
+            return
+        for i in sorted(sel, reverse=True):
+            if 0 <= i < len(self._videos):
+                del self._videos[i]
+            self.vids.delete(i)
+        self.vcount.configure(text=f"{len(self._videos)} videos")
+        self._set(f"Removed {len(sel)} video(s).")
+
+    def _vids_right_click(self, e):
+        idx = self.vids.nearest(e.y)
+        if idx < 0 or idx >= self.vids.size():
+            return
+        if idx not in self.vids.curselection():
+            self.vids.selection_clear(0, "end")
+            self.vids.selection_set(idx)
+            self.vids.activate(idx)
+        m = tk.Menu(self.vids, tearoff=0)
+        m.add_command(label="Remove", command=self._remove_selected)
+        try:
+            m.tk_popup(e.x_root, e.y_root)
+        finally:
+            m.grab_release()
 
     def _clear_videos(self):
         self._videos = []
