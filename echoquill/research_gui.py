@@ -514,14 +514,19 @@ class ResearchWindow:
                 self._logline("search failed: " + str(e)[:100])
 
             def fill():
+                from . import research as _r
                 added = 0
-                have = set(u for u, _t in self._videos)
-                for u, t in items:
+                have = set(v[0] for v in self._videos)
+                for it in items:
+                    u, t = it[0], it[1]
+                    d = it[2] if len(it) > 2 else None
                     if u in have:
                         continue
                     have.add(u)
-                    self._videos.append((u, t))
-                    self.vids.insert("end", t or u)
+                    self._videos.append((u, t, d))
+                    ds = _r.dur_str(d)
+                    self.vids.insert("end", (f"{ds} · " if ds else "")
+                                     + (t or u))
                     added += 1
                 self.vcount.configure(text=f"{len(self._videos)} videos")
                 self._set(f"Added {added} video(s)." if added
@@ -669,7 +674,8 @@ class ResearchWindow:
                 notify.done(False)
             except Exception:
                 pass
-            video_items = [{"url": u, "title": t} for u, t in self._videos]
+            video_items = [{"url": v[0], "title": v[1]}
+                           for v in self._videos]
             folder = self.folder_var.get().strip() or None
             goal = self.goal.get("1.0", "end").strip()
             auto_rounds = int(self.auto_max.get()) if self.auto_on.get() else 0
@@ -679,7 +685,7 @@ class ResearchWindow:
             per = int(cv) if cv.isdigit() and int(cv) > 0 else 15
 
             def refetch(kw):
-                return [{"url": u, "title": t} for u, t in
+                return [{"url": it[0], "title": it[1]} for it in
                         research.fetch_search_web(kw, self.cfg, sort, win, per,
                                                   log=self._logline,
                                                   duration=dur)]

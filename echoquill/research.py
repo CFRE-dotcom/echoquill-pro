@@ -32,6 +32,13 @@ def mmss(sec):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+def dur_str(sec):
+    """Human duration for a fetched video, or '' when unknown."""
+    if not sec:
+        return ""
+    return mmss(sec)
+
+
 def _json(text):
     """Best-effort parse of a JSON object from a model reply."""
     if not text:
@@ -136,7 +143,7 @@ def fetch_search_web(query, cfg, sort="Most viewed", window="Any", n=25,
             u = "https://www.youtube.com/watch?v=" + e["id"]
         t = (e.get("title") or "").strip()
         if u:
-            out.append((u, t))
+            out.append((u, t, e.get("duration")))
         if len(out) >= int(n):
             break
     return out

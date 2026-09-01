@@ -321,7 +321,7 @@ def fetch_channel(channel, kind, limit, cfg):
             u = "https://www.youtube.com/watch?v=" + e["id"]
         t = (e.get("title") or "").strip()
         if u:
-            out.append((u, t))
+            out.append((u, t, e.get("duration")))
     if limit:
         out = out[:int(limit)]
     return out
@@ -1018,6 +1018,7 @@ class AutoBatchGrid:
         self.url_txt = self._column(cols, "URL")
         self.title_txt = self._column(cols, "Title")
         self.folder_txt = self._column(cols, "Folder")
+        self.time_txt = self._column(cols, "Time", width=7, expand=False)
 
         self.count = ttk.Label(self.win, style="Dim.TLabel",
                                text="URLs: 0 · Titles: 0 · Folders: 0")
@@ -1118,15 +1119,14 @@ class AutoBatchGrid:
                     if kind == "All":
                         items, seen = [], set()
                         for _k in ("Videos", "Shorts", "Lives"):
-                            for (u, t) in fetch_channel(q, _k, fetch_n,
-                                                        self.cfg):
-                                if u not in seen:
-                                    seen.add(u); items.append((u, t))
+                            for it in fetch_channel(q, _k, fetch_n, self.cfg):
+                                if it[0] not in seen:
+                                    seen.add(it[0]); items.append(it)
                     else:
                         items = fetch_channel(q, kind, fetch_n, self.cfg)
                     if keyword:
-                        items = [(u, t) for (u, t) in items
-                                 if keyword in (t or "").lower()]
+                        items = [it for it in items
+                                 if keyword in (it[1] or "").lower()]
                     if want:
                         items = items[:want]
             except Exception as e:
@@ -1139,23 +1139,28 @@ class AutoBatchGrid:
                     self.chan_status.configure(
                         text="No matches." if keyword else "Nothing found.")
                     return
+                from . import research as _r
                 us = "\n".join(i[0] for i in items)
                 ts = "\n".join(i[1] for i in items)
+                ds = "\n".join(_r.dur_str(i[2] if len(i) > 2 else None)
+                                for i in items)
                 if self.url_txt.get("1.0", "end").strip():
                     self.url_txt.insert("end", "\n" + us)
                     self.title_txt.insert("end", "\n" + ts)
+                    self.time_txt.insert("end", "\n" + ds)
                 else:
                     self.url_txt.insert("1.0", us)
                     self.title_txt.insert("1.0", ts)
+                    self.time_txt.insert("1.0", ds)
                 self._recount()
                 label = "search results" if is_search else kind
                 self.chan_status.configure(text=f"Added {len(items)} {label}.")
             self.win.after(0, fill)
         threading.Thread(target=run, daemon=True).start()
 
-    def _column(self, parent, name):
+    def _column(self, parent, name, width=10, expand=True):
         col = ttk.Frame(parent)
-        col.pack(side="left", fill="both", expand=True, padx=4)
+        col.pack(side="left", fill="both", expand=expand, padx=4)
         hdr = ttk.Frame(col)
         hdr.pack(fill="x")
         ttk.Label(hdr, text=name, style="Section.TLabel").pack(side="left")
@@ -1163,7 +1168,7 @@ class AutoBatchGrid:
                    command=lambda: self._clear_one(name)).pack(side="right")
         wrap = ttk.Frame(col)
         wrap.pack(fill="both", expand=True)
-        txt = tk.Text(wrap, wrap="none", width=10, height=18, bg=theme.FIELD,
+        txt = tk.Text(wrap, wrap="none", width=width, height=18, bg=theme.FIELD,
                       fg=theme.FG, insertbackground=theme.FG, relief="solid",
                       borderwidth=1, font=("Segoe UI", 10))
         vs = ttk.Scrollbar(wrap, orient="vertical", command=txt.yview)
@@ -1185,7 +1190,7 @@ class AutoBatchGrid:
 
     def _boxes(self):
         return {"URL": self.url_txt, "Title": self.title_txt,
-                "Folder": self.folder_txt}
+                "Folder": self.folder_txt, "Time": self.time_txt}
 
     def _lines(self, txt):
         return txt.get("1.0", "end").splitlines()

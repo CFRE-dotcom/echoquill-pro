@@ -348,10 +348,11 @@ def _scan_sources(cfg, d, log):
             except Exception:
                 continue
             if kw:
-                items = [(u, t) for (u, t) in items if kw in (t or "").lower()]
+                items = [it for it in items if kw in (it[1] or "").lower()]
             items = items[:limit]
             found += len(items)
-            for (u, t) in items:
+            for it in items:
+                u, t = it[0], it[1]
                 if u in seen:
                     continue
                 seen.add(u)
