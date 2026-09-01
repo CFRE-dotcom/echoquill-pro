@@ -246,7 +246,8 @@ class ResearchWindow:
 
         self.win = tk.Toplevel(parent)
         self.win.title("EchoQuill — Research project")
-        self.win.geometry("760x720")
+        self.win.geometry("740x600")
+        self.win.minsize(700, 480)
         theme.apply(self.win)
 
         top = ttk.Frame(self.win)
@@ -254,12 +255,11 @@ class ResearchWindow:
         ttk.Label(top, text="Research project", style="Title.TLabel").pack(
             side="left")
         ttk.Label(self.win, style="Dim.TLabel", wraplength=700, text=(
-            "Find videos, ask your questions, get one clickable report answered "
-            "across every video — with citations. Needs AI Enhancement set up "
-            "(Settings → AI Enhancement).")).pack(anchor="w", padx=16)
+            "Find videos → ask questions → one cited report. Needs AI "
+            "Enhancement set up.")).pack(anchor="w", padx=16, pady=(0, 2))
 
         nb = ttk.Notebook(self.win)
-        nb.pack(fill="both", expand=True, padx=12, pady=(6, 4))
+        nb.pack(fill="both", expand=True, padx=12, pady=(2, 2))
         t1 = ttk.Frame(nb)
         t2 = ttk.Frame(nb)
         nb.add(t1, text="  1 · Find videos  ")
@@ -345,7 +345,7 @@ class ResearchWindow:
         helptip.tip(_fb, "Pick where to save this project's files.")
 
         lf = ttk.Frame(f); lf.pack(fill="both", expand=True, padx=10, pady=(6, 2))
-        self.vids = theme.dark_listbox(lf, height=10)
+        self.vids = theme.dark_listbox(lf, height=7)
         _sb = ttk.Scrollbar(lf, orient="vertical", command=self.vids.yview)
         self.vids.configure(yscrollcommand=_sb.set)
         _sb.pack(side="right", fill="y")
@@ -366,7 +366,7 @@ class ResearchWindow:
         ttk.Label(ai, style="Dim.TLabel", wraplength=700, text=(
             "Describe your goal and let AI draft the questions — then edit or "
             "delete any. Or type your own below.")).pack(anchor="w")
-        self.goal = theme.dark_text(f, wrap="word", height=3)
+        self.goal = theme.dark_text(f, wrap="word", height=2)
         self.goal.pack(fill="x", padx=10, pady=(2, 2))
         helptip.tip(self.goal, "Describe what you want to learn, e.g. 'I want to "
                     "grow ginger — every factor: seeding, humidity, watering, "
@@ -451,8 +451,8 @@ class ResearchWindow:
 
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(anchor="w", padx=16)
-        self.log = theme.dark_text(self.win, wrap="word", height=8)
-        self.log.pack(fill="x", padx=16, pady=(2, 12))
+        self.log = theme.dark_text(self.win, wrap="word", height=5)
+        self.log.pack(fill="x", padx=16, pady=(2, 8))
 
     # ------------------------------------------------------------- helpers
     def _set(self, msg):
