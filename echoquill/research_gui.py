@@ -451,6 +451,12 @@ class ResearchWindow:
         _addq = ttk.Button(gr, text="+ Add", command=lambda: self._q_add())
         _addq.pack(side="left", padx=8)
         helptip.tip(_addq, "Add a blank question box to type your own.")
+        _paste = ttk.Button(gr, text="Paste many…",
+                            command=self._paste_questions)
+        _paste.pack(side="left", padx=8)
+        helptip.tip(_paste, "Paste a whole list of questions at once — one per "
+                    "line. Blank lines are ignored; numbers/bullets are stripped "
+                    "automatically. Each line becomes its own question.")
         self.qcount = ttk.Label(gr, style="Dim.TLabel", text="0 questions")
         self.qcount.pack(side="right")
 
@@ -676,6 +682,47 @@ class ResearchWindow:
 
     def _q_recount(self):
         self.qcount.configure(text=f"{len(self._q_list())} questions")
+
+    # ---- bulk paste
+    def _paste_questions(self):
+        dlg = tk.Toplevel(self.win)
+        dlg.title("Paste questions")
+        dlg.geometry("560x460")
+        theme.apply(dlg)
+        ttk.Label(dlg, text="Paste your questions", style="Title.TLabel").pack(
+            anchor="w", padx=14, pady=(12, 2))
+        ttk.Label(dlg, style="Dim.TLabel", wraplength=520, text=(
+            "One question per line. Blank lines are ignored, and leading "
+            "numbers or bullets (1., 2), -, *, •) are stripped automatically. "
+            "These are ADDED to your current list.")).pack(anchor="w", padx=14)
+        box = theme.dark_text(dlg, wrap="word", height=15)
+        box.pack(fill="both", expand=True, padx=14, pady=(6, 6))
+        try:
+            box.focus_set()
+        except Exception:
+            pass
+        bar = ttk.Frame(dlg)
+        bar.pack(fill="x", padx=14, pady=(0, 12))
+
+        def _add():
+            raw = box.get("1.0", "end")
+            added = 0
+            for line in raw.splitlines():
+                q = line.strip().lstrip("-*•0123456789.):\t ").strip()
+                if len(q) >= 3:
+                    self._q_add(q)
+                    added += 1
+            self._set(f"Added {added} question(s).")
+            dlg.destroy()
+
+        _b = ttk.Button(bar, text="Add questions", style="Accent.TButton",
+                        command=_add)
+        _b.pack(side="right")
+        helptip.tip(_b, "Add every non-blank line as a question.")
+        ttk.Button(bar, text="Cancel", command=dlg.destroy).pack(
+            side="right", padx=8)
+        dlg.transient(self.win)
+        theme.bring_to_front(dlg)
 
     # ---- generate / expand
     def _gen(self, more):
