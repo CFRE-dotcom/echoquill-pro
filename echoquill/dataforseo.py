@@ -45,12 +45,15 @@ def _post(cfg, url, payload, timeout=60):
 
 
 def _collect_text(node, out):
-    """Recursively pull every 'text' string out of a content node."""
+    """Recursively pull every 'text' string out of a content node, skipping the
+    'urls' link-metadata arrays."""
     if isinstance(node, dict):
         t = node.get("text")
         if isinstance(t, str) and t.strip():
             out.append(t.strip())
-        for v in node.values():
+        for key, v in node.items():
+            if key == "urls":          # link anchors/metadata, not body text
+                continue
             _collect_text(v, out)
     elif isinstance(node, list):
         for v in node:
@@ -96,12 +99,10 @@ def read_page(cfg, url, log=lambda s: None):
         for task in data.get("tasks") or []:
             for res in task.get("result") or []:
                 for it in res.get("items") or []:
-                    pc = it.get("page_content") or {}
                     meta = it.get("meta") or {}
                     if not title:
                         title = (meta.get("title") or "").strip()
-                    _collect_text(pc.get("primary_content"), parts)
-                    _collect_text(pc.get("secondary_content"), parts)
+                    _collect_text(it.get("page_content"), parts)
     except Exception as e:
         log(f"  parse error: {str(e)[:80]}")
     # de-dupe consecutive blocks, join
