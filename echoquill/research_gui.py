@@ -454,6 +454,25 @@ class ResearchWindow:
         self.qcount = ttk.Label(gr, style="Dim.TLabel", text="0 questions")
         self.qcount.pack(side="right")
 
+        # pin auto-recheck + save/load to the BOTTOM so they never scroll off
+        ar = ttk.Frame(f); ar.pack(side="bottom", fill="x", padx=10, pady=(4, 8))
+        self.auto_on = tk.BooleanVar(value=False)
+        _ac = ttk.Checkbutton(ar, text="If some questions aren't answered, "
+                              "auto-search for more sources",
+                              variable=self.auto_on, command=self._toggle_auto)
+        _ac.pack(side="left")
+        helptip.tip(_ac, "After the run, AI generates fresh keywords and "
+                    "searches for more sources (videos and/or web pages) to "
+                    "fill any unanswered questions, then tries again.")
+        self.autorow = ttk.Frame(ar)
+        sr = ttk.Frame(f); sr.pack(side="bottom", fill="x", padx=10, pady=(2, 2))
+        _sv = ttk.Button(sr, text="Save set…", command=self._save_set)
+        _sv.pack(side="left")
+        helptip.tip(_sv, "Save these questions as a reusable named set.")
+        _ld = ttk.Button(sr, text="Load set…", command=self._load_set)
+        _ld.pack(side="left", padx=8)
+        helptip.tip(_ld, "Replace the list with a saved question set.")
+
         body = ttk.Frame(f); body.pack(fill="both", expand=True, padx=8,
                                        pady=(2, 2))
         self.qcanvas = tk.Canvas(body, bg=theme.BG, highlightthickness=0)
@@ -469,24 +488,6 @@ class ResearchWindow:
             scrollregion=self.qcanvas.bbox("all")))
         self.qcanvas.bind("<Configure>", lambda e: self.qcanvas.itemconfigure(
             self._qwin, width=e.width))
-
-        sr = ttk.Frame(f); sr.pack(fill="x", padx=10, pady=(2, 2))
-        _sv = ttk.Button(sr, text="Save set…", command=self._save_set)
-        _sv.pack(side="left")
-        helptip.tip(_sv, "Save these questions as a reusable named set.")
-        _ld = ttk.Button(sr, text="Load set…", command=self._load_set)
-        _ld.pack(side="left", padx=8)
-        helptip.tip(_ld, "Replace the list with a saved question set.")
-
-        ar = ttk.Frame(f); ar.pack(fill="x", padx=10, pady=(6, 8))
-        self.auto_on = tk.BooleanVar(value=False)
-        _ac = ttk.Checkbutton(ar, text="If some questions aren't answered, "
-                              "auto-search for more videos",
-                              variable=self.auto_on, command=self._toggle_auto)
-        _ac.pack(side="left")
-        helptip.tip(_ac, "After the run, AI searches for more videos to fill "
-                    "any unanswered questions, then tries again.")
-        self.autorow = ttk.Frame(ar)
         ttk.Label(self.autorow, text="  max extra searches:").pack(side="left")
         self.auto_max = tk.StringVar(value="2")
         _am = ttk.OptionMenu(self.autorow, self.auto_max, "2", "1", "2", "3",
