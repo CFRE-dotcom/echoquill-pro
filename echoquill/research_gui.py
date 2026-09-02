@@ -255,18 +255,19 @@ class ResearchWindow:
         ttk.Label(top, text="Research project", style="Title.TLabel").pack(
             side="left")
         ttk.Label(self.win, style="Dim.TLabel", wraplength=700, text=(
-            "Find videos → ask questions → one cited report. Needs AI "
-            "Enhancement set up.")).pack(anchor="w", padx=16, pady=(0, 2))
+            "Find sources (videos and/or web) → ask questions → one cited "
+            "report. Needs AI Enhancement set up.")).pack(
+            anchor="w", padx=16, pady=(0, 2))
 
         nb = ttk.Notebook(self.win)
-        nb.pack(fill="both", expand=True, padx=12, pady=(2, 2))
         t1 = ttk.Frame(nb)
         t2 = ttk.Frame(nb)
-        nb.add(t1, text="  1 · Find videos  ")
+        nb.add(t1, text="  1 · Find sources  ")
         nb.add(t2, text="  2 · Questions  ")
         self._build_find(t1)
         self._build_questions(t2)
-        self._build_runbar()
+        self._build_runbar()   # pinned to the bottom so it never scrolls off
+        nb.pack(fill="both", expand=True, padx=12, pady=(2, 2))
 
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         try:
@@ -333,7 +334,8 @@ class ResearchWindow:
         self.fetch_btn = ttk.Button(sr, text="Fetch", style="Accent.TButton",
                                     command=self._fetch)
         self.fetch_btn.pack(side="left")
-        helptip.tip(self.fetch_btn, "Search YouTube and add the results below.")
+        helptip.tip(self.fetch_btn, "Search YouTube and add videos to the list "
+                    "below (used in Videos / Both mode).")
 
         op = ttk.Frame(f); op.pack(fill="x", padx=10, pady=(2, 2))
         ttk.Label(op, text="Sort:").pack(side="left")
@@ -474,12 +476,13 @@ class ResearchWindow:
 
     # ------------------------------------------------------------- run bar
     def _build_runbar(self):
-        bar = ttk.Frame(self.win); bar.pack(fill="x", padx=16, pady=(2, 2))
+        bar = ttk.Frame(self.win)
+        bar.pack(side="bottom", fill="x", padx=16, pady=(2, 8))
         self.start_btn = ttk.Button(bar, text="Start", style="Accent.TButton",
                                     command=self._start)
         self.start_btn.pack(side="left")
-        helptip.tip(self.start_btn, "Download + transcribe every video, then "
-                    "answer all questions and build the report.")
+        helptip.tip(self.start_btn, "Gather your sources (videos and/or web), "
+                    "answer every question, and build the cited report.")
         self.stop_btn = ttk.Button(bar, text="Stop", command=self._stop,
                                    state="disabled")
         self.stop_btn.pack(side="left", padx=8)
@@ -493,10 +496,10 @@ class ResearchWindow:
         helptip.tip(self.report_btn, "Open the finished HTML report.")
         ttk.Button(bar, text="Close", command=self._on_close).pack(side="right")
 
+        self.log = theme.dark_text(self.win, wrap="word", height=4)
+        self.log.pack(side="bottom", fill="x", padx=16, pady=(2, 2))
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
-        self.status.pack(anchor="w", padx=16)
-        self.log = theme.dark_text(self.win, wrap="word", height=5)
-        self.log.pack(fill="x", padx=16, pady=(2, 8))
+        self.status.pack(side="bottom", anchor="w", padx=16)
 
     # ------------------------------------------------------------- helpers
     def _set(self, msg):

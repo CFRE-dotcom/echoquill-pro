@@ -182,7 +182,7 @@ class WatcherWindow:
         helptip.tip(_bstop, "Halts the current run after the video in progress.")
         _bclr = ttk.Button(brow, text="Clear queue", command=self._clear_queue)
         _bclr.pack(side="left", padx=8)
-        helptip.tip(_bclr, "Deletes every queued item (keeps your channels).")
+        helptip.tip(_bclr, "Removes items WAITING to run (pending + retrying). Keeps finished history, counts, and channels.")
         _btest = ttk.Button(brow, text="Test notification",
                             command=self._test_notify)
         _btest.pack(side="left", padx=8)
@@ -1124,9 +1124,9 @@ class WatcherWindow:
     def _clear_queue(self):
         if not messagebox.askyesno(
                 "Clear queue",
-                "Delete every queued item?\n\nThis keeps your watched "
-                "channels but empties everything waiting to be processed. "
-                "This can't be undone.", parent=self.win):
+                "Remove everything WAITING to run (pending + retrying)?\n\n"
+                "Your finished/done history and counts are kept, along with "
+                "your channels. This can't be undone.", parent=self.win):
             return
         watcher.clear_queue()
         self._refresh()

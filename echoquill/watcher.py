@@ -615,9 +615,12 @@ def run_once(cfg, log=lambda s: None, cancel=lambda: False):
 
 
 def clear_queue():
-    """Wipe every queued item (keeps channels + their seen lists)."""
+    """Remove only items WAITING to run (pending + failed/retrying). Keeps the
+    finished 'done' history (so counts stay), unavailable items, channels, and
+    seen lists."""
     def fn(d):
-        d["queue"] = []
+        d["queue"] = [q for q in d["queue"]
+                      if q.get("status") not in ("pending", "failed")]
         d["new_ready"] = 0
     _mutate(fn)
 
