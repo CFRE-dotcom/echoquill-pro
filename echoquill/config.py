@@ -165,6 +165,8 @@ DEFAULTS = {
     "di_enabled": False,
     "di_base_username": "",
     "di_password": "",
+    "dataforseo_login": "",
+    "dataforseo_password": "",
     "di_country": "us",
     "di_state": "",
     "di_use_geo": False,
@@ -318,7 +320,7 @@ def api_model(name: str) -> str:
 
 
 KEYRING_MARK = "__stored_in_credential_manager__"
-_SECRET_KEYS = ("ai_api_key", "pro_license_key", "elevenlabs_api_key", "di_password")
+_SECRET_KEYS = ("ai_api_key", "pro_license_key", "elevenlabs_api_key", "di_password", "dataforseo_password")
 
 
 def _kr_backend():

@@ -277,6 +277,24 @@ class ResearchWindow:
             pass
         theme.bring_to_front(self.win)
 
+    def _on_mode(self):
+        web = self.mode_var.get() in ("Web", "Both")
+        vids = self.mode_var.get() in ("Videos", "Both")
+        try:
+            if web:
+                self.perq_lbl.pack(side="left")
+                self.perq_menu.pack(side="left", padx=(4, 0))
+            else:
+                self.perq_lbl.pack_forget()
+                self.perq_menu.pack_forget()
+            # dim the video search area when Web-only (still visible, just noted)
+            self._search_hint.configure(
+                text=("" if vids else
+                      "Web-only: skip the video search below; your questions "
+                      "become the Google searches."))
+        except Exception:
+            pass
+
     # ------------------------------------------------------------- tab 1
     def _build_find(self, f):
         nm = ttk.Frame(f); nm.pack(fill="x", padx=10, pady=(10, 4))
@@ -288,6 +306,20 @@ class ResearchWindow:
         _e.pack(side="left", padx=(6, 0))
         helptip.tip(_e, "Required. Names the project and its folder; the report "
                     "is saved inside it.")
+        ttk.Label(nm, text="  Sources:").pack(side="left")
+        self.mode_var = tk.StringVar(value="Videos")
+        _mm = ttk.OptionMenu(nm, self.mode_var, "Videos", "Videos", "Web",
+                             "Both", command=lambda *_: self._on_mode())
+        _mm.pack(side="left", padx=(4, 8))
+        helptip.tip(_mm, "Videos = YouTube (transcribe). Web = Google pages via "
+                    "DataForSEO. Both = combine into one report.")
+        self.perq_lbl = ttk.Label(nm, text="Web pages/question:")
+        self.perq_var = tk.StringVar(value="10")
+        self.perq_menu = ttk.OptionMenu(nm, self.perq_var, "10",
+                                        *[str(i) for i in range(1, 11)])
+        helptip.tip(self.perq_menu, "For Web/Both: how many top Google results "
+                    "to read per question (1-10). More = more thorough + more "
+                    "cost.")
 
         sr = ttk.Frame(f); sr.pack(fill="x", padx=10, pady=(4, 2))
         ttk.Label(sr, text="Search:").pack(side="left")
@@ -322,6 +354,8 @@ class ResearchWindow:
         _dm.pack(side="left", padx=(4, 12))
         helptip.tip(_dm, "Filter by video length. 'Any length' pulls all; use "
                     "4\u201320 min or Under 4 min to skip very long videos.")
+        self._search_hint = ttk.Label(f, style="Dim.TLabel", text="")
+        self._search_hint.pack(anchor="w", padx=10)
         ttk.Label(op, text="How many:").pack(side="left")
         self.count_var = tk.StringVar(value="")
         _c = tk.Entry(op, textvariable=self.count_var, width=5, bg=theme.FIELD,
@@ -687,13 +721,20 @@ class ResearchWindow:
         if not name:
             self._set("Name the project first (tab 1).")
             return
-        if not self._videos:
+        mode = self.mode_var.get()
+        if mode in ("Videos", "Both") and not self._videos:
             self._set("Fetch some videos first (tab 1).")
             return
         questions = self._q_list()
         if not questions:
             self._set("Add at least one question (tab 2).")
             return
+        if mode in ("Web", "Both"):
+            from . import dataforseo
+            if not dataforseo.configured(self.cfg):
+                self._set("Add your DataForSEO login in Settings for web "
+                          "research.")
+                return
         self._cancel = False
         self._busy = True
         self._report_path = ""
@@ -729,9 +770,11 @@ class ResearchWindow:
 
             def prog(ph, i, n):
                 if ph == "transcribe":
-                    self._set(f"Transcribing {i}/{n}…")
+                    self._set(f"Transcribing video {i}/{n}…")
+                elif ph == "web-search":
+                    self._set(f"Google + reading pages {i}/{n}…")
                 else:
-                    self._set(f"Reading transcripts {i}/{n}…")
+                    self._set(f"Reading sources {i}/{n}…")
 
             def on_done(path):
                 self._report_path = path
@@ -741,11 +784,16 @@ class ResearchWindow:
                 except Exception:
                     pass
 
+            _mode = {"Videos": "videos", "Web": "web",
+                     "Both": "both"}.get(self.mode_var.get(), "videos")
+            _perq = int(self.perq_var.get()) if self.perq_var.get().isdigit() \
+                else 10
+
             res = research.run(self.cfg, name, questions, video_items,
                                log=self._logline, cancel=lambda: self._cancel,
                                progress=prog, on_done=on_done, folder=folder,
                                goal=goal, auto_rounds=auto_rounds,
-                               refetch=refetch)
+                               refetch=refetch, mode=_mode, web_per_q=_perq)
             path = res.get("report", "")
             if path:
                 self._report_path = path

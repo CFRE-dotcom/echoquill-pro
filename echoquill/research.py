@@ -72,6 +72,23 @@ def _windows(segs, max_chars=6000):
     return out or [""]
 
 
+def _windows_text(text, max_chars=6000):
+    """Chunk plain web-page text into windows under max_chars (paragraph-aware)."""
+    out, cur, n = [], [], 0
+    for para in (text or "").split("\n"):
+        para = para.strip()
+        if not para:
+            continue
+        if n + len(para) > max_chars and cur:
+            out.append("\n".join(cur))
+            cur, n = [], 0
+        cur.append(para)
+        n += len(para) + 1
+    if cur:
+        out.append("\n".join(cur))
+    return out or [""]
+
+
 # ---------------------------------------------------------------- search
 # YouTube duration filter codes: 1=short (<4 min), 2=long (>20 min),
 # 3=medium (4-20 min).
@@ -206,25 +223,38 @@ def suggest_keywords(cfg, unanswered, goal, log=lambda s: None):
 
 
 # ---------------------------------------------------------------- synthesis
-def _extract_for_video(cfg, questions, vid, log):
-    """Phase 1: pull, from ONE video, the findings relevant to each question.
-    Returns {qidx: [{"t": sec, "point": str}, ...]}."""
+def _extract_source(cfg, questions, src, log):
+    """Phase 1: pull, from ONE source (video transcript OR web page), the
+    findings relevant to each question. Returns {qidx: [{"t","point"}, ...]}.
+    Web sources have t=None (no timestamps)."""
     findings = {}
     qlist = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
-    sysmsg = (
-        "You extract, from a single video transcript, only the passages that "
-        "help answer a list of research questions. Use ONLY what the "
-        "transcript says. For every point, give the timestamp (the [seconds] "
-        "marker nearest where it is said). Ignore questions the transcript "
-        "does not address. Reply with STRICT JSON only, shape: "
-        '{"1":[{"t":123,"point":"..."}], "2":[...]}  (keys are question '
-        "numbers). No prose, no code fences.")
-    wins = [w for w in _windows(vid.get("segs") or []) if w.strip()]
+    is_web = src.get("kind") == "web" or not src.get("segs")
+    if is_web:
+        sysmsg = (
+            "You extract, from a web page's text, only the passages that help "
+            "answer a list of research questions. Use ONLY what the text says. "
+            "Ignore questions the text does not address. Reply with STRICT JSON "
+            'only, shape: {"1":[{"point":"..."}], "2":[...]}  (keys are '
+            "question numbers). No prose, no code fences.")
+        wins = [w for w in _windows_text(src.get("text", "")) if w.strip()]
+        label = "WEB PAGE"
+    else:
+        sysmsg = (
+            "You extract, from a single video transcript, only the passages "
+            "that help answer a list of research questions. Use ONLY what the "
+            "transcript says. For every point, give the timestamp (the "
+            "[seconds] marker nearest where it is said). Ignore questions the "
+            "transcript does not address. Reply with STRICT JSON only, shape: "
+            '{"1":[{"t":123,"point":"..."}], "2":[...]}  (keys are question '
+            "numbers). No prose, no code fences.")
+        wins = [w for w in _windows(src.get("segs") or []) if w.strip()]
+        label = "TRANSCRIPT"
     for wi, win in enumerate(wins):
         if len(wins) > 1:
             log(f"      reading part {wi+1}/{len(wins)}\u2026")
-        user = (f"QUESTIONS:\n{qlist}\n\nTRANSCRIPT (of "
-                f"\"{vid.get('name','')}\"):\n{win}")
+        user = (f"QUESTIONS:\n{qlist}\n\n{label} (of "
+                f"\"{src.get('name','')}\"):\n{win}")
         ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.1)
         if not ok:
             log(f"    AI extract failed: {reply[:80]}")
@@ -243,35 +273,43 @@ def _extract_for_video(cfg, questions, vid, log):
                 pt = (it.get("point") or "").strip()
                 if not pt:
                     continue
-                try:
-                    t = int(float(it.get("t", 0)))
-                except Exception:
-                    t = 0
+                if is_web:
+                    t = None
+                else:
+                    try:
+                        t = int(float(it.get("t", 0)))
+                    except Exception:
+                        t = 0
                 findings.setdefault(qi, []).append({"t": t, "point": pt})
     return findings
 
 
 def _answer_question(cfg, question, per_video, log):
-    """Phase 2: synthesize one answer from findings across videos.
-    per_video: list of (video_index, name, [{"t","point"}...]).
-    Returns answer text containing citation tokens like [[V2|754]]."""
+    """Phase 2: synthesize one answer from findings across sources (videos and
+    web pages). Video points carry a timestamp; web points don't.
+    Returns answer text with citation tokens like [[S2|754]] or [[S2]]."""
     lines, tokens = [], []
-    for vk, name, items in per_video:
+    for k, name, items in per_video:
         for it in items:
-            tok = f"[[V{vk}|{it['t']}]]"
+            if it.get("t") is not None:
+                tok = f"[[S{k}|{it['t']}]]"
+                where = f"{name} @ {mmss(it['t'])}"
+            else:
+                tok = f"[[S{k}]]"
+                where = name
             tokens.append(tok)
-            lines.append(f"{tok} ({name} @ {mmss(it['t'])}): {it['point']}")
+            lines.append(f"{tok} ({where}): {it['point']}")
     if not lines:
-        return "The videos in this project do not address this question."
+        return "The sources in this project do not address this question."
     sysmsg = (
-        "You answer a research question using ONLY the findings provided from "
-        "video transcripts. Absolute rules: use no outside knowledge; invent "
-        "nothing; no hyperbole, no editorializing, no filler. State only what "
-        "the findings support. Cite sources inline by copying the exact "
-        "bracket tokens shown (e.g. [[V2|754]]); when several findings support "
-        "a point, cite ALL of them together. If the findings do not actually "
-        "answer the question, reply with exactly: NOT_COVERED. Write in plain "
-        "paragraphs, nothing else.")
+        "You answer a research question using ONLY the findings provided (from "
+        "video transcripts and web pages). Absolute rules: use no outside "
+        "knowledge; invent nothing; no hyperbole, no editorializing, no filler. "
+        "State only what the findings support. Cite sources inline by copying "
+        "the exact bracket tokens shown (e.g. [[S2|754]] or [[S2]]); when "
+        "several findings support a point, cite ALL of them together. If the "
+        "findings do not actually answer the question, reply with exactly: "
+        "NOT_COVERED. Write in plain paragraphs, nothing else.")
     user = (f"QUESTION: {question}\n\nFINDINGS (each begins with its citation "
             f"token):\n" + "\n".join(lines) +
             "\n\nWrite the answer now, placing the exact tokens after the "
@@ -279,11 +317,9 @@ def _answer_question(cfg, question, per_video, log):
     ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.3)
     if not ok:
         log(f"    AI answer failed: {reply[:80]}")
-        # fall back to listing the raw findings with their tokens
         return "\n".join(lines)
     valid = set(tokens)
-    # drop any hallucinated tokens the model may have invented
-    for tok in set(re.findall(r"\[\[V\d+\|\d+\]\]", reply)):
+    for tok in set(re.findall(r"\[\[S\d+(?:\|\d+)?\]\]", reply)):
         if tok not in valid:
             reply = reply.replace(tok, "")
     return reply.strip()
@@ -302,9 +338,10 @@ def extract_all(cfg, questions, videos, start=0, log=lambda s: None,
         if cancel():
             break
         progress(vk, total)
-        log("    reading transcript " + str(vk + 1) + "/" + str(total)
+        _kind = "page" if videos[vk].get("kind") == "web" else "transcript"
+        log("    reading " + _kind + " " + str(vk + 1) + "/" + str(total)
             + ": " + videos[vk].get("name", ""))
-        out.append(_extract_for_video(cfg, questions, videos[vk], log))
+        out.append(_extract_source(cfg, questions, videos[vk], log))
     return out
 
 
@@ -349,51 +386,67 @@ def _nearest_seg(segs, sec):
     return best
 
 
-def _render_answer(text, videos):
-    """Turn citation tokens in an answer into clickable links."""
+def _render_answer(text, sources):
+    """Turn citation tokens in an answer into clickable links (video or web)."""
     esc = html.escape(text)
 
     def repl(m):
-        vk, sec = int(m.group(1)), int(m.group(2))
-        if vk < 0 or vk >= len(videos):
+        k = int(m.group(1))
+        sec = m.group(2)
+        if k < 0 or k >= len(sources):
             return ""
-        vid = videos[vk]
-        name = html.escape(vid.get("name", f"Video {vk+1}"))
-        vidid = yt_id(vid.get("url", ""))
-        seg_i = _nearest_seg(vid.get("segs") or [(0, "")], sec)
-        anchor = f"v{vk}s{seg_i}"
-        yurl = (f"https://youtu.be/{vidid}?t={sec}" if vidid
-                else vid.get("url", "#"))
-        return (f'<span class="cite">[<a class="src" href="#{anchor}">'
+        src = sources[k]
+        name = html.escape(src.get("name", f"Source {k+1}"))
+        is_web = src.get("kind") == "web" or not src.get("segs")
+        if is_web:
+            url = html.escape(src.get("url", "#"))
+            return (f'<span class="cite">[<a class="src" href="#src{k}">'
+                    f'{name}</a> <a class="ts" href="{url}" target="_blank" '
+                    f'rel="noopener">link</a>]</span>')
+        secn = int(sec) if sec else 0
+        vidid = yt_id(src.get("url", ""))
+        seg_i = _nearest_seg(src.get("segs") or [(0, "")], secn)
+        yurl = (f"https://youtu.be/{vidid}?t={secn}" if vidid
+                else src.get("url", "#"))
+        return (f'<span class="cite">[<a class="src" href="#src{k}s{seg_i}">'
                 f'{name}</a> <a class="ts" href="{yurl}" target="_blank" '
-                f'rel="noopener">{mmss(sec)}</a>]</span>')
+                f'rel="noopener">{mmss(secn)}</a>]</span>')
 
-    # tokens are inside the escaped text as [[V2|754]] (brackets are safe)
-    esc = re.sub(r"\[\[V(\d+)\|(\d+)\]\]", repl, esc)
-    # paragraphs
+    esc = re.sub(r"\[\[S(\d+)(?:\|(\d+))?\]\]", repl, esc)
     paras = [p.strip() for p in esc.split("\n") if p.strip()]
     return "\n".join(f"<p>{p}</p>" for p in paras)
 
 
-def _render_transcript(vk, vid):
-    segs = vid.get("segs") or []
-    vidid = yt_id(vid.get("url", ""))
+def _render_source(k, src):
+    """Render one source (video transcript with timestamps, or web page text)
+    into the report appendix, with anchors the citations jump to."""
+    name = html.escape(src.get("name", ""))
+    url = html.escape(src.get("url", "#"))
+    is_web = src.get("kind") == "web" or not src.get("segs")
+    if is_web:
+        body = "".join("<p>" + html.escape(p.strip()) + "</p>"
+                       for p in (src.get("text", "") or "").split("\n")
+                       if p.strip())
+        return (f'<section class="tr" id="src{k}"><h3>{name}</h3>'
+                f'<div class="vlink"><a href="{url}" target="_blank" '
+                f'rel="noopener">open page</a></div>'
+                f'<div class="webtext">{body}</div></section>')
+    vidid = yt_id(src.get("url", ""))
     rows = []
-    for i, (st, txt) in enumerate(segs):
+    for i, (st, txt) in enumerate(src.get("segs") or []):
         sec = int(st)
-        yurl = (f"https://youtu.be/{vidid}?t={sec}" if vidid
-                else vid.get("url", "#"))
+        yurl = (f"https://youtu.be/{vidid}?t={sec}" if vidid else url)
         rows.append(
-            f'<div class="seg" id="v{vk}s{i}"><a class="ts" href="{yurl}" '
+            f'<div class="seg" id="src{k}s{i}"><a class="ts" href="{yurl}" '
             f'target="_blank" rel="noopener">{mmss(sec)}</a>'
             f'<span>{html.escape(txt)}</span></div>')
-    desc = vid.get("desc") or ""
+    desc = src.get("desc") or ""
     desc_html = (f'<details class="desc"><summary>Description</summary>'
                  f'<pre>{html.escape(desc)}</pre></details>') if desc else ""
-    return (f'<section class="tr" id="v{vk}"><h3>{html.escape(vid.get("name",""))}'
-            f'</h3><div class="vlink"><a href="{html.escape(vid.get("url","#"))}"'
-            f' target="_blank" rel="noopener">open video</a></div>'
-            f'{desc_html}<div class="segs">' + "".join(rows) + "</div></section>")
+    return (f'<section class="tr" id="src{k}"><h3>{name}</h3>'
+            f'<div class="vlink"><a href="{url}" target="_blank" '
+            f'rel="noopener">open video</a></div>{desc_html}'
+            f'<div class="segs">' + "".join(rows) + "</div></section>")
 
 
 _CSS = """
@@ -427,6 +480,8 @@ color:var(--mut);background:var(--bg);padding:8px;border-radius:8px}
 .seg{display:flex;gap:10px;padding:2px 0;font-size:14px}
 .seg .ts{flex:none;min-width:56px;color:var(--acc);text-decoration:none}
 .seg:target{background:#fff3cd;border-radius:6px}
+.webtext p{margin:6px 0;font-size:14px}
+.tr:target{outline:2px solid #f0d98a}
 .gap{background:#fff8e6;border:1px solid #f0d98a;border-radius:12px;padding:14px 20px;margin:0 0 18px}
 .gap h2{font-size:16px;margin:0 0 8px}.gap li{margin:2px 0}
 .gap code{background:#fff;padding:2px 6px;border-radius:6px}
@@ -449,9 +504,9 @@ def build_report(project_name, questions_results, videos, unanswered=None,
         items = "".join("<li>" + html.escape(q) + "</li>" for q in unanswered)
         sug = ("<p>Suggested next search: <code>" + html.escape(suggestion)
                + "</code></p>") if suggestion else ""
-        gap = ('<div class="gap"><h2>Not answered by these videos</h2>'
+        gap = ('<div class="gap"><h2>Not answered by these sources</h2>'
                '<ul>' + items + '</ul>' + sug + '</div>')
-    trs = "".join(_render_transcript(vk, v) for vk, v in enumerate(videos))
+    trs = "".join(_render_source(vk, v) for vk, v in enumerate(videos))
     when = time.strftime("%B %-d, %Y") if os.name != "nt" else \
         time.strftime("%B %d, %Y")
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -459,7 +514,7 @@ def build_report(project_name, questions_results, videos, unanswered=None,
 <title>{html.escape(project_name)} — research report</title>
 <style>{_CSS}</style></head><body><div class="wrap">
 <h1>{html.escape(project_name)}</h1>
-<div class="meta">Research report · {len(videos)} videos · """ \
+<div class="meta">Research report · {sum(1 for v in videos if v.get("kind")!="web")} videos · {sum(1 for v in videos if v.get("kind")=="web")} web pages · """ \
         f"""{len(questions_results)} questions · {when}</div>
 <div class="toc"><strong>Questions</strong>{toc}</div>
 {qs}
@@ -479,24 +534,42 @@ def project_dir(cfg, name):
     return folder
 
 
+def _norm_url(u):
+    """Normalize a URL for de-duplication (drop scheme, www, fragment, common
+    tracking params, trailing slash)."""
+    import re as _re
+    u = (u or "").strip()
+    u = _re.sub(r"^https?://", "", u, flags=_re.I)
+    u = _re.sub(r"^www\.", "", u, flags=_re.I)
+    u = u.split("#")[0]
+    u = _re.sub(r"[?&](utm_[^=&]+|fbclid|gclid)=[^&]*", "", u)
+    return u.rstrip("/?").lower()
+
+
 def run(cfg, name, questions, video_items, log=lambda s: None,
         cancel=lambda: False, progress=lambda ph, i, n: None,
         on_done=lambda path: None, folder=None, goal="",
-        auto_rounds=0, refetch=None):
-    """Full research project. Downloads+transcribes each video into `folder`
-    (default Transcriptions/Research/<name>), answers every question across all
-    transcripts, and — if auto_rounds>0 and refetch is given — keeps searching
-    for more videos to fill unanswered questions (up to auto_rounds times).
+        auto_rounds=0, refetch=None, mode="videos", web_per_q=10,
+        location="United States", language="English"):
+    """Research project across videos and/or web pages.
+    mode: 'videos' | 'web' | 'both'. For web, each question is a Google search
+    (via DataForSEO); the top web_per_q results are read for their text and
+    de-duplicated by URL. Everything is pooled and every question is answered
+    across all sources with citations. auto_rounds>0 keeps searching for more
+    sources to fill unanswered questions.
     Returns {"report":path, "unanswered":[...], "suggestion":str}."""
     from . import pipeline
     if not folder:
         folder = project_dir(cfg, name)
     else:
         os.makedirs(folder, exist_ok=True)
-    log("Research project: " + name)
+    log("Research project: " + name + "  (" + mode + ")")
     log("  folder: " + folder)
     collected = []
-    seen = set()
+    seen = set()        # video urls
+    web_seen = set()    # normalized web urls
+    do_videos = mode in ("videos", "both")
+    do_web = mode in ("web", "both")
 
     def transcribe(items):
         n = len(items)
@@ -518,22 +591,53 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
                                    progress=lambda ph: None,
                                    sink=collected.append)
 
-    transcribe(video_items)
+    def gather_web(qs):
+        from . import dataforseo
+        total = len(qs)
+        for qi, q in enumerate(qs):
+            if cancel():
+                break
+            progress("web-search", qi + 1, total)
+            log("  Google: " + q)
+            for (u, t) in dataforseo.search(cfg, q, web_per_q, location,
+                                            language, log=log):
+                if cancel():
+                    break
+                nu = _norm_url(u)
+                if not nu or nu in web_seen:
+                    continue
+                web_seen.add(nu)
+                log("    reading " + u)
+                title, text = dataforseo.read_page(cfg, u, log=log)
+                if not (text or "").strip():
+                    continue
+                collected.append({"kind": "web",
+                                  "name": (title or t or u), "url": u,
+                                  "text": text})
+
+    if do_videos:
+        transcribe(video_items)
+    if do_web and not cancel():
+        gather_web(questions)
+
     if cancel():
         log("  cancelled.")
         return {"report": "", "unanswered": [], "suggestion": ""}
     if not collected:
-        log("  no transcripts produced — nothing to synthesize.")
+        log("  nothing gathered — nothing to synthesize.")
         return {"report": "", "unanswered": [], "suggestion": ""}
 
-    log("  synthesizing across " + str(len(collected)) + " transcripts…")
+    import gc
+    gc.collect()
+    log("  synthesizing across " + str(len(collected)) + " sources…")
+    log("  (AI reading every source — can take a while on a slow/local model; "
+        "it is working, not stuck)")
     extracts = extract_all(cfg, questions, collected, 0, log, cancel,
                            lambda d, t: progress("synthesize", d, t))
     results = answer_all(cfg, questions, collected, extracts, log, cancel)
 
     rounds = 0
-    while (auto_rounds and rounds < auto_rounds and refetch
-           and not cancel()):
+    while auto_rounds and rounds < auto_rounds and not cancel():
         unanswered = [r["q"] for r in results if not r.get("answered")]
         if not unanswered:
             break
@@ -542,14 +646,16 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
         kw = suggest_keywords(cfg, unanswered, goal, log)
         if not kw:
             break
-        log("  searching more with: " + kw)
-        more = [it for it in (refetch(kw) or [])
-                if it.get("url") not in seen]
-        if not more:
-            log("  no new videos found.")
-            break
         before = len(collected)
-        transcribe(more)
+        if do_videos and refetch:
+            log("  more videos: " + kw)
+            more = [it for it in (refetch(kw) or [])
+                    if it.get("url") not in seen]
+            if more:
+                transcribe(more)
+        if do_web and not cancel():
+            log("  more web: " + kw)
+            gather_web([kw])
         if len(collected) == before:
             break
         new_ex = extract_all(cfg, questions, collected, before, log, cancel,
@@ -570,10 +676,11 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
         f.write(html_doc)
     try:
         man = {"name": name, "created": time.time(), "goal": goal,
-               "questions": questions,
+               "mode": mode, "questions": questions,
                "unanswered": unanswered_final,
-               "videos": [{"name": c["name"], "url": c["url"],
-                           "path": c.get("path", "")} for c in collected]}
+               "sources": [{"kind": c.get("kind", "video"),
+                            "name": c["name"], "url": c["url"]}
+                           for c in collected]}
         with open(os.path.join(folder, "project.json"), "w",
                   encoding="utf-8") as f:
             json.dump(man, f, indent=2)
@@ -583,3 +690,4 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
     on_done(rpath)
     return {"report": rpath, "unanswered": unanswered_final,
             "suggestion": suggestion}
+

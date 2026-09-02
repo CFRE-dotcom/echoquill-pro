@@ -233,17 +233,69 @@ class SettingsWindow:
                 "Channel watcher", f"Couldn't open the watcher:\n\n{e}")
 
     def _build_research(self, f):
+        from . import helptip
         self._title(f, "Research project",
-                    "Download + transcribe a set of videos into one titled "
-                    "folder, then answer your whole question set across ALL of "
-                    "them in a single clickable HTML report with citations.")
+                    "Find videos and/or web pages on a topic, ask your "
+                    "questions, and get one clickable HTML report answered "
+                    "across every source with citations.")
         ttk.Label(f, style="Dim.TLabel", wraplength=460, text=(
-            "Opens Auto-batch with research mode on: build your video list "
-            "(YouTube search or channel), name the project, add your questions, "
-            "then Start. Needs AI Enhancement set up. Pro only.")).pack(
-            anchor="w", pady=(0, 14))
-        ttk.Button(f, text="Open Research project", style="Accent.TButton",
-                   command=self._open_research).pack(anchor="w")
+            "Its own window: pick Sources (Videos, Web, or Both), fetch/enter "
+            "your material, add questions, then Start. Needs AI Enhancement "
+            "set up. Pro only.")).pack(anchor="w", pady=(0, 10))
+        _bor = ttk.Button(f, text="Open Research project", style="Accent.TButton",
+                          command=self._open_research)
+        _bor.pack(anchor="w")
+        helptip.tip(_bor, "Open the Research window.")
+
+        ttk.Label(f, style="Section.TLabel",
+                  text="Web research (DataForSEO)").pack(anchor="w",
+                                                         pady=(18, 2))
+        ttk.Label(f, style="Dim.TLabel", wraplength=460, text=(
+            "Only needed for Web or Both mode. Paste your DataForSEO API login "
+            "and password (from app.dataforseo.com → API Access), Save, then "
+            "Test. Stored securely on this PC; never shown in reports.")).pack(
+            anchor="w", pady=(0, 8))
+        r = self._row(f, "DataForSEO login")
+        self.dfs_login = tk.StringVar(value=self.cfg.get("dataforseo_login", ""))
+        _le = ttk.Entry(r, textvariable=self.dfs_login, width=36)
+        _le.pack(side="left")
+        helptip.tip(_le, "Your DataForSEO API login (usually your account "
+                    "email). From app.dataforseo.com → API Access.")
+        r = self._row(f, "DataForSEO password")
+        self.dfs_pw = tk.StringVar(value=self.cfg.get("dataforseo_password", ""))
+        _pe = ttk.Entry(r, textvariable=self.dfs_pw, width=36, show="\u2022")
+        _pe.pack(side="left")
+        helptip.tip(_pe, "Your DataForSEO API password (shown on the same API "
+                    "Access page). Kept in Windows Credential Manager.")
+        r = self._row(f, "")
+        _sb = ttk.Button(r, text="Save", style="Accent.TButton",
+                         command=self._dfs_save)
+        _sb.pack(side="left")
+        helptip.tip(_sb, "Save your DataForSEO login + password on this PC.")
+        _tb = ttk.Button(r, text="Test", command=self._dfs_test)
+        _tb.pack(side="left", padx=(8, 0))
+        helptip.tip(_tb, "Run a tiny search to confirm your login works.")
+        self.dfs_status = ttk.Label(f, style="Dim.TLabel", text="")
+        self.dfs_status.pack(anchor="w", pady=(4, 0))
+
+    def _dfs_save(self):
+        from . import config as _c
+        self.cfg["dataforseo_login"] = self.dfs_login.get().strip()
+        self.cfg["dataforseo_password"] = self.dfs_pw.get().strip()
+        _c.save(self.cfg)
+        self.dfs_status.configure(text="Saved \u2713")
+
+    def _dfs_test(self):
+        import threading
+        self._dfs_save()
+        self.dfs_status.configure(text="Testing\u2026")
+
+        def run():
+            from . import dataforseo
+            ok, msg = dataforseo.test(self.cfg)
+            self.win.after(0, lambda: self.dfs_status.configure(
+                text=("DataForSEO: " + msg)))
+        threading.Thread(target=run, daemon=True).start()
 
     def _open_research(self):
         try:
