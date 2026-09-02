@@ -301,7 +301,7 @@ class ResearchWindow:
         nm = ttk.Frame(f); nm.pack(fill="x", padx=10, pady=(10, 4))
         ttk.Label(nm, text="Project name:").pack(side="left")
         self.name_var = tk.StringVar()
-        _e = tk.Entry(nm, textvariable=self.name_var, width=30, bg=theme.FIELD,
+        _e = tk.Entry(nm, textvariable=self.name_var, width=28, bg=theme.FIELD,
                       fg=theme.FG, insertbackground=theme.FG, relief="solid",
                       borderwidth=1)
         _e.pack(side="left", padx=(6, 0))
@@ -322,51 +322,7 @@ class ResearchWindow:
                     "to read per question (1-10). More = more thorough + more "
                     "cost.")
 
-        sr = ttk.Frame(f); sr.pack(fill="x", padx=10, pady=(4, 2))
-        ttk.Label(sr, text="Search:").pack(side="left")
-        self.query_var = tk.StringVar()
-        _q = tk.Entry(sr, textvariable=self.query_var, bg=theme.FIELD,
-                      fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                      borderwidth=1)
-        _q.pack(side="left", fill="x", expand=True, padx=(6, 6))
-        helptip.tip(_q, "What to search on YouTube. Put an exact phrase in "
-                    '"double quotes" to match it exactly.')
-        self.fetch_btn = ttk.Button(sr, text="Fetch", style="Accent.TButton",
-                                    command=self._fetch)
-        self.fetch_btn.pack(side="left")
-        helptip.tip(self.fetch_btn, "Search YouTube and add videos to the list "
-                    "below (used in Videos / Both mode).")
-
-        op = ttk.Frame(f); op.pack(fill="x", padx=10, pady=(2, 2))
-        ttk.Label(op, text="Sort:").pack(side="left")
-        self.sort_var = tk.StringVar(value="Most viewed")
-        _s = ttk.OptionMenu(op, self.sort_var, "Most viewed", *self.SORTS)
-        _s.pack(side="left", padx=(4, 12))
-        helptip.tip(_s, "How YouTube ranks results. Most viewed surfaces the "
-                    "highest-value videos; Newest is most recent.")
-        ttk.Label(op, text="From:").pack(side="left")
-        self.window_var = tk.StringVar(value="Any")
-        _w = ttk.OptionMenu(op, self.window_var, "Any", *self.WINDOWS)
-        _w.pack(side="left", padx=(4, 12))
-        helptip.tip(_w, "Only videos uploaded within this window. Combine with "
-                    "Most viewed for the best recent videos.")
-        ttk.Label(op, text="Length:").pack(side="left")
-        self.dur_var = tk.StringVar(value="Any length")
-        _dm = ttk.OptionMenu(op, self.dur_var, "Any length", *self.DURATIONS)
-        _dm.pack(side="left", padx=(4, 12))
-        helptip.tip(_dm, "Filter by video length. 'Any length' pulls all; use "
-                    "4\u201320 min or Under 4 min to skip very long videos.")
-        self._search_hint = ttk.Label(f, style="Dim.TLabel", text="")
-        self._search_hint.pack(anchor="w", padx=10)
-        ttk.Label(op, text="How many:").pack(side="left")
-        self.count_var = tk.StringVar(value="")
-        _c = tk.Entry(op, textvariable=self.count_var, width=5, bg=theme.FIELD,
-                      fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                      borderwidth=1)
-        _c.pack(side="left", padx=(4, 0))
-        helptip.tip(_c, "Required. How many videos to fetch — type a number "
-                    "(e.g. 25).")
-
+        # folder (always shown)
         fr = ttk.Frame(f); fr.pack(fill="x", padx=10, pady=(2, 2))
         ttk.Label(fr, text="Save to folder:").pack(side="left")
         self.folder_var = tk.StringVar()
@@ -380,7 +336,48 @@ class ResearchWindow:
         _fb.pack(side="left")
         helptip.tip(_fb, "Pick where to save this project's files.")
 
-        lf = ttk.Frame(f); lf.pack(fill="both", expand=True, padx=10, pady=(6, 2))
+        # web-only note (shown when the video area is hidden)
+        self._search_hint = ttk.Label(f, style="Dim.TLabel", text="")
+        self._search_hint.pack(anchor="w", padx=10)
+
+        # ---- video-search area (hidden entirely in Web-only mode) ----
+        self._vid_area = ttk.Frame(f)
+        va = self._vid_area
+        sr = ttk.Frame(va); sr.pack(fill="x", padx=0, pady=(4, 2))
+        ttk.Label(sr, text="Search:").pack(side="left")
+        self.query_var = tk.StringVar()
+        _q = tk.Entry(sr, textvariable=self.query_var, bg=theme.FIELD,
+                      fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                      borderwidth=1)
+        _q.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        helptip.tip(_q, "What to search on YouTube. Put an exact phrase in "
+                    '"double quotes" to match it exactly.')
+        self.fetch_btn = ttk.Button(sr, text="Fetch", style="Accent.TButton",
+                                    command=self._fetch)
+        self.fetch_btn.pack(side="left")
+        helptip.tip(self.fetch_btn, "Search YouTube and add videos to the list "
+                    "below.")
+
+        op = ttk.Frame(va); op.pack(fill="x", pady=(2, 2))
+        ttk.Label(op, text="Sort:").pack(side="left")
+        self.sort_var = tk.StringVar(value="Most viewed")
+        ttk.OptionMenu(op, self.sort_var, "Most viewed", *self.SORTS).pack(
+            side="left", padx=(4, 12))
+        ttk.Label(op, text="From:").pack(side="left")
+        self.window_var = tk.StringVar(value="Any")
+        ttk.OptionMenu(op, self.window_var, "Any", *self.WINDOWS).pack(
+            side="left", padx=(4, 12))
+        ttk.Label(op, text="Length:").pack(side="left")
+        self.dur_var = tk.StringVar(value="Any length")
+        ttk.OptionMenu(op, self.dur_var, "Any length", *self.DURATIONS).pack(
+            side="left", padx=(4, 12))
+        ttk.Label(op, text="How many:").pack(side="left")
+        self.count_var = tk.StringVar(value="")
+        tk.Entry(op, textvariable=self.count_var, width=5, bg=theme.FIELD,
+                 fg=theme.FG, insertbackground=theme.FG, relief="solid",
+                 borderwidth=1).pack(side="left", padx=(4, 0))
+
+        lf = ttk.Frame(va); lf.pack(fill="both", expand=True, pady=(6, 2))
         self.vids = theme.dark_listbox(lf, height=7)
         self.vids.configure(selectmode="extended")
         _sb = ttk.Scrollbar(lf, orient="vertical", command=self.vids.yview)
@@ -391,10 +388,9 @@ class ResearchWindow:
         self.vids.pack(side="left", fill="both", expand=True)
         helptip.tip(self.vids, "The videos that will be transcribed. Select "
                     "rows (Ctrl-click for several) and Remove selected to drop "
-                    "the long ones; right-click also removes. Delete key works "
-                    "too.")
+                    "long ones; right-click also removes.")
 
-        br = ttk.Frame(f); br.pack(fill="x", padx=10, pady=(0, 6))
+        br = ttk.Frame(va); br.pack(fill="x", pady=(0, 6))
         self.vcount = ttk.Label(br, style="Dim.TLabel", text="0 videos")
         self.vcount.pack(side="left")
         _clr = ttk.Button(br, text="Clear list", command=self._clear_videos)
@@ -403,9 +399,34 @@ class ResearchWindow:
         _rms = ttk.Button(br, text="Remove selected",
                           command=self._remove_selected)
         _rms.pack(side="right", padx=6)
-        helptip.tip(_rms, "Drop the highlighted video(s) from this run — e.g. a "
-                    "very long one. Doesn't touch anything on disk.")
+        helptip.tip(_rms, "Drop the highlighted video(s) from this run.")
 
+        self._vid_area.pack(fill="both", expand=True, padx=10)
+        self._on_mode()   # set initial visibility
+
+    def _on_mode(self):
+        m = self.mode_var.get()
+        web = m in ("Web", "Both")
+        vids = m in ("Videos", "Both")
+        try:
+            if web:
+                self.perq_lbl.pack(side="left")
+                self.perq_menu.pack(side="left", padx=(4, 0))
+            else:
+                self.perq_lbl.pack_forget()
+                self.perq_menu.pack_forget()
+            if vids:
+                self._search_hint.configure(text="")
+                self._vid_area.pack(fill="both", expand=True, padx=10)
+            else:
+                self._vid_area.pack_forget()
+                self._search_hint.configure(
+                    text="Web mode: your questions ARE the Google searches — "
+                    "no video search needed. Add questions on tab 2, then Start.")
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------- tab 2
     # ------------------------------------------------------------- tab 2
     def _build_questions(self, f):
         ai = ttk.Frame(f); ai.pack(fill="x", padx=10, pady=(10, 2))
