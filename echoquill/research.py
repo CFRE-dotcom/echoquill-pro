@@ -607,9 +607,6 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
                 if not nu or nu in web_seen:
                     continue
                 web_seen.add(nu)
-                if dataforseo.unscrapable(u):
-                    log("    skipping (not readable): " + u)
-                    continue
                 log("    reading " + u)
                 title, text = dataforseo.read_page(cfg, u, log=log)
                 if not (text or "").strip():

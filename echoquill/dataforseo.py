@@ -77,8 +77,11 @@ def _collect_text(node, out):
 def search(cfg, query, n=10, location="United States", language="English",
            log=lambda s: None):
     """Google organic results for a query. Returns [(url, title), ...]."""
+    # over-fetch so that, after dropping un-scrapable domains, we still return
+    # up to n readable results
+    depth = min(max(int(n) * 2, int(n)), 40)
     payload = [{"keyword": query, "location_name": location,
-                "language_name": language, "depth": max(int(n), 1)}]
+                "language_name": language, "depth": depth}]
     ok, data = _post(cfg, SERP_URL, payload)
     if not ok:
         log("  " + str(data))
@@ -91,9 +94,10 @@ def search(cfg, query, n=10, location="United States", language="English",
                     if it.get("type") != "organic":
                         continue
                     u = it.get("url")
+                    if not u or unscrapable(u):   # drop skip-domains outright
+                        continue
                     t = (it.get("title") or "").strip()
-                    if u:
-                        out.append((u, t))
+                    out.append((u, t))
                     if len(out) >= int(n):
                         break
     except Exception as e:
