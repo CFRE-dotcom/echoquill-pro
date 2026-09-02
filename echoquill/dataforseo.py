@@ -145,7 +145,13 @@ def _read_reddit(cfg, url, log=lambda s: None):
     import requests
     base = url.split("#")[0].split("?")[0].rstrip("/")
     jurl = base + "/.json?limit=500&raw_json=1"
-    headers = {"User-Agent": "EchoQuill-Research/1.0 (research reader)"}
+    headers = {
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/125.0.0.0 Safari/537.36"),
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     proxies = None
     try:
         from . import proxy as _px
