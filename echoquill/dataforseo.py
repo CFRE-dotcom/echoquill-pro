@@ -10,6 +10,20 @@ import base64
 import json
 
 SERP_URL = "https://api.dataforseo.com/v3/serp/google/organic/live/advanced"
+
+# Domains we can't get useful text from (login-walled or not article text) —
+# skip them entirely so we don't waste time or credits. Reddit + Quora are NOT
+# here: Reddit has a .json reader; Quora works with JS rendering.
+SKIP_DOMAINS = ("facebook.com", "fb.com", "instagram.com", "linkedin.com",
+                "twitter.com", "x.com", "tiktok.com", "pinterest.com",
+                "youtube.com", "youtu.be", "m.facebook.com")
+
+
+def unscrapable(url):
+    """True if this URL is a known login-walled / thin-text page to skip."""
+    low = (url or "").lower()
+    return any(("//" + d in low) or ("." + d in low) or ("/" + d in low)
+               for d in SKIP_DOMAINS)
 PARSE_URL = "https://api.dataforseo.com/v3/on_page/content_parsing/live"
 
 
@@ -87,10 +101,13 @@ def search(cfg, query, n=10, location="United States", language="English",
     return out[:int(n)]
 
 
-def read_page(cfg, url, log=lambda s: None):
-    """Fetch a page's readable text. Returns (title, text) or ('', '')."""
-    payload = [{"url": url}]
-    ok, data = _post(cfg, PARSE_URL, payload, timeout=90)
+def _content_parse(cfg, url, render=False, log=lambda s: None):
+    """Parse one page via DataForSEO. render=True asks for JavaScript rendering
+    (catches SPAs like Quora / new Reddit UI; costs more per page)."""
+    item = {"url": url}
+    if render:
+        item["enable_javascript"] = True
+    ok, data = _post(cfg, PARSE_URL, [item], timeout=120)
     if not ok:
         log("  " + str(data))
         return ("", "")
@@ -105,15 +122,88 @@ def read_page(cfg, url, log=lambda s: None):
                     _collect_text(it.get("page_content"), parts)
     except Exception as e:
         log(f"  parse error: {str(e)[:80]}")
-    # de-dupe consecutive blocks, join
+    return (title, _dedupe("\n\n".join(parts)))
+
+
+def _dedupe(text):
     seen, clean = set(), []
-    for p in parts:
+    for p in (text or "").split("\n\n"):
+        p = p.strip()
+        if not p:
+            continue
         k = p[:120]
         if k in seen:
             continue
         seen.add(k)
         clean.append(p)
-    return (title, "\n\n".join(clean))
+    return "\n\n".join(clean)
+
+
+def _read_reddit(cfg, url, log=lambda s: None):
+    """Read a Reddit thread deep via its public .json endpoint — post body plus
+    the full nested comment tree. No login. Routed through the proxy if on."""
+    import requests
+    base = url.split("#")[0].split("?")[0].rstrip("/")
+    jurl = base + "/.json?limit=500&raw_json=1"
+    headers = {"User-Agent": "EchoQuill-Research/1.0 (research reader)"}
+    proxies = None
+    try:
+        from . import proxy as _px
+        pu = _px.proxy_url(cfg)
+        if pu:
+            proxies = {"http": pu, "https": pu}
+    except Exception:
+        proxies = None
+    data, last = None, ""
+    for use in ([proxies, None] if proxies else [None]):
+        try:
+            r = requests.get(jurl, headers=headers, proxies=use, timeout=45)
+            r.raise_for_status()
+            data = r.json()
+            break
+        except Exception as e:
+            last = str(e)
+    if not isinstance(data, list) or len(data) < 2:
+        if last:
+            log("  reddit fetch failed: " + last[:80])
+        return ("", "")
+    title, parts = "", []
+    try:
+        post = data[0]["data"]["children"][0]["data"]
+        title = post.get("title", "")
+        if post.get("selftext"):
+            parts.append(post["selftext"])
+
+        def walk(children):
+            for c in children or []:
+                d = c.get("data") or {}
+                if d.get("body"):
+                    parts.append(d["body"])
+                reps = d.get("replies")
+                if isinstance(reps, dict):
+                    walk(((reps.get("data") or {}).get("children")) or [])
+        walk((data[1].get("data") or {}).get("children") or [])
+    except Exception as e:
+        log("  reddit parse: " + str(e)[:60])
+    return (title, "\n\n".join(p for p in parts if p and p.strip()))
+
+
+def read_page(cfg, url, log=lambda s: None):
+    """Fetch a page's readable text, with fallbacks:
+    Reddit -> its .json comment tree; empty parse -> retry with JS rendering.
+    Returns (title, text) or ('', '')."""
+    low = (url or "").lower()
+    if "reddit.com" in low:
+        t, x = _read_reddit(cfg, url, log)
+        if x.strip():
+            return (t, x)
+    title, text = _content_parse(cfg, url, render=False, log=log)
+    if not text.strip():
+        log("    little/no text — retrying with JS rendering")
+        t2, x2 = _content_parse(cfg, url, render=True, log=log)
+        if x2.strip():
+            return (t2 or title, x2)
+    return (title, text)
 
 
 def test(cfg):
