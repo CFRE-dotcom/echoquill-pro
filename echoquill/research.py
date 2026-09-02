@@ -609,8 +609,11 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
                 web_seen.add(nu)
                 log("    reading " + u)
                 title, text = dataforseo.read_page(cfg, u, log=log)
-                if not (text or "").strip():
+                words = len((text or "").split())
+                if words < 20:
+                    log(f"    ✗ no readable text ({words} words) — skipped")
                     continue
+                log(f"    ✓ got {words} words: " + (title or u)[:70])
                 collected.append({"kind": "web",
                                   "name": (title or t or u), "url": u,
                                   "text": text})
