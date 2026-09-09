@@ -376,6 +376,15 @@ class ResearchWindow:
         tk.Entry(op, textvariable=self.count_var, width=5, bg=theme.FIELD,
                  fg=theme.FG, insertbackground=theme.FG, relief="solid",
                  borderwidth=1).pack(side="left", padx=(4, 0))
+        ttk.Label(op, text="  Transcript:").pack(side="left")
+        self.tmode_var = tk.StringVar(value="Whisper (accurate)")
+        _tm = ttk.OptionMenu(op, self.tmode_var, "Whisper (accurate)",
+                             "Whisper (accurate)", "YouTube captions (fast)")
+        _tm.pack(side="left", padx=(4, 0))
+        helptip.tip(_tm, "How to get each video's text. YouTube captions = "
+                    "fast + free, no download (falls back to Whisper if a "
+                    "video has none). Whisper = our local speech-to-text, most "
+                    "accurate, works on any site but downloads + is slower.")
 
         lf = ttk.Frame(va); lf.pack(fill="both", expand=True, pady=(6, 2))
         self.vids = theme.dark_listbox(lf, height=7)
@@ -824,7 +833,9 @@ class ResearchWindow:
                 notify.done(False)
             except Exception:
                 pass
-            video_items = [{"url": v[0], "title": v[1]}
+            tmode = self.tmode_var.get()
+            video_items = [{"url": v[0], "title": v[1],
+                            "transcript_mode": tmode}
                            for v in self._videos]
             folder = self.folder_var.get().strip() or None
             goal = self.goal.get("1.0", "end").strip()
@@ -835,7 +846,8 @@ class ResearchWindow:
             per = int(cv) if cv.isdigit() and int(cv) > 0 else 15
 
             def refetch(kw):
-                return [{"url": it[0], "title": it[1]} for it in
+                return [{"url": it[0], "title": it[1],
+                         "transcript_mode": tmode} for it in
                         research.fetch_search_web(kw, self.cfg, sort, win, per,
                                                   log=self._logline,
                                                   duration=dur)]

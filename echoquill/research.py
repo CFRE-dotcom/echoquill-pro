@@ -19,6 +19,35 @@ import time
 from . import ai_call
 
 
+def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
+                tries=6, cancel=lambda: False):
+    """ai_call.chat with exponential backoff on rate-limits/timeouts so a 429
+    or transient hiccup WAITS and retries instead of failing the whole run."""
+    delay = 3
+    reply = ""
+    for i in range(max(1, tries)):
+        if cancel():
+            return (False, "cancelled")
+        ok, reply = ai_call.chat(cfg, system, user, temperature=temperature)
+        if ok:
+            return (True, reply)
+        low = str(reply).lower()
+        transient = any(s in low for s in (
+            "429", "too many requests", "rate limit", "timed out", "timeout",
+            "connection", "temporarily", "502", "503", "504",
+            "overloaded", "incompleteread"))
+        if not transient or i == tries - 1:
+            return (False, reply)
+        log(f"      rate-limited/timeout — waiting {delay}s, retry "
+            f"{i + 1}/{tries - 1}…")
+        for _ in range(delay):
+            if cancel():
+                return (False, "cancelled")
+            time.sleep(1)
+        delay = min(delay * 2, 60)
+    return (False, reply)
+
+
 # ---------------------------------------------------------------- helpers
 def yt_id(url):
     m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})",
@@ -187,7 +216,7 @@ def generate_questions(cfg, goal, existing=None, log=lambda s: None):
             "Cover every important angle. Output one question per line, no "
             "numbering, no preamble, no closing remarks.")
         user = "GOAL:\n" + goal + "\n\nWrite the questions, one per line."
-    ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.4)
+    ok, reply = _chat_retry(cfg, sysmsg, user, log=log, temperature=0.4)
     if not ok:
         log("  question generation failed: " + reply[:100])
         return []
@@ -216,7 +245,7 @@ def suggest_keywords(cfg, unanswered, goal, log=lambda s: None):
     user = ("GOAL:\n" + goal + "\n\nUNANSWERED QUESTIONS:\n"
             + "\n".join("- " + q for q in unanswered)
             + "\n\nGive one search query.")
-    ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.3)
+    ok, reply = _chat_retry(cfg, sysmsg, user, log=log, temperature=0.3)
     if not ok or not reply:
         return ""
     return reply.strip().splitlines()[0].strip().strip('"').strip()
@@ -255,7 +284,7 @@ def _extract_source(cfg, questions, src, log):
             log(f"      reading part {wi+1}/{len(wins)}\u2026")
         user = (f"QUESTIONS:\n{qlist}\n\n{label} (of "
                 f"\"{src.get('name','')}\"):\n{win}")
-        ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.1)
+        ok, reply = _chat_retry(cfg, sysmsg, user, log=log, temperature=0.1)
         if not ok:
             log(f"    AI extract failed: {reply[:80]}")
             continue
@@ -314,7 +343,7 @@ def _answer_question(cfg, question, per_video, log):
             f"token):\n" + "\n".join(lines) +
             "\n\nWrite the answer now, placing the exact tokens after the "
             "claims they support.")
-    ok, reply = ai_call.chat(cfg, sysmsg, user, temperature=0.3)
+    ok, reply = _chat_retry(cfg, sysmsg, user, log=log, temperature=0.3)
     if not ok:
         log(f"    AI answer failed: {reply[:80]}")
         return "\n".join(lines)
@@ -328,44 +357,74 @@ def _answer_question(cfg, question, per_video, log):
 NOT_ANSWERED = "Not addressed by the videos in this project."
 
 
+def _workers(cfg):
+    """How many AI calls to run at once (matches your Ollama Cloud concurrency;
+    Pro = 3). Configurable via 'research_workers'; clamped 1..8."""
+    try:
+        return max(1, min(int(cfg.get("research_workers", 3)), 8))
+    except Exception:
+        return 3
+
+
 def extract_all(cfg, questions, videos, start=0, log=lambda s: None,
                 cancel=lambda: False, progress=lambda a, b: None):
     """Phase 1 for videos[start:]. Returns list aligned with videos: each entry
-    is {qi: [findings]}. Videos before `start` are skipped (already done)."""
-    out = []
+    is {qi: [findings]}. Runs up to _workers(cfg) sources IN PARALLEL."""
+    import concurrent.futures as _cf
+    idxs = list(range(start, len(videos)))
     total = len(videos)
-    for vk in range(start, total):
+    done = [0]
+
+    def work(vk):
         if cancel():
-            break
-        progress(vk, total)
+            return (vk, {})
         _kind = "page" if videos[vk].get("kind") == "web" else "transcript"
         log("    reading " + _kind + " " + str(vk + 1) + "/" + str(total)
             + ": " + videos[vk].get("name", ""))
-        out.append(_extract_source(cfg, questions, videos[vk], log))
-    return out
+        return (vk, _extract_source(cfg, questions, videos[vk], log))
+
+    results = {}
+    with _cf.ThreadPoolExecutor(max_workers=_workers(cfg)) as ex:
+        futs = [ex.submit(work, vk) for vk in idxs]
+        for fut in _cf.as_completed(futs):
+            vk, res = fut.result()
+            results[vk] = res
+            done[0] += 1
+            progress(done[0], len(idxs) or 1)
+    return [results.get(vk, {}) for vk in idxs]
 
 
 def answer_all(cfg, questions, videos, extracts, log=lambda s: None,
                cancel=lambda: False):
     """Phase 2. extracts aligned with videos. Returns list of
-    {q, answer, answered}."""
-    results = []
-    for qi, q in enumerate(questions):
+    {q, answer, answered}. Runs up to _workers(cfg) answers IN PARALLEL."""
+    import concurrent.futures as _cf
+    nq = len(questions)
+
+    def work(qi):
+        q = questions[qi]
         if cancel():
-            break
+            return (qi, {"q": q, "answer": NOT_ANSWERED, "answered": False})
         per_video = []
         for vk, vid in enumerate(videos):
             items = (extracts[vk] if vk < len(extracts) else {}).get(qi) or []
             if items:
                 per_video.append((vk, vid.get("name", ""), items))
-        log("    answering question " + str(qi + 1) + "/" + str(len(questions)))
+        log("    answering question " + str(qi + 1) + "/" + str(nq))
         answered = bool(per_video)
         ans = _answer_question(cfg, q, per_video, log)
         if ans.strip() == "NOT_COVERED" or not per_video:
             ans = NOT_ANSWERED
             answered = False
-        results.append({"q": q, "answer": ans, "answered": answered})
-    return results
+        return (qi, {"q": q, "answer": ans, "answered": answered})
+
+    out = {}
+    with _cf.ThreadPoolExecutor(max_workers=_workers(cfg)) as ex:
+        futs = [ex.submit(work, qi) for qi in range(nq)]
+        for fut in _cf.as_completed(futs):
+            qi, res = fut.result()
+            out[qi] = res
+    return [out[qi] for qi in range(nq)]
 
 
 def synthesize(cfg, questions, videos, log=lambda s: None,
