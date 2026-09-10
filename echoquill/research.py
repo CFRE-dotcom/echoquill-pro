@@ -72,13 +72,43 @@ def _pace(cfg):
         time.sleep(min(wait, 1.0))
 
 
+# Errors where the request was REJECTED before doing work — retrying costs no
+# tokens/GPU-time, so we wait patiently and keep trying until it goes through.
+_REJECT_MARKERS = ("429", "too many requests", "rate limit", "rate-limit",
+                   "quota", "overloaded", "temporarily", "capacity",
+                   "queue", "503", "please try again", "server busy")
+# Errors where the server may have already spent compute — retry only a little.
+_EXPENSIVE_MARKERS = ("timed out", "timeout", "connection", "incompleteread",
+                      "remotedisconnected", "reset", "502", "504", "aborted")
+
+
+def _sleep_cancellable(secs, cancel):
+    for _ in range(int(max(0, secs))):
+        if cancel():
+            return False
+        time.sleep(1)
+    return not cancel()
+
+
 def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
-                tries=2, cancel=lambda: False):
-    """ai_call.chat with exponential backoff on rate-limits/timeouts so a 429
-    or transient hiccup WAITS and retries instead of failing the whole run."""
+                tries=3, cancel=lambda: False):
+    """ai_call.chat that pushes a call THROUGH to completion.
+
+    Rate-limit / queue-full / capacity errors mean Ollama refused the request
+    without spending anything, so we wait (patient backoff) and keep retrying
+    until it succeeds — this is how a big project grinds to the finish through
+    the 3-concurrent limit instead of giving up. Read-timeout / connection
+    errors may have burned compute, so those get only a few tries. Cancel/Pause
+    breaks out immediately (progress is already checkpointed)."""
+    try:
+        wait_tries = int(cfg.get("research_wait_tries", 240) or 240)
+    except Exception:
+        wait_tries = 240
     delay = 3
     reply = ""
-    for i in range(max(1, tries)):
+    expensive_used = 0
+    waited = 0
+    while True:
         if cancel():
             return (False, "cancelled")
         _pace(cfg)
@@ -90,20 +120,25 @@ def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
         if ok:
             return (True, reply)
         low = str(reply).lower()
-        transient = any(s in low for s in (
-            "429", "too many requests", "rate limit", "timed out", "timeout",
-            "connection", "temporarily", "502", "503", "504",
-            "overloaded", "incompleteread"))
-        if not transient or i == tries - 1:
+        is_reject = any(s in low for s in _REJECT_MARKERS)
+        is_expensive = any(s in low for s in _EXPENSIVE_MARKERS)
+        if is_reject:
+            waited += 1
+            if waited > max(1, wait_tries):
+                return (False, reply)
+            log(f"      rate-limited (free retry) — waiting {delay}s "
+                f"[{waited}]…")
+        elif is_expensive:
+            expensive_used += 1
+            if expensive_used >= max(1, tries):
+                return (False, reply)
+            log(f"      timeout — waiting {delay}s, retry "
+                f"{expensive_used}/{tries - 1}…")
+        else:
             return (False, reply)
-        log(f"      rate-limited/timeout — waiting {delay}s, retry "
-            f"{i + 1}/{tries - 1}…")
-        for _ in range(delay):
-            if cancel():
-                return (False, "cancelled")
-            time.sleep(1)
-        delay = min(delay * 2, 60)
-    return (False, reply)
+        if not _sleep_cancellable(delay, cancel):
+            return (False, "cancelled")
+        delay = min(int(delay * 2), 120)
 
 
 # ---------------------------------------------------------------- helpers
@@ -1080,9 +1115,33 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
                 answer_store[questions[qi]] = res
                 _ck_write(folder, "_answers.json", answer_store)
 
-    extracts = extract_all(cfg, questions, collected, 0, log, cancel,
-                           lambda d, t: progress("synthesize", d, t),
-                           done=extract_done, on_result=_save_extract)
+    # Extract every source, and keep re-attempting any that fail (e.g. a
+    # timeout that burned a slot) until they ALL succeed or a pass makes no
+    # progress. Rate-limit refusals are handled inside _chat_retry, so this
+    # loop only ever revisits genuinely-failed sources — it drives the project
+    # to completion without a manual restart.
+    extracts = []
+    prev_missing = None
+    while not cancel():
+        extracts = extract_all(cfg, questions, collected, 0, log, cancel,
+                               lambda d, t: progress("synthesize", d, t),
+                               done=dict(extract_done),
+                               on_result=_save_extract)
+        missing = [vk for vk in range(len(collected))
+                   if _src_key(collected[vk]) not in extract_store]
+        if not missing:
+            break
+        if prev_missing is not None and len(missing) >= len(prev_missing):
+            log("  " + str(len(missing)) + " source(s) still failing after a "
+                "full retry pass — leaving them and moving on.")
+            break
+        log("  retrying " + str(len(missing)) + " source(s) that didn't "
+            "complete…")
+        prev_missing = missing
+        extract_done = {vk: {int(qi): v for qi, v in
+                             extract_store[_src_key(collected[vk])].items()}
+                        for vk in range(len(collected))
+                        if _src_key(collected[vk]) in extract_store}
     if cancel():
         log("  paused — progress saved; press Start to resume.")
         return {"report": "", "unanswered": [], "suggestion": ""}
