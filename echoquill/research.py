@@ -72,12 +72,20 @@ def _pace(cfg):
         time.sleep(min(wait, 1.0))
 
 
-# Errors where the request was REJECTED before doing work — retrying costs no
-# tokens/GPU-time, so we wait patiently and keep trying until it goes through.
+# Concurrency throttle: the request was REJECTED before doing work (Ollama's
+# 3-at-a-time limit / full queue). Not billed — retrying is free, so we wait a
+# few seconds and keep trying until it goes through.
 _REJECT_MARKERS = ("429", "too many requests", "rate limit", "rate-limit",
-                   "quota", "overloaded", "temporarily", "capacity",
-                   "queue", "503", "please try again", "server busy")
-# Errors where the server may have already spent compute — retry only a little.
+                   "overloaded", "temporarily", "capacity", "queue", "503",
+                   "please try again", "server busy")
+# Account budget actually spent / auth revoked. Retrying fast does NOT help and
+# can prolong a lockout — instead we wait a long COOLDOWN for the allowance to
+# reset, then resume. This is what keeps the Ollama account from being wedged.
+_EXHAUST_MARKERS = ("quota", "usage limit", "limit reached", "insufficient",
+                    "exceeded", "credits", "suspend", "reauthor",
+                    "not authorized", "unauthorized", "payment", "402", "401",
+                    "403")
+# The server may have already spent compute — retry only a little.
 _EXPENSIVE_MARKERS = ("timed out", "timeout", "connection", "incompleteread",
                       "remotedisconnected", "reset", "502", "504", "aborted")
 
@@ -104,10 +112,19 @@ def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
         wait_tries = int(cfg.get("research_wait_tries", 240) or 240)
     except Exception:
         wait_tries = 240
+    try:
+        cooldown = int(cfg.get("research_cooldown", 1800) or 1800)
+    except Exception:
+        cooldown = 1800
+    try:
+        cooldown_tries = int(cfg.get("research_cooldown_tries", 8) or 8)
+    except Exception:
+        cooldown_tries = 8
     delay = 3
     reply = ""
     expensive_used = 0
     waited = 0
+    cooled = 0
     while True:
         if cancel():
             return (False, "cancelled")
@@ -120,8 +137,20 @@ def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
         if ok:
             return (True, reply)
         low = str(reply).lower()
+        # order matters: a plain concurrency 429 must NOT be read as exhaustion.
         is_reject = any(s in low for s in _REJECT_MARKERS)
+        is_exhaust = (not is_reject) and any(s in low for s in _EXHAUST_MARKERS)
         is_expensive = any(s in low for s in _EXPENSIVE_MARKERS)
+        if is_exhaust:
+            cooled += 1
+            if cooled > max(1, cooldown_tries):
+                return (False, reply)
+            mins = max(1, cooldown // 60)
+            log(f"      Ollama allowance reached — pausing calls ~{mins} min "
+                f"for it to reset, then resuming [{cooled}/{cooldown_tries}]…")
+            if not _sleep_cancellable(cooldown, cancel):
+                return (False, "cancelled")
+            continue
         if is_reject:
             waited += 1
             if waited > max(1, wait_tries):
