@@ -18,9 +18,62 @@ import time
 
 from . import ai_call
 
+import threading as _threading
+
+# ---- launch pacer ---------------------------------------------------------
+# Ollama Cloud Pro allows 3 CONCURRENT requests (we cap workers at 3); extra
+# requests queue and a full queue is rejected (429). Ollama publishes no
+# requests-per-minute number, so we don't hard-code one — instead we throttle
+# how fast calls are LAUNCHED. Default is off (0 = no cap beyond concurrency);
+# set 'research_max_rpm' to pace launches, 'research_min_gap' for a floor
+# between them. Shared across all worker threads.
+_pace_lock = _threading.Lock()
+_pace_last = [0.0]
+
+# Per-run ceiling on model calls (0 = unlimited). When reached, the run stops
+# like a pause — all progress is already on disk — and Start resumes it.
+_call_count = [0]
+_call_cap = [0]
+
+
+def _budget_reset(cfg):
+    try:
+        _call_cap[0] = max(0, int(cfg.get("research_max_calls", 0) or 0))
+    except Exception:
+        _call_cap[0] = 0
+    _call_count[0] = 0
+
+
+def _budget_hit():
+    return _call_cap[0] > 0 and _call_count[0] >= _call_cap[0]
+
+
+def _pace(cfg):
+    """Block until it's OK to launch the next model call, per research_max_rpm
+    (calls/min) and research_min_gap (seconds). No-op if both are 0/unset."""
+    try:
+        rpm = float(cfg.get("research_max_rpm", 0) or 0)
+    except Exception:
+        rpm = 0.0
+    try:
+        gap = float(cfg.get("research_min_gap", 0) or 0)
+    except Exception:
+        gap = 0.0
+    interval = max(gap, (60.0 / rpm) if rpm > 0 else 0.0)
+    if interval <= 0:
+        return
+    while True:
+        with _pace_lock:
+            now = time.time()
+            wait = _pace_last[0] + interval - now
+            if wait <= 0:
+                _pace_last[0] = now
+                return
+        time.sleep(min(wait, 1.0))
+
 
 def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
-                tries=6, cancel=lambda: False):
+                tries=2, cancel=lambda: False):
     """ai_call.chat with exponential backoff on rate-limits/timeouts so a 429
     or transient hiccup WAITS and retries instead of failing the whole run."""
     delay = 3
@@ -28,6 +81,11 @@ def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
     for i in range(max(1, tries)):
         if cancel():
             return (False, "cancelled")
+        _pace(cfg)
+        if cancel():
+            return (False, "cancelled")
+        with _pace_lock:
+            _call_count[0] += 1
         ok, reply = ai_call.chat(cfg, system, user, temperature=temperature)
         if ok:
             return (True, reply)
@@ -116,6 +174,113 @@ def _windows_text(text, max_chars=6000):
     if cur:
         out.append("\n".join(cur))
     return out or [""]
+
+
+def _batch_budget(cfg):
+    """Chars of source text to pack into ONE extraction call. Derived from the
+    model's context window (num_ctx tokens), reserving ~40% for the questions
+    block + the JSON reply. 1 token ~= 4 chars. Configurable via
+    'research_batch_chars'; else computed from 'ai_num_ctx' (default 16384)."""
+    try:
+        explicit = int(cfg.get("research_batch_chars", 0))
+        if explicit > 0:
+            return max(4000, explicit)
+    except Exception:
+        pass
+    try:
+        nctx = int(cfg.get("ai_num_ctx", 16384))
+    except Exception:
+        nctx = 16384
+    return max(4000, int(nctx * 4 * 0.6))
+
+
+def _source_body(src):
+    """Render one source's full text for extraction. Returns (body, has_ts).
+    Video transcripts carry '[sec] text' lines; web pages are plain text."""
+    is_web = src.get("kind") == "web" or not src.get("segs")
+    if is_web:
+        return ((src.get("text", "") or "").strip(), False)
+    lines = [f"[{int(sec)}] {txt}" for sec, txt in (src.get("segs") or [])]
+    return ("\n".join(lines), True)
+
+
+def _batch_items(items, budget):
+    """Greedily pack (vk, piece, has_ts) items into batches whose combined
+    text stays under budget. Each piece is already <= budget."""
+    batches, cur, n = [], [], 0
+    for it in items:
+        plen = len(it[1])
+        if cur and n + plen > budget:
+            batches.append(cur)
+            cur, n = [], 0
+        cur.append(it)
+        n += plen
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+def _extract_batch(cfg, questions, batch, log):
+    """Extract findings for a batch of sources in ONE model call.
+    batch: list of (vk, piece_text, has_ts). Returns {vk: {qi: [findings]}}.
+    Sources are labelled SOURCE 1..N in the prompt; the model tags each finding
+    with its source number 's', so all questions are asked ONCE across every
+    source in the batch (instead of one call per source)."""
+    qlist = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
+    any_ts = any(b[2] for b in batch)
+    sysmsg = (
+        "You extract, from several labelled SOURCES (video transcripts and/or "
+        "web pages), only the passages that help answer a list of research "
+        "questions. Use ONLY what each source says; invent nothing; ignore "
+        "questions a source does not address. Every finding MUST name the "
+        "SOURCE number it came from as \"s\". "
+        + ("When the source is a transcript (its text has [seconds] markers), "
+           "also give \"t\": the nearest [seconds] marker. Web sources have no "
+           "\"t\". " if any_ts else "")
+        + "Reply with STRICT JSON only, no prose, no code fences, shape: "
+        '{"1":[{"s":1,"t":123,"point":"..."},{"s":3,"point":"..."}], "2":[...]}'
+        "  (top-level keys are question numbers).")
+    blocks = []
+    for i, (vk, piece, has_ts) in enumerate(batch):
+        tag = " (transcript, has [seconds] markers)" if has_ts else " (web page)"
+        blocks.append(f"===== SOURCE {i+1}{tag} =====\n{piece}")
+    user = ("QUESTIONS:\n" + qlist + "\n\nSOURCES:\n" + "\n\n".join(blocks)
+            + "\n\nReturn the JSON now.")
+    ok, reply = _chat_retry(cfg, sysmsg, user, log=log, temperature=0.1)
+    out = {vk: {} for (vk, _p, _h) in batch}
+    if not ok:
+        log(f"    AI extract failed: {reply[:80]}")
+        return (False, out)
+    data = _json(reply) or {}
+    for k, arr in data.items():
+        try:
+            qi = int(str(k).strip()) - 1
+        except Exception:
+            continue
+        if qi < 0 or qi >= len(questions) or not isinstance(arr, list):
+            continue
+        for it in arr:
+            if not isinstance(it, dict):
+                continue
+            pt = (it.get("point") or "").strip()
+            if not pt:
+                continue
+            try:
+                si = int(it.get("s", 0)) - 1
+            except Exception:
+                continue
+            if si < 0 or si >= len(batch):
+                continue
+            vk, _p, has_ts = batch[si]
+            if has_ts:
+                try:
+                    t = int(float(it.get("t", 0)))
+                except Exception:
+                    t = 0
+            else:
+                t = None
+            out[vk].setdefault(qi, []).append({"t": t, "point": pt})
+    return (True, out)
 
 
 # ---------------------------------------------------------------- search
@@ -367,39 +532,90 @@ def _workers(cfg):
 
 
 def extract_all(cfg, questions, videos, start=0, log=lambda s: None,
-                cancel=lambda: False, progress=lambda a, b: None):
+                cancel=lambda: False, progress=lambda a, b: None,
+                done=None, on_result=lambda vk, res: None):
     """Phase 1 for videos[start:]. Returns list aligned with videos: each entry
-    is {qi: [findings]}. Runs up to _workers(cfg) sources IN PARALLEL."""
+    is {qi: [findings]}. Sources are PACKED by size into as few model calls as
+    fit the context budget (all questions asked once per call), and the batches
+    run up to _workers(cfg) at a time.
+    done: optional {vk: result} of sources already extracted (checkpoint) —
+    skipped and reused. on_result(vk, res) fires once a source is fully read so
+    the caller can persist a checkpoint incrementally."""
     import concurrent.futures as _cf
-    idxs = list(range(start, len(videos)))
+    import threading as _th
+    done = dict(done or {})
+    idxs = [vk for vk in range(start, len(videos)) if vk not in done]
     total = len(videos)
-    done = [0]
+    results = dict(done)
+    if done:
+        log("    resume: " + str(len(done)) + " source(s) already read — "
+            "skipping")
 
-    def work(vk):
+    # Build items (split any single source larger than the batch budget), then
+    # pack many sources into each call. All questions are asked ONCE per call.
+    budget = _batch_budget(cfg)
+    items, per_vk = [], {}
+    for vk in idxs:
+        body, has_ts = _source_body(videos[vk])
+        pieces = _windows_text(body, budget) if len(body) > budget else [body]
+        per_vk[vk] = len(pieces)
+        for p in pieces:
+            items.append((vk, p, has_ts))
+    batches = _batch_items(items, budget)
+    nb = len(batches) or 1
+    log("    " + str(len(idxs)) + " source(s) packed into " + str(len(batches))
+        + " call(s) (budget " + str(budget) + " chars/call)")
+
+    lock = _th.Lock()
+    remaining = dict(per_vk)          # vk -> pieces still outstanding
+    merged = {vk: {} for vk in idxs}  # vk -> {qi: [findings]}
+    counter = [0]
+
+    def _merge(ok, part):
+        # On a failed call, leave those sources un-finalized so a later resume
+        # retries them instead of recording them as "read, nothing found".
+        if not ok:
+            return []
+        finished = []
+        with lock:
+            for vk, qd in part.items():
+                for qi, arr in qd.items():
+                    merged[vk].setdefault(qi, []).extend(arr)
+                remaining[vk] -= 1
+                if remaining[vk] <= 0:
+                    finished.append(vk)
+        return finished
+
+    def work(bi):
         if cancel():
-            return (vk, {})
-        _kind = "page" if videos[vk].get("kind") == "web" else "transcript"
-        log("    reading " + _kind + " " + str(vk + 1) + "/" + str(total)
-            + ": " + videos[vk].get("name", ""))
-        return (vk, _extract_source(cfg, questions, videos[vk], log))
+            return (False, {})
+        log("    reading batch " + str(bi + 1) + "/" + str(nb))
+        return _extract_batch(cfg, questions, batches[bi], log)
 
-    results = {}
+    progress(len(done), total or 1)
     with _cf.ThreadPoolExecutor(max_workers=_workers(cfg)) as ex:
-        futs = [ex.submit(work, vk) for vk in idxs]
+        futs = [ex.submit(work, bi) for bi in range(len(batches))]
         for fut in _cf.as_completed(futs):
-            vk, res = fut.result()
-            results[vk] = res
-            done[0] += 1
-            progress(done[0], len(idxs) or 1)
-    return [results.get(vk, {}) for vk in idxs]
+            ok, part = fut.result()
+            for vk in _merge(ok, part):
+                results[vk] = merged[vk]
+                if not cancel():
+                    on_result(vk, merged[vk])
+                counter[0] += 1
+                progress(len(done) + counter[0], total or 1)
+    return [results.get(vk, {}) for vk in range(start, len(videos))]
 
 
 def answer_all(cfg, questions, videos, extracts, log=lambda s: None,
-               cancel=lambda: False):
+               cancel=lambda: False, done=None,
+               on_result=lambda qi, res: None):
     """Phase 2. extracts aligned with videos. Returns list of
-    {q, answer, answered}. Runs up to _workers(cfg) answers IN PARALLEL."""
+    {q, answer, answered}. Runs up to _workers(cfg) answers IN PARALLEL.
+    done: optional {qi: result} of questions already answered (checkpoint) —
+    skipped and reused. on_result(qi, res) fires per finished question."""
     import concurrent.futures as _cf
     nq = len(questions)
+    done = dict(done or {})
 
     def work(qi):
         q = questions[qi]
@@ -418,13 +634,20 @@ def answer_all(cfg, questions, videos, extracts, log=lambda s: None,
             answered = False
         return (qi, {"q": q, "answer": ans, "answered": answered})
 
-    out = {}
+    out = dict(done)
+    todo = [qi for qi in range(nq) if qi not in done]
+    if done:
+        log("    resume: " + str(len(done)) + " question(s) already answered "
+            "— skipping")
     with _cf.ThreadPoolExecutor(max_workers=_workers(cfg)) as ex:
-        futs = [ex.submit(work, qi) for qi in range(nq)]
+        futs = [ex.submit(work, qi) for qi in todo]
         for fut in _cf.as_completed(futs):
             qi, res = fut.result()
             out[qi] = res
-    return [out[qi] for qi in range(nq)]
+            if not cancel():
+                on_result(qi, res)
+    return [out.get(qi, {"q": questions[qi], "answer": NOT_ANSWERED,
+                         "answered": False}) for qi in range(nq)]
 
 
 def synthesize(cfg, questions, videos, log=lambda s: None,
@@ -585,10 +808,12 @@ def build_report(project_name, questions_results, videos, unanswered=None,
 
 # ---------------------------------------------------------------- run
 def project_dir(cfg, name):
-    from .media_gui import transcripts_dir
+    from .media_gui import base_dir
     from .auto_batch import normalize_name
-    base = transcripts_dir(cfg)
-    folder = os.path.join(base, "Research", normalize_name(name) or "project")
+    # Documents\EchoQuill\ResearchProjects\<project name>
+    base = base_dir(cfg)
+    folder = os.path.join(base, "ResearchProjects",
+                          normalize_name(name) or "project")
     os.makedirs(folder, exist_ok=True)
     return folder
 
@@ -603,6 +828,60 @@ def _norm_url(u):
     u = u.split("#")[0]
     u = _re.sub(r"[?&](utm_[^=&]+|fbclid|gclid)=[^&]*", "", u)
     return u.rstrip("/?").lower()
+
+
+def _src_key(src):
+    """Stable identity for a gathered source, for checkpoint keying."""
+    u = src.get("url") or ""
+    if src.get("kind") == "web":
+        return "web:" + _norm_url(u)
+    return "vid:" + (u or src.get("name") or "")
+
+
+def _writable(folder):
+    """True if we can actually create + write + delete a file in folder.
+    Catches the Windows case where a path under Program Files is read-only (and
+    silently redirected to VirtualStore), which otherwise loses the whole run."""
+    try:
+        os.makedirs(folder, exist_ok=True)
+        probe = os.path.join(folder, ".echoquill_write_test")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+        return True
+    except Exception:
+        return False
+
+
+def _bad_location(folder):
+    """A folder we must never write a project into (system-protected on
+    Windows; writes there vanish into VirtualStore)."""
+    low = (folder or "").replace("/", "\\").lower()
+    return ("\\program files" in low or "\\windows\\" in low
+            or low.rstrip("\\").endswith("\\windows"))
+
+
+def _ck_read(folder, fname, default):
+    """Load a checkpoint file from the project folder."""
+    try:
+        p = os.path.join(folder, fname)
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return default
+
+
+def _ck_write(folder, fname, data):
+    """Atomically save a checkpoint file (tmp + replace)."""
+    try:
+        tmp = os.path.join(folder, fname + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, os.path.join(folder, fname))
+    except Exception:
+        pass
 
 
 def run(cfg, name, questions, video_items, log=lambda s: None,
@@ -621,14 +900,73 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
     if not folder:
         folder = project_dir(cfg, name)
     else:
-        os.makedirs(folder, exist_ok=True)
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except Exception:
+            pass
+    # Direct the output to a safe, writable location BEFORE spending any
+    # tokens. A folder under Program Files / Windows is write-protected and
+    # silently loses the report and all progress, so we REROUTE to the normal
+    # Documents project folder and carry on — never blame the OS, never lose
+    # the run.
+    if _bad_location(folder) or not _writable(folder):
+        why = ("a system-protected location (Program Files/Windows)"
+               if _bad_location(folder) else "read-only")
+        rerouted = project_dir(cfg, name)
+        if not _writable(rerouted):
+            log("  ✗ can't write to '" + folder + "' (" + why + ") and the "
+                "default project folder is also unwritable: " + rerouted)
+            log("  Nothing was run and no tokens were spent.")
+            return {"report": "", "unanswered": [], "suggestion": "",
+                    "error": "unwritable_folder", "suggested_folder": rerouted}
+        log("  '" + folder + "' is " + why + " — saving this project here "
+            "instead: " + rerouted)
+        folder = rerouted
     log("Research project: " + name + "  (" + mode + ")")
     log("  folder: " + folder)
+    import threading
+    _ck_lock = threading.Lock()
+
+    # Per-run model-call ceiling: when hit, stop like a pause (all progress is
+    # already saved) so a big project spends only what you allow per sitting.
+    _budget_reset(cfg)
+    _user_cancel = cancel
+
+    def cancel():
+        return _user_cancel() or _budget_hit()
+
+    if _call_cap[0]:
+        log("  call ceiling this run: " + str(_call_cap[0])
+            + " model calls, then auto-pause (Start resumes).")
+
     collected = []
     seen = set()        # video urls
     web_seen = set()    # normalized web urls
     do_videos = mode in ("videos", "both")
     do_web = mode in ("web", "both")
+
+    # ---- resume: reload any sources already gathered on a prior run ----
+    saved_sources = _ck_read(folder, "_sources.json", [])
+    if saved_sources:
+        for s in saved_sources:
+            collected.append(s)
+            if s.get("kind") == "web":
+                nu = _norm_url(s.get("url", ""))
+                if nu:
+                    web_seen.add(nu)
+            else:
+                if s.get("url"):
+                    seen.add(s["url"])
+        log("  resume: " + str(len(collected)) + " source(s) reloaded from "
+            "checkpoint — not re-downloading")
+
+    def _save_sources():
+        with _ck_lock:
+            _ck_write(folder, "_sources.json", collected)
+
+    def _add_source(s):
+        collected.append(s)
+        _save_sources()
 
     def transcribe(items):
         n = len(items)
@@ -648,7 +986,7 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
             log("→ " + (it.get("title") or u))
             pipeline.process_video(cfg, it, log, cancel,
                                    progress=lambda ph: None,
-                                   sink=collected.append)
+                                   sink=_add_source)
 
     def gather_web(qs):
         from . import dataforseo
@@ -673,9 +1011,9 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
                     log(f"    ✗ no readable text ({words} words) — skipped")
                     continue
                 log(f"    ✓ got {words} words: " + (title or u)[:70])
-                collected.append({"kind": "web",
-                                  "name": (title or t or u), "url": u,
-                                  "text": text})
+                _add_source({"kind": "web",
+                             "name": (title or t or u), "url": u,
+                             "text": text})
 
     if do_videos:
         transcribe(video_items)
@@ -683,7 +1021,8 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
         gather_web(questions)
 
     if cancel():
-        log("  cancelled.")
+        log("  paused — " + str(len(collected)) + " source(s) saved; press "
+            "Start to resume.")
         return {"report": "", "unanswered": [], "suggestion": ""}
     if not collected:
         log("  nothing gathered — nothing to synthesize.")
@@ -694,9 +1033,64 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
     log("  synthesizing across " + str(len(collected)) + " sources…")
     log("  (AI reading every source — can take a while on a slow/local model; "
         "it is working, not stuck)")
+
+    # ---- resume: reload per-source extracts + per-question answers ----
+    def _load_extract_done():
+        raw = _ck_read(folder, "_extracts.json", {})
+        by_key = {}
+        for k, v in (raw or {}).items():
+            try:
+                by_key[k] = {int(qi): items for qi, items in v.items()}
+            except Exception:
+                pass
+        done = {}
+        for vk, src in enumerate(collected):
+            key = _src_key(src)
+            if key in by_key:
+                done[vk] = by_key[key]
+        return done
+
+    extract_store = {}  # src_key -> {qi: findings}
+
+    def _save_extract(vk, res):
+        with _ck_lock:
+            if 0 <= vk < len(collected):
+                extract_store[_src_key(collected[vk])] = {
+                    str(qi): items for qi, items in (res or {}).items()}
+                _ck_write(folder, "_extracts.json", extract_store)
+
+    extract_done = _load_extract_done()
+    for vk, res in extract_done.items():
+        extract_store[_src_key(collected[vk])] = {
+            str(qi): items for qi, items in (res or {}).items()}
+
+    def _load_answer_done():
+        raw = _ck_read(folder, "_answers.json", {})
+        done = {}
+        for qi, q in enumerate(questions):
+            if q in (raw or {}):
+                done[qi] = raw[q]
+        return done
+
+    answer_store = dict(_ck_read(folder, "_answers.json", {}) or {})
+
+    def _save_answer(qi, res):
+        with _ck_lock:
+            if 0 <= qi < len(questions):
+                answer_store[questions[qi]] = res
+                _ck_write(folder, "_answers.json", answer_store)
+
     extracts = extract_all(cfg, questions, collected, 0, log, cancel,
-                           lambda d, t: progress("synthesize", d, t))
-    results = answer_all(cfg, questions, collected, extracts, log, cancel)
+                           lambda d, t: progress("synthesize", d, t),
+                           done=extract_done, on_result=_save_extract)
+    if cancel():
+        log("  paused — progress saved; press Start to resume.")
+        return {"report": "", "unanswered": [], "suggestion": ""}
+    results = answer_all(cfg, questions, collected, extracts, log, cancel,
+                         done=_load_answer_done(), on_result=_save_answer)
+    if cancel():
+        log("  paused — progress saved; press Start to resume.")
+        return {"report": "", "unanswered": [], "suggestion": ""}
 
     rounds = 0
     while auto_rounds and rounds < auto_rounds and not cancel():
@@ -721,9 +1115,14 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
         if len(collected) == before:
             break
         new_ex = extract_all(cfg, questions, collected, before, log, cancel,
-                             lambda d, t: progress("synthesize", d, t))
+                             lambda d, t: progress("synthesize", d, t),
+                             done={}, on_result=_save_extract)
         extracts += new_ex
-        results = answer_all(cfg, questions, collected, extracts, log, cancel)
+        # new sources may answer previously-unanswered questions — re-answer
+        # all, refreshing the checkpoint as we go.
+        answer_store.clear()
+        results = answer_all(cfg, questions, collected, extracts, log, cancel,
+                             done=None, on_result=_save_answer)
         rounds += 1
 
     unanswered_final = [r["q"] for r in results if not r.get("answered")]
@@ -734,8 +1133,24 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
     html_doc = build_report(name, results, collected, unanswered_final,
                             suggestion)
     rpath = os.path.join(folder, "report.html")
-    with open(rpath, "w", encoding="utf-8") as f:
-        f.write(html_doc)
+    try:
+        with open(rpath, "w", encoding="utf-8") as f:
+            f.write(html_doc)
+    except Exception as e:
+        # never lose the finished report — fall back to a guaranteed-writable
+        # location and tell the user exactly where it went.
+        fallback = project_dir(cfg, name)
+        rpath = os.path.join(fallback, "report.html")
+        try:
+            with open(rpath, "w", encoding="utf-8") as f:
+                f.write(html_doc)
+            log("  ! couldn't write to the chosen folder (" + str(e)[:60]
+                + "); saved the report here instead: " + rpath)
+        except Exception as e2:
+            log("  ✗ FAILED to save the report: " + str(e2)[:80])
+            return {"report": "", "unanswered": unanswered_final,
+                    "suggestion": suggestion, "error": "write_failed"}
+        folder = fallback
     try:
         man = {"name": name, "created": time.time(), "goal": goal,
                "mode": mode, "questions": questions,
@@ -748,6 +1163,12 @@ def run(cfg, name, questions, video_items, log=lambda s: None,
             json.dump(man, f, indent=2)
     except Exception:
         pass
+    # completed cleanly — drop checkpoints so a later re-run starts fresh.
+    for _f in ("_sources.json", "_extracts.json", "_answers.json"):
+        try:
+            os.remove(os.path.join(folder, _f))
+        except OSError:
+            pass
     log("  report written: " + rpath)
     on_done(rpath)
     return {"report": rpath, "unanswered": unanswered_final,

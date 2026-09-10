@@ -519,11 +519,16 @@ class ResearchWindow:
                                     command=self._start)
         self.start_btn.pack(side="left")
         helptip.tip(self.start_btn, "Gather your sources (videos and/or web), "
-                    "answer every question, and build the cited report.")
-        self.stop_btn = ttk.Button(bar, text="Stop", command=self._stop,
+                    "answer every question, and build the cited report. If the "
+                    "project was paused or failed partway, Start picks up where "
+                    "it left off — no re-downloading or re-reading.")
+        self.stop_btn = ttk.Button(bar, text="Pause", command=self._stop,
                                    state="disabled")
         self.stop_btn.pack(side="left", padx=8)
-        helptip.tip(self.stop_btn, "Halt after the current video.")
+        helptip.tip(self.stop_btn, "Pause after the current step. Everything "
+                    "gathered and answered so far is saved to the project "
+                    "folder — press Start to resume, or close and come back "
+                    "later. Nothing is re-done.")
         _of = ttk.Button(bar, text="Open folder", command=self._open_folder)
         _of.pack(side="left", padx=8)
         helptip.tip(_of, "Open this project's folder in File Explorer.")
@@ -533,12 +538,62 @@ class ResearchWindow:
         helptip.tip(self.report_btn, "Open the finished HTML report.")
         ttk.Button(bar, text="Close", command=self._on_close).pack(side="right")
 
+        # ---- budget / throttle (protects your Ollama credits) ----
+        lim = ttk.Frame(bar)
+        lim.pack(side="right", padx=12)
+        ttk.Label(lim, text="cap calls/run:").pack(side="left")
+        self.maxcalls_var = tk.StringVar(
+            value=str(int(self.cfg.get("research_max_calls", 0) or 0)))
+        _mc = tk.Entry(lim, textvariable=self.maxcalls_var, width=6,
+                       bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
+                       relief="solid", borderwidth=1)
+        _mc.pack(side="left", padx=(4, 10))
+        helptip.tip(_mc, "Stop after this many AI calls in one sitting, then "
+                    "auto-pause with everything saved — press Start later to "
+                    "resume. 0 = no cap. Use it to spend only part of your "
+                    "Ollama budget per run on a huge project.")
+        ttk.Label(lim, text="calls/min:").pack(side="left")
+        self.rpm_var = tk.StringVar(
+            value=str(int(self.cfg.get("research_max_rpm", 0) or 0)))
+        _rpm = tk.Entry(lim, textvariable=self.rpm_var, width=5,
+                        bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
+                        relief="solid", borderwidth=1)
+        _rpm.pack(side="left", padx=(4, 0))
+        helptip.tip(_rpm, "Throttle how fast calls are launched (calls per "
+                    "minute) to avoid overrunning Ollama's queue. 0 = off; "
+                    "the 3-at-a-time concurrency limit still applies either "
+                    "way.")
+
         self.log = theme.dark_text(self.win, wrap="word", height=4)
         self.log.pack(side="bottom", fill="x", padx=16, pady=(2, 2))
         self.status = ttk.Label(self.win, style="Dim.TLabel", text="")
         self.status.pack(side="bottom", anchor="w", padx=16)
+        # persistent per-phase counters (stay visible the whole run)
+        sf = ttk.Frame(self.win)
+        sf.pack(side="bottom", fill="x", padx=16, pady=(4, 0))
+        self.vid_stat = ttk.Label(sf, text="Videos: —", style="Section.TLabel")
+        self.vid_stat.pack(side="left")
+        ttk.Label(sf, text="      ").pack(side="left")
+        self.web_stat = ttk.Label(sf, text="Web pages: —",
+                                  style="Section.TLabel")
+        self.web_stat.pack(side="left")
+        ttk.Label(sf, text="      ").pack(side="left")
+        self.syn_stat = ttk.Label(sf, text="Synthesis: —",
+                                  style="Section.TLabel")
+        self.syn_stat.pack(side="left")
 
     # ------------------------------------------------------------- helpers
+    def _stat(self, widget, text):
+        try:
+            self.win.after(0, lambda: widget.configure(text=text))
+        except Exception:
+            pass
+
+    def _reset_stats(self):
+        self._stat(self.vid_stat, "Videos: —")
+        self._stat(self.web_stat, "Web pages: —")
+        self._stat(self.syn_stat, "Synthesis: —")
+
     def _set(self, msg):
         try:
             self.win.after(0, lambda: self.status.configure(text=msg))
@@ -817,8 +872,25 @@ class ResearchWindow:
                           "research.")
                 return
         self._cancel = False
+        # apply + persist the budget/throttle controls
+        try:
+            self.cfg["research_max_calls"] = int(self.maxcalls_var.get() or 0)
+        except Exception:
+            self.cfg["research_max_calls"] = 0
+        try:
+            self.cfg["research_max_rpm"] = int(self.rpm_var.get() or 0)
+        except Exception:
+            self.cfg["research_max_rpm"] = 0
+        try:
+            from . import config as _config
+            _config.save(self.cfg)
+        except Exception:
+            pass
         self._busy = True
         self._report_path = ""
+        if self._has_checkpoint():
+            self._set("Resuming — reloading saved progress, skipping finished "
+                      "work…")
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
         self.report_btn.configure(state="disabled")
@@ -833,6 +905,7 @@ class ResearchWindow:
                 notify.done(False)
             except Exception:
                 pass
+            self._reset_stats()
             tmode = self.tmode_var.get()
             video_items = [{"url": v[0], "title": v[1],
                             "transcript_mode": tmode}
@@ -853,11 +926,15 @@ class ResearchWindow:
                                                   duration=dur)]
 
             def prog(ph, i, n):
+                done = " ✓" if i >= n else ""
                 if ph == "transcribe":
+                    self._stat(self.vid_stat, f"Videos: {i}/{n}{done}")
                     self._set(f"Transcribing video {i}/{n}…")
                 elif ph == "web-search":
+                    self._stat(self.web_stat, f"Web searches: {i}/{n}{done}")
                     self._set(f"Google + reading pages {i}/{n}…")
                 else:
+                    self._stat(self.syn_stat, f"Synthesis: {i}/{n}{done}")
                     self._set(f"Reading sources {i}/{n}…")
 
             def on_done(path):
@@ -887,12 +964,13 @@ class ResearchWindow:
                 except Exception:
                     pass
                 self._set("Research complete ✓" if not self._cancel
-                          else "Stopped.")
+                          else "Paused — progress saved. Press Start to resume.")
                 un = res.get("unanswered") or []
                 if un and not self._cancel:
                     self._show_gaps(un, res.get("suggestion", ""))
             else:
-                self._set("Stopped." if self._cancel else "Nothing produced.")
+                self._set("Paused — progress saved. Press Start to resume."
+                          if self._cancel else "Nothing produced.")
         finally:
             self._busy = False
             try:
@@ -921,7 +999,26 @@ class ResearchWindow:
 
     def _stop(self):
         self._cancel = True
-        self._set("Stopping after the current video…")
+        self._set("Pausing after the current step — progress is being saved…")
+
+    def _effective_folder(self):
+        """The folder research.run will actually use for this project."""
+        folder = self.folder_var.get().strip()
+        if folder:
+            return folder
+        name = self.name_var.get().strip()
+        if not name:
+            return ""
+        from . import research
+        return research.project_dir(self.cfg, name)
+
+    def _has_checkpoint(self):
+        """True if a paused/failed run left resumable progress on disk."""
+        import os
+        folder = self._effective_folder()
+        if not folder:
+            return False
+        return os.path.exists(os.path.join(folder, "_sources.json"))
 
     def _open_folder(self):
         import os

@@ -40,9 +40,18 @@ def chat(cfg: dict, system: str, user: str, temperature: float = 0.3,
     try:
         if native:
             root = base[:-4] if base.endswith("/api") else base
+            # Ollama defaults num_ctx to 4096 tokens and silently TRUNCATES
+            # anything longer. Set it explicitly so batched prompts aren't cut.
+            try:
+                _nctx = int(cfg.get("ai_num_ctx", 16384))
+            except Exception:
+                _nctx = 16384
             r = requests.post(root + "/api/chat", headers=headers,
                               json={"model": model, "messages": messages,
-                                    "stream": False}, timeout=timeout)
+                                    "stream": False,
+                                    "options": {"temperature": temperature,
+                                                "num_ctx": max(2048, _nctx)}},
+                              timeout=timeout)
             r.raise_for_status()
             out = ((r.json() or {}).get("message") or {}).get("content", "").strip()
         else:
