@@ -246,8 +246,8 @@ class ResearchWindow:
 
         self.win = tk.Toplevel(parent)
         self.win.title("EchoQuill — Research project")
-        self.win.geometry("740x600")
-        self.win.minsize(700, 480)
+        self.win.geometry("1040x760")
+        self.win.minsize(900, 640)
         theme.apply(self.win)
 
         top = ttk.Frame(self.win)
@@ -326,15 +326,36 @@ class ResearchWindow:
         fr = ttk.Frame(f); fr.pack(fill="x", padx=10, pady=(2, 2))
         ttk.Label(fr, text="Save to folder:").pack(side="left")
         self.folder_var = tk.StringVar()
-        _fe = tk.Entry(fr, textvariable=self.folder_var, bg=theme.FIELD,
-                       fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                       borderwidth=1)
-        _fe.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        _fe = tk.Entry(fr, textvariable=self.folder_var, width=52,
+                       bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
+                       relief="solid", borderwidth=1)
+        _fe.pack(side="left", padx=(6, 6))
         helptip.tip(_fe, "Optional. Leave blank to save under "
-                    "Transcriptions\\Research\\<project name>.")
+                    "Documents\\EchoQuill\\ResearchProjects\\<project name>.")
         _fb = ttk.Button(fr, text="Browse…", command=self._browse)
         _fb.pack(side="left")
         helptip.tip(_fb, "Pick where to save this project's files.")
+
+        # AI model for THIS project (separate from the dictation model) -------
+        from . import research as _res
+        md = ttk.Frame(f); md.pack(fill="x", padx=10, pady=(2, 0))
+        ttk.Label(md, text="AI model:").pack(side="left")
+        self.model_var = tk.StringVar(
+            value=self.cfg.get("research_model", "gpt-oss:120b"))
+        _models = list(_res.MODEL_RATES.keys())
+        if self.model_var.get() not in _models:
+            _models.insert(0, self.model_var.get())
+        self.model_menu = ttk.OptionMenu(md, self.model_var,
+                                         self.model_var.get(), *_models,
+                                         command=lambda *_: self._on_model())
+        self.model_menu.pack(side="left", padx=(6, 10))
+        helptip.tip(self.model_menu, "Which cloud model answers this project. "
+                    "gpt-oss:120b is the best balance of quality and cost for "
+                    "research; glm-5.3 is ~7x pricier. This does NOT change your "
+                    "dictation model.")
+        self.model_hint = ttk.Label(md, style="Dim.TLabel", text="")
+        self.model_hint.pack(side="left")
+        self._on_model()
 
         # web-only note (shown when the video area is hidden)
         self._search_hint = ttk.Label(f, style="Dim.TLabel", text="")
@@ -346,10 +367,10 @@ class ResearchWindow:
         sr = ttk.Frame(va); sr.pack(fill="x", padx=0, pady=(4, 2))
         ttk.Label(sr, text="Search:").pack(side="left")
         self.query_var = tk.StringVar()
-        _q = tk.Entry(sr, textvariable=self.query_var, bg=theme.FIELD,
-                      fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                      borderwidth=1)
-        _q.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        _q = tk.Entry(sr, textvariable=self.query_var, width=46,
+                      bg=theme.FIELD, fg=theme.FG, insertbackground=theme.FG,
+                      relief="solid", borderwidth=1)
+        _q.pack(side="left", padx=(6, 6))
         helptip.tip(_q, "What to search on YouTube. Put an exact phrase in "
                     '"double quotes" to match it exactly.')
         self.fetch_btn = ttk.Button(sr, text="Fetch", style="Accent.TButton",
@@ -358,29 +379,34 @@ class ResearchWindow:
         helptip.tip(self.fetch_btn, "Search YouTube and add videos to the list "
                     "below.")
 
-        op = ttk.Frame(va); op.pack(fill="x", pady=(2, 2))
-        ttk.Label(op, text="Sort:").pack(side="left")
+        # filters in a 2-row GRID so nothing runs off the window edge
+        op = ttk.Frame(va); op.pack(fill="x", pady=(4, 2))
+        ttk.Label(op, text="Sort:").grid(row=0, column=0, sticky="w")
         self.sort_var = tk.StringVar(value="Most viewed")
-        ttk.OptionMenu(op, self.sort_var, "Most viewed", *self.SORTS).pack(
-            side="left", padx=(4, 12))
-        ttk.Label(op, text="From:").pack(side="left")
+        ttk.OptionMenu(op, self.sort_var, "Most viewed", *self.SORTS).grid(
+            row=0, column=1, sticky="w", padx=(4, 18))
+        ttk.Label(op, text="From:").grid(row=0, column=2, sticky="w")
         self.window_var = tk.StringVar(value="Any")
-        ttk.OptionMenu(op, self.window_var, "Any", *self.WINDOWS).pack(
-            side="left", padx=(4, 12))
-        ttk.Label(op, text="Length:").pack(side="left")
+        ttk.OptionMenu(op, self.window_var, "Any", *self.WINDOWS).grid(
+            row=0, column=3, sticky="w", padx=(4, 18))
+        ttk.Label(op, text="Length:").grid(row=0, column=4, sticky="w")
         self.dur_var = tk.StringVar(value="Any length")
-        ttk.OptionMenu(op, self.dur_var, "Any length", *self.DURATIONS).pack(
-            side="left", padx=(4, 12))
-        ttk.Label(op, text="How many:").pack(side="left")
+        ttk.OptionMenu(op, self.dur_var, "Any length", *self.DURATIONS).grid(
+            row=0, column=5, sticky="w", padx=(4, 0))
+        ttk.Label(op, text="How many:").grid(row=1, column=0, sticky="w",
+                                             pady=(6, 0))
         self.count_var = tk.StringVar(value="")
-        tk.Entry(op, textvariable=self.count_var, width=5, bg=theme.FIELD,
+        tk.Entry(op, textvariable=self.count_var, width=6, bg=theme.FIELD,
                  fg=theme.FG, insertbackground=theme.FG, relief="solid",
-                 borderwidth=1).pack(side="left", padx=(4, 0))
-        ttk.Label(op, text="  Transcript:").pack(side="left")
+                 borderwidth=1).grid(row=1, column=1, sticky="w", padx=(4, 18),
+                                     pady=(6, 0))
+        ttk.Label(op, text="Transcript:").grid(row=1, column=2, sticky="w",
+                                               pady=(6, 0))
         self.tmode_var = tk.StringVar(value="Whisper (accurate)")
         _tm = ttk.OptionMenu(op, self.tmode_var, "Whisper (accurate)",
                              "Whisper (accurate)", "YouTube captions (fast)")
-        _tm.pack(side="left", padx=(4, 0))
+        _tm.grid(row=1, column=3, columnspan=3, sticky="w", padx=(4, 0),
+                 pady=(6, 0))
         helptip.tip(_tm, "How to get each video's text. YouTube captions = "
                     "fast + free, no download (falls back to Whisper if a "
                     "video has none). Whisper = our local speech-to-text, most "
@@ -435,7 +461,14 @@ class ResearchWindow:
         except Exception:
             pass
 
-    # ------------------------------------------------------------- tab 2
+    def _on_model(self):
+        from . import research as _res
+        try:
+            self.model_hint.configure(text="  " + _res.cost_hint(
+                self.model_var.get()))
+        except Exception:
+            pass
+
     # ------------------------------------------------------------- tab 2
     def _build_questions(self, f):
         ai = ttk.Frame(f); ai.pack(fill="x", padx=10, pady=(10, 2))
@@ -872,7 +905,12 @@ class ResearchWindow:
                           "research.")
                 return
         self._cancel = False
-        # apply + persist the budget/throttle controls
+        # apply + persist the model + budget/throttle controls
+        try:
+            self.cfg["research_model"] = self.model_var.get().strip() \
+                or "gpt-oss:120b"
+        except Exception:
+            self.cfg["research_model"] = "gpt-oss:120b"
         try:
             self.cfg["research_max_calls"] = int(self.maxcalls_var.get() or 0)
         except Exception:
@@ -950,7 +988,13 @@ class ResearchWindow:
             _perq = int(self.perq_var.get()) if self.perq_var.get().isdigit() \
                 else 10
 
-            res = research.run(self.cfg, name, questions, video_items,
+            # use the project's chosen model for this run only — the global
+            # dictation model is left untouched.
+            run_cfg = dict(self.cfg)
+            run_cfg["ai_model"] = self.cfg.get("research_model",
+                                               "gpt-oss:120b")
+            self._logline("  model: " + run_cfg["ai_model"])
+            res = research.run(run_cfg, name, questions, video_items,
                                log=self._logline, cancel=lambda: self._cancel,
                                progress=prog, on_done=on_done, folder=folder,
                                goal=goal, auto_rounds=auto_rounds,

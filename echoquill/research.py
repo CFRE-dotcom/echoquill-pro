@@ -20,6 +20,55 @@ from . import ai_call
 
 import threading as _threading
 
+# ---- Ollama Cloud per-million-token rates (USD), from ollama.com/pricing,
+# verified Sep 2026. (input, cached_input, output). Used for the research
+# model picker and the live cost readout. Rates can change — treat as an
+# estimate; token COUNTS come straight from Ollama's response and are exact.
+MODEL_RATES = {
+    "deepseek-v4-flash": (0.22, 0.007, 0.66),
+    "deepseek-v4-pro": (0.66, 0.022, 1.98),
+    "gemma4": (0.14, 0.05, 0.40),
+    "glm-5.3": (1.40, 0.26, 4.40),
+    "glm-5.3-flash": (0.15, 0.03, 0.50),
+    "glm-5.2": (1.40, 0.26, 4.40),
+    "glm-5.1": (1.00, 0.20, 3.20),
+    "gpt-oss:120b": (0.15, 0.014, 0.60),
+    "gpt-oss:20b": (0.07, 0.035, 0.30),
+    "kimi-k3": (3.00, 0.30, 15.00),
+    "kimi-k2.7-code": (0.95, 0.19, 4.00),
+    "kimi-k2.6": (0.95, 0.16, 4.00),
+    "minimax-m3": (0.60, 0.12, 2.40),
+    "minimax-m2.7": (0.30, 0.06, 1.20),
+    "mistral-large-3": (0.50, None, 1.50),
+    "nemotron-3-nano": (0.06, None, 0.24),
+    "nemotron-3-super": (0.015, 0.015, 0.60),
+    "nemotron-3-ultra": (0.10, 0.10, 3.00),
+    "qwen3.5:397b": (0.60, None, 3.60),
+}
+
+
+def model_rate(model):
+    """(input, cached, output) $/M for a model id, or None if unknown."""
+    if not model:
+        return None
+    m = str(model).strip().lower()
+    for k, v in MODEL_RATES.items():
+        if k.lower() == m:
+            return v
+    return None
+
+
+def cost_hint(model):
+    """One-line human cost summary for a model, e.g.
+    'glm-5.3 · in $1.40 / out $4.40 per 1M · $60 ≈ 14M output tok'."""
+    r = model_rate(model)
+    if not r:
+        return str(model) + " · rate unknown (est. off)"
+    inp, _c, out = r
+    per60 = int(60.0 / out) if out else 0
+    return (f"{model} · in ${inp:.2f} / out ${out:.2f} per 1M · "
+            f"$60 ≈ {per60}M output tok")
+
 # ---- launch pacer ---------------------------------------------------------
 # Ollama Cloud Pro allows 3 CONCURRENT requests (we cap workers at 3); extra
 # requests queue and a full queue is rejected (429). Ollama publishes no
@@ -116,10 +165,14 @@ def _chat_retry(cfg, system, user, temperature=0.3, log=lambda s: None,
         cooldown = int(cfg.get("research_cooldown", 1800) or 1800)
     except Exception:
         cooldown = 1800
+    # Legacy Pro has a rolling ~3-hour SESSION limit; probe every 30 min for up
+    # to ~6 hours so a run rides out the reset and resumes on its own. If it is
+    # the WEEKLY limit (days), it waits the window then pauses with everything
+    # saved, so nothing is lost and Start resumes once usage frees up.
     try:
-        cooldown_tries = int(cfg.get("research_cooldown_tries", 8) or 8)
+        cooldown_tries = int(cfg.get("research_cooldown_tries", 12) or 12)
     except Exception:
-        cooldown_tries = 8
+        cooldown_tries = 12
     delay = 3
     reply = ""
     expensive_used = 0
