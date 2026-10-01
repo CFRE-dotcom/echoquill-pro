@@ -262,6 +262,18 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
         return ("done", name)
     except Exception as e:
         msg = str(e)
+        # surface WHERE it failed (file:line) so errors are diagnosable instead
+        # of a bare message with no location.
+        try:
+            import traceback
+            tb = traceback.extract_tb(e.__traceback__)
+            if tb:
+                fr = tb[-1]
+                fn = os.path.basename(fr.filename)
+                log(f"    [where] {type(e).__name__}: {msg}  @ {fn}:"
+                    f"{fr.lineno} in {fr.name}()  «{(fr.line or '').strip()}»")
+        except Exception:
+            pass
         low = msg.lower()
         permanent = (("not available" in low and "format" not in low)
                      or "private" in low or "removed" in low
