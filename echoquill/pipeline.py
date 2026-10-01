@@ -202,15 +202,31 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
             lang = cfg.get("language", "auto")
             lang = None if lang in ("", "auto") else lang
             segs, parts = [], []
-            with eng._lock:
-                segments, _i = model.transcribe(apath, language=lang,
-                                                vad_filter=True)
-                for seg in segments:
-                    if cancel():
-                        break
-                    t = seg.text.strip()
-                    segs.append((seg.start, t))
-                    parts.append(t)
+            # Silent / music-only clips make the voice-activity filter return
+            # nothing and faster-whisper then raises "tuple index out of range".
+            # Try with VAD, fall back to no-VAD, then accept an empty transcript
+            # rather than failing the whole video.
+            for _vad in (True, False):
+                segs, parts = [], []
+                try:
+                    with eng._lock:
+                        segments, _i = model.transcribe(
+                            apath, language=lang, vad_filter=_vad)
+                        for seg in segments:
+                            if cancel():
+                                break
+                            t = seg.text.strip()
+                            segs.append((seg.start, t))
+                            parts.append(t)
+                    break
+                except Exception as _te:
+                    if _vad:
+                        log("    transcription hiccup (" + str(_te)
+                            + "); retrying without voice-detection…")
+                        continue
+                    log("    no speech could be transcribed (" + str(_te)
+                        + "); saving description / text only.")
+                    segs, parts = [], []
             text = " ".join(parts).strip()
             eng = None
 
