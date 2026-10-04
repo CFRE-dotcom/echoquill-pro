@@ -193,6 +193,8 @@ def fetch_search_filtered(query, cfg, types=("Video",), duration="Any",
     pull = min(max(int(n) * 3, int(n)), 120)
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
             "skip_download": True, "playlistend": pull}
+    from .media_gui import _ensure_cookiefile
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
@@ -258,6 +260,8 @@ def fetch_playlist(url, limit, cfg):
             "skip_download": True}
     if limit:
         opts["playlistend"] = int(limit)
+    from .media_gui import _ensure_cookiefile
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
@@ -299,6 +303,8 @@ def fetch_channel(channel, kind, limit, cfg):
             "skip_download": True}
     if limit:
         opts["playlistend"] = int(limit)
+    from .media_gui import _ensure_cookiefile
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
@@ -332,6 +338,8 @@ def fetch_search(query, n, cfg):
     import yt_dlp
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
             "skip_download": True}
+    from .media_gui import _ensure_cookiefile
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf

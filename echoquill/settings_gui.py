@@ -570,7 +570,10 @@ class SettingsWindow:
                     "login-gated and age-restricted videos.")
         try:
             import os as _os
-            _cfp = self.cfg.get("yt_cookies_file", "")
+            # show the user's REAL saved cookies (the source), never the
+            # throwaway working copy yt-dlp may have overwritten.
+            _cfp = (self.cfg.get("yt_cookies_file_src")
+                    or self.cfg.get("yt_cookies_file", ""))
             if _cfp and _os.path.exists(_cfp):
                 with open(_cfp, encoding="utf-8", errors="ignore") as _fh:
                     self.cookie_box.insert("1.0", _fh.read())
@@ -589,7 +592,9 @@ class SettingsWindow:
             try:
                 with open(path, "w", encoding="utf-8") as fh:
                     fh.write(txt + "\n")
-                self.cfg["yt_cookies_file"] = path; _c.save(self.cfg)
+                self.cfg["yt_cookies_file"] = path
+                self.cfg["yt_cookies_file_src"] = path
+                _c.save(self.cfg)
                 self.cookie_status.configure(text="Saved \u2713")
             except Exception as e:
                 self.cookie_status.configure(text=f"Save failed: {e}")
@@ -597,7 +602,9 @@ class SettingsWindow:
         def _clear_cookies():
             from . import config as _c
             self.cookie_box.delete("1.0", "end")
-            self.cfg["yt_cookies_file"] = ""; _c.save(self.cfg)
+            self.cfg["yt_cookies_file"] = ""
+            self.cfg["yt_cookies_file_src"] = ""
+            _c.save(self.cfg)
             self.cookie_status.configure(text="Cleared")
         _bsc = ttk.Button(crow2, text="Save cookies", style="Accent.TButton",
                    command=_save_cookies); _bsc.pack(side="left")

@@ -161,6 +161,7 @@ DEFAULTS = {
     "language": "auto",
     "yt_cookies_browser": "",
     "yt_cookies_file": "",   # path to an exported cookies.txt (most reliable for YouTube)
+    "yt_cookies_file_src": "",  # user's REAL cookies file; yt-dlp gets a throwaway copy so it can't wipe this
     # DataImpulse residential/mobile proxy (optional; verify before use).
     "di_enabled": False,
     "di_base_username": "",

@@ -451,6 +451,8 @@ def fetch_search_web(query, cfg, sort="Most viewed", window="Any", n=25,
     target = base + ("&sp=" + quote(sp) if sp else "")
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
             "skip_download": True, "playlistend": max(int(n), 1)}
+    from .media_gui import _ensure_cookiefile
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf

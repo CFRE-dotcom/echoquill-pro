@@ -123,6 +123,97 @@ def _sanitize_path_env():
     _PATH_SANITIZED[0] = True
 
 
+def _write_netscape_copy(src, dst):
+    """Read the user's cookies file `src` (valid Netscape, header-less, or a
+    JSON export) and write a VALID Netscape copy to `dst`. Returns dst on
+    success, else None. yt-dlp OVERWRITES whatever cookiefile it is handed
+    (documented behavior, yt-dlp #5977/#13741/#15335), so we always give it
+    this throwaway COPY and never the user's real file — that overwrite is what
+    was silently wiping their cookies."""
+    try:
+        with open(src, "r", encoding="utf-8", errors="replace") as fh:
+            raw = fh.read()
+    except Exception:
+        return None
+    s = raw.lstrip()
+    if (s.startswith("# Netscape HTTP Cookie File")
+            or s.startswith("# HTTP Cookie File")):
+        try:
+            with open(dst, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(raw if raw.endswith("\n") else raw + "\n")
+            return dst
+        except Exception:
+            return None
+    rows = []
+    if s[:1] in "[{":                       # JSON cookie export -> Netscape
+        try:
+            import json as _json
+            data = _json.loads(s)
+            items = data if isinstance(data, list) else (data.get("cookies")
+                                                         or [])
+            for c in items:
+                if not isinstance(c, dict):
+                    continue
+                dom = (c.get("domain") or "").strip()
+                if not dom:
+                    continue
+                inc = "TRUE" if dom.startswith(".") else "FALSE"
+                pth = c.get("path") or "/"
+                sec = "TRUE" if c.get("secure") else "FALSE"
+                try:
+                    exp = int(float(c.get("expirationDate")
+                                    or c.get("expires")
+                                    or c.get("expiry") or 0))
+                except Exception:
+                    exp = 0
+                rows.append("\t".join([dom, inc, pth, sec, str(exp),
+                                       c.get("name") or "",
+                                       c.get("value") or ""]))
+        except Exception:
+            return None
+    else:                                   # header-less tab-delimited rows
+        for ln in raw.splitlines():
+            if (ln.strip() and not ln.lstrip().startswith("#")
+                    and len(ln.split("\t")) >= 7):
+                rows.append(ln.rstrip("\r\n"))
+    if not rows:
+        return None
+    try:
+        with open(dst, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("# Netscape HTTP Cookie File\n")
+            fh.write("\n".join(rows) + "\n")
+        return dst
+    except Exception:
+        return None
+
+
+def _ensure_cookiefile(cfg):
+    """Protect the user's real cookies file from yt-dlp (which overwrites any
+    cookiefile it is handed) and accept non-Netscape files.
+
+    The user's true file is remembered in cfg['yt_cookies_file_src']; yt-dlp is
+    always pointed at a regenerated throwaway copy (youtube_cookies.working.txt)
+    so the original is never written to or wiped. Mutates cfg; safe every
+    download. A real cleared cookies setting (both keys empty) stays cleared."""
+    try:
+        if not isinstance(cfg, dict):
+            return
+        from .config import app_data_dir
+        work = str(app_data_dir() / "youtube_cookies.working.txt")
+        cur = (cfg.get("yt_cookies_file", "") or "").strip()
+        src = (cfg.get("yt_cookies_file_src", "") or "").strip()
+        # a real user path (not our working copy) becomes the remembered source
+        if cur and os.path.normcase(cur) != os.path.normcase(work):
+            src = cur
+            cfg["yt_cookies_file_src"] = src
+        if not src or not os.path.exists(src):
+            return                           # nothing to protect/convert
+        _write_netscape_copy(src, work)      # (re)build the throwaway copy
+        cfg["yt_cookies_file"] = work        # yt-dlp only ever sees the copy
+    except Exception:
+        pass
+
+
 def fetch_audio_info(url: str, status_cb, cfg=None):
     """Download best-audio for a URL. Returns (path, video_title).
 
@@ -148,6 +239,7 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
                                 "Origin": "https://www.skool.com"}
     # Optional: pull videos that require you to be logged in, using the cookies
     # from your browser (Settings > Transcription > "Sign in via browser").
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf          # exported cookies.txt (most reliable)
@@ -215,6 +307,7 @@ def fetch_captions(url, cfg, langs=("en", "en-US", "en-GB", "en-orig")):
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
@@ -251,6 +344,7 @@ def _video_comments(url, cfg, max_total=200):
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
@@ -292,6 +386,7 @@ def _video_description(url, cfg):
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf
@@ -352,6 +447,7 @@ def _media_opts(url, cfg, tmpl, fmt):
     if "skool.com" in low or ".m3u8" in low:
         opts["http_headers"] = {"Referer": "https://www.skool.com/",
                                 "Origin": "https://www.skool.com"}
+    _ensure_cookiefile(cfg)
     cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
     if cf and os.path.exists(cf):
         opts["cookiefile"] = cf          # exported cookies.txt (most reliable)
