@@ -133,24 +133,82 @@ def _path():
     return os.path.join(str(app_data_dir()), "watcher.json")
 
 
+def _coerce(d):
+    if isinstance(d, dict):
+        d.setdefault("channels", [])
+        d.setdefault("queue", [])
+        d.setdefault("new_ready", 0)
+        return d
+    return None
+
+
 def load():
+    """Read watcher.json. The MAIN file wins even if empty (so deleting all
+    channels sticks). Only if the main file is MISSING or CORRUPT do we fall
+    back to the last-good backup — that's what prevents a truncated file (e.g.
+    an update interrupting a write) from wiping every channel."""
+    p = _path()
+    # main file: use it only if it parses cleanly (respects legit empties)
     try:
-        with open(_path(), encoding="utf-8") as f:
-            d = json.load(f)
-        if isinstance(d, dict):
-            d.setdefault("channels", [])
-            d.setdefault("queue", [])
-            d.setdefault("new_ready", 0)
-            return d
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                d = _coerce(json.load(f))
+            if d is not None:
+                return d
+            # exists but didn't parse -> preserve the bytes for recovery
+            try:
+                import shutil as _sh
+                _sh.copy2(p, p + ".corrupt")
+            except Exception:
+                pass
+    except Exception:
+        try:
+            import shutil as _sh
+            _sh.copy2(p, p + ".corrupt")
+        except Exception:
+            pass
+    # recover from the last-good backup
+    try:
+        bak = p + ".bak"
+        if os.path.exists(bak):
+            with open(bak, encoding="utf-8") as f:
+                d = _coerce(json.load(f))
+            if d is not None:
+                try:
+                    save(d)          # heal the main file from the backup
+                except Exception:
+                    pass
+                return d
     except Exception:
         pass
     return {"channels": [], "queue": [], "new_ready": 0}
 
 
 def save(d):
+    """Atomic write (temp + os.replace) so a crash/kill never leaves a
+    truncated file, plus a rolling backup of the last state that actually had
+    channels, so a later empty save can't destroy the only copy."""
+    p = _path()
     try:
-        with open(_path(), "w", encoding="utf-8") as f:
+        # back up the current file ONLY if it still holds channels
+        try:
+            if os.path.exists(p):
+                with open(p, encoding="utf-8") as f:
+                    old = json.load(f)
+                if isinstance(old, dict) and old.get("channels"):
+                    import shutil as _sh
+                    _sh.copy2(p, p + ".bak")
+        except Exception:
+            pass
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(d, f, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp, p)
     except Exception:
         pass
 

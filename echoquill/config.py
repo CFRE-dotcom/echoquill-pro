@@ -12,6 +12,62 @@ from pathlib import Path
 APP_NAME = "EchoQuill"
 
 
+def atomic_write_json(path, data, indent=2):
+    """Crash-safe write for any state file: back up the last non-empty version,
+    write to a temp file, fsync, then os.replace() (atomic). A hard app exit
+    (os._exit) or an update closing the app mid-write can only lose the temp —
+    never truncate the real file. Returns True on success.
+
+    This is the systematic guard against state (watcher channels, settings,
+    question sets, dictionary, favorites, folders, history) vanishing on update.
+    """
+    import shutil
+    p = str(path)
+    try:
+        try:
+            if os.path.exists(p) and os.path.getsize(p) > 2:
+                shutil.copy2(p, p + ".bak")
+        except Exception:
+            pass
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=indent, ensure_ascii=False)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp, p)
+        return True
+    except Exception:
+        return False
+
+
+def read_json_safe(path, default):
+    """Read a JSON state file, falling back to its .bak on corruption (and
+    preserving the corrupt bytes as .corrupt) so a truncated file never silently
+    becomes a blank slate."""
+    import shutil
+    p = str(path)
+    try:
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        try:
+            shutil.copy2(p, p + ".corrupt")
+        except Exception:
+            pass
+        try:
+            bak = p + ".bak"
+            if os.path.exists(bak):
+                with open(bak, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception:
+            pass
+    return default
+
+
 def app_data_dir() -> Path:
     base = os.environ.get("APPDATA", str(Path.home()))
     d = Path(base) / APP_NAME
@@ -361,14 +417,23 @@ def _kr_get(name: str) -> str:
 
 def load() -> dict:
     cfg = dict(DEFAULTS)
+    saved = None
     try:
         if CONFIG_PATH.exists():
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 saved = json.load(f)
-            if isinstance(saved, dict):
-                cfg.update(saved)
     except Exception:
-        pass  # fall back to defaults on any corruption
+        # main config corrupt (e.g. truncated by an interrupted update) —
+        # recover from the last-good backup instead of resetting to defaults.
+        try:
+            bak = str(CONFIG_PATH) + ".bak"
+            if os.path.exists(bak):
+                with open(bak, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+        except Exception:
+            saved = None
+    if isinstance(saved, dict):
+        cfg.update(saved)
     for k in _SECRET_KEYS:
         v = cfg.get(k, "")
         if v == KEYRING_MARK:
@@ -409,7 +474,23 @@ def save(cfg: dict) -> None:
                 out[k] = KEYRING_MARK if val else ""   # vault holds it; file has a marker
             else:
                 out[k] = _encrypt_key(val)              # fallback: DPAPI in-file
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        # back up the current config only if it still has content, then write
+        # atomically (temp + replace) so an interrupted/updated app can never
+        # leave a truncated config that loads as blank and wipes settings.
+        try:
+            if CONFIG_PATH.exists() and CONFIG_PATH.stat().st_size > 2:
+                import shutil as _sh
+                _sh.copy2(str(CONFIG_PATH), str(CONFIG_PATH) + ".bak")
+        except Exception:
+            pass
+        tmp = str(CONFIG_PATH) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(out, f, indent=2, ensure_ascii=False)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp, str(CONFIG_PATH))
     except Exception:
         pass

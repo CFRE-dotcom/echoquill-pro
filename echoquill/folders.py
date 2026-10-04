@@ -15,24 +15,18 @@ PATH = app_data_dir() / "folders.json"
 
 
 def _load() -> dict:
-    try:
-        with open(PATH, "r", encoding="utf-8") as f:
-            d = json.load(f)
-        if isinstance(d, dict):
-            d.setdefault("names", [])
-            d.setdefault("map", {})
-            return d
-    except Exception:
-        pass
+    from . import config as _c
+    d = _c.read_json_safe(PATH, None)
+    if isinstance(d, dict):
+        d.setdefault("names", [])
+        d.setdefault("map", {})
+        return d
     return {"names": [], "map": {}}
 
 
 def _save(d: dict):
-    try:
-        with open(PATH, "w", encoding="utf-8") as f:
-            json.dump(d, f, indent=1, ensure_ascii=False)
-    except Exception:
-        pass
+    from . import config as _c
+    _c.atomic_write_json(PATH, d, indent=1)
 
 
 def all_folders() -> list:

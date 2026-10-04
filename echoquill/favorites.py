@@ -10,20 +10,14 @@ MAX_FAVS = 50
 
 
 def _load() -> list:
-    try:
-        with open(FAV_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    from . import config as _c
+    data = _c.read_json_safe(FAV_PATH, [])
+    return data if isinstance(data, list) else []
 
 
 def _save(items: list):
-    try:
-        with open(FAV_PATH, "w", encoding="utf-8") as f:
-            json.dump(items[:MAX_FAVS], f, indent=1, ensure_ascii=False)
-    except Exception:
-        pass
+    from . import config as _c
+    _c.atomic_write_json(FAV_PATH, items[:MAX_FAVS], indent=1)
 
 
 def all_favorites() -> list:

@@ -26,26 +26,20 @@ class Dictionary:
 
     def load(self):
         try:
-            if DICT_PATH.exists():
-                with open(DICT_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+            from . import config as _c
+            data = _c.read_json_safe(DICT_PATH, None)
+            if isinstance(data, dict):
                 self.replacements = data.get("replacements", {})
                 self._correction_counts = Counter(data.get("corrections", {}))
         except Exception:
             self.replacements = {}
 
     def save(self):
-        try:
-            with open(DICT_PATH, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "replacements": self.replacements,
-                        "corrections": dict(self._correction_counts),
-                    },
-                    f, indent=2, ensure_ascii=False,
-                )
-        except Exception:
-            pass
+        from . import config as _c
+        _c.atomic_write_json(DICT_PATH, {
+            "replacements": self.replacements,
+            "corrections": dict(self._correction_counts),
+        })
 
     # ---------- editing ----------
 

@@ -18,19 +18,13 @@ def _store_path():
 
 
 def load_sets():
-    try:
-        return json.loads(_store_path().read_text(encoding="utf-8")).get(
-            "sets", {})
-    except Exception:
-        return {}
+    from . import config as _c
+    return (_c.read_json_safe(_store_path(), {}) or {}).get("sets", {})
 
 
 def save_sets(sets):
-    try:
-        _store_path().write_text(json.dumps({"sets": sets}, indent=2),
-                                 encoding="utf-8")
-    except Exception:
-        pass
+    from . import config as _c
+    _c.atomic_write_json(_store_path(), {"sets": sets})
 
 
 class QuestionsDialog:

@@ -14,6 +14,31 @@ from .config import app_data_dir
 HISTORY_PATH = app_data_dir() / "history.jsonl"
 
 
+def _atomic_write_lines(path, lines):
+    """Rewrite a JSONL file crash-safely (temp + os.replace), so a hard exit or
+    an update closing the app mid-rewrite can't truncate your history."""
+    import os
+    p = str(path)
+    try:
+        try:
+            if os.path.exists(p) and os.path.getsize(p) > 2:
+                import shutil
+                shutil.copy2(p, p + ".bak")
+        except Exception:
+            pass
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp, p)
+    except Exception:
+        pass
+
+
 def add(text: str, duration_sec: float, cfg: dict):
     if not cfg.get("history_enabled", True) or not text:
         return
@@ -141,8 +166,7 @@ def update(ts, new_text: str) -> None:
                 out.append(json.dumps(e, ensure_ascii=False) + "\n")
             else:
                 out.append(line)
-        with open(HISTORY_PATH, "w", encoding="utf-8") as f:
-            f.writelines(out)
+        _atomic_write_lines(HISTORY_PATH, out)
     except FileNotFoundError:
         pass
 
@@ -161,8 +185,7 @@ def delete_many(ts_set) -> None:
             except Exception:
                 pass
             kept.append(line)
-        with open(HISTORY_PATH, "w", encoding="utf-8") as f:
-            f.writelines(kept)
+        _atomic_write_lines(HISTORY_PATH, kept)
     except FileNotFoundError:
         pass
 
