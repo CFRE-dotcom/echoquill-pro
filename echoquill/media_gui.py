@@ -90,6 +90,39 @@ from tkinter import ttk, filedialog
 from . import theme
 
 
+_PATH_SANITIZED = [False]
+
+
+def _sanitize_path_env():
+    """yt-dlp and ffmpeg search %PATH% for executables. A PATH entry that is an
+    untrusted / untraversable mount — e.g. the Cua computer-use driver's
+    'Cua\\cua-driver\\bin' — makes Windows raise OSError WinError 448 ("path
+    cannot be traversed because it contains an untrusted mount point") and kills
+    every download before it starts. Drop any PATH dir we can't traverse, so the
+    executable search skips the landmine. Only removes dirs that actually error;
+    normal dirs are kept untouched. Runs once per process."""
+    if _PATH_SANITIZED[0]:
+        return
+    sep = os.pathsep
+    raw = os.environ.get("PATH", "")
+    good, dropped = [], []
+    for d in raw.split(sep):
+        if not d:
+            continue
+        try:
+            os.path.realpath(d)          # this is the call that WinError-448s
+            with os.scandir(d):          # open the dir handle too
+                pass
+            good.append(d)
+        except OSError:
+            dropped.append(d)            # untraversable / untrusted — skip it
+        except Exception:
+            good.append(d)               # unknown issue: keep, don't over-prune
+    if dropped and good:
+        os.environ["PATH"] = sep.join(good)
+    _PATH_SANITIZED[0] = True
+
+
 def fetch_audio_info(url: str, status_cb, cfg=None):
     """Download best-audio for a URL. Returns (path, video_title).
 
@@ -97,6 +130,7 @@ def fetch_audio_info(url: str, status_cb, cfg=None):
     demands a Referer header, and member-only videos need your browser login.
     """
     import yt_dlp
+    _sanitize_path_env()
     tmpdir = tempfile.mkdtemp(prefix="echoquill_")
     status_cb("Downloading audio…")
     opts = {
@@ -349,6 +383,7 @@ def download_video(url, cfg, dest_dir, status_cb=lambda s: None, name=None) -> s
     If name is given, the file is saved under that name (used for Skool videos
     and the optional 'Name this transcript' box)."""
     import yt_dlp
+    _sanitize_path_env()
     status_cb("Downloading video…")
     if name:
         tmpl = os.path.join(dest_dir, _safe_stem(name) + ".%(ext)s")
