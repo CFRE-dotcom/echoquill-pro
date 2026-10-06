@@ -137,6 +137,17 @@ def _do_video(cfg, item, dest, log=lambda s: None, cancel=lambda: False,
     ttl = item.get("title", "")
     questions = item.get("questions") or []
     tmpdir = None
+    # Skip BEFORE downloading anything if this video's transcript is already in
+    # the destination folder. The watcher re-queues titles it already has, and
+    # without this it would download + transcribe all of them only to discard
+    # the duplicates at the end. Uses the title carried on the queue item.
+    try:
+        _early = normalize_name(ttl) if ttl else ""
+        if _early and _already_have(dest, _early):
+            log("    already in this folder — skipping (no download).")
+            return ("done", _early)
+    except Exception:
+        pass
     try:
         use_caps = str(item.get("transcript_mode", "")).lower().startswith(
             "youtube")
