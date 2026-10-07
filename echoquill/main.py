@@ -778,8 +778,10 @@ def main():
     try:
         from . import ytdlp_updater
         ytdlp_updater.activate()
+        ytdlp_updater._add_path(str(ytdlp_updater._deno_dir()))  # deno on PATH
         threading.Thread(
-            target=lambda: (ytdlp_updater.ensure(), ytdlp_updater.activate()),
+            target=lambda: (ytdlp_updater.ensure(), ytdlp_updater.activate(),
+                            ytdlp_updater.ensure_deno()),
             daemon=True).start()
     except Exception:
         pass

@@ -430,6 +430,17 @@ def check_new(cfg, log=lambda s: None):
     """Scan every enabled source. When the proxy is on, verify a live IP FIRST
     so scans aren't run on a blocked IP. Returns count queued."""
     from . import proxy
+    # Pull + hot-reload the newest yt-dlp engine BEFORE scanning, so each
+    # scheduled cycle runs on a current engine (YouTube changes often, and the
+    # fix is in nightly first). Hot-reload means no app restart is needed.
+    try:
+        from . import ytdlp_updater
+        _emit(log, "Updating video engine before scan…")
+        _v = ytdlp_updater.refresh(lambda m: _emit(log, m))
+        if _v:
+            _emit(log, "  engine: yt-dlp " + str(_v))
+    except Exception as _e:
+        _emit(log, "  engine update skipped: " + str(_e)[:70])
     d = load()
     proxy_on = bool(cfg.get("di_enabled"))
     if proxy_on:
