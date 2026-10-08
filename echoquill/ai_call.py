@@ -25,7 +25,15 @@ def chat(cfg: dict, system: str, user: str, temperature: float = 0.3,
         return codex_cli.chat(system, user,
                               model=_am(cfg.get("ai_model", "gpt-5.5")) or "gpt-5.5",
                               timeout=max(timeout, 180))
-    import requests
+    # Use Python's BUILT-IN HTTP (urllib), NOT requests. requests rides on
+    # urllib3, which yt-dlp monkey-patches ('Urllib3PercentREOverride'); once
+    # yt-dlp runs in-process that patch breaks every requests call, which was
+    # failing the AI Q&A with "object has no attribute 'sub'". Stdlib urllib is
+    # independent of urllib3, so the AI calls can't be broken by the video
+    # engine. This is the redundancy/isolation.
+    import json as _json
+    import urllib.request
+    import urllib.error
     base = (cfg.get("ai_base_url", "") or "").rstrip("/")
     if not base:
         return (False, "Set up AI Enhancement first (Settings > AI Enhancement).")
@@ -35,8 +43,17 @@ def chat(cfg: dict, system: str, user: str, temperature: float = 0.3,
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": user}]
-    # Native Ollama /api/chat: ollama.com (cloud) or any base ending in /api.
     native = base.endswith("/api") or (("ollama.com" in base) and not base.endswith("/v1"))
+
+    def _post(url, payload):
+        data = _json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        for k, v in headers.items():
+            req.add_header(k, v)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", "replace")
+        return _json.loads(raw) if raw else {}
+
     try:
         if native:
             root = base[:-4] if base.endswith("/api") else base
@@ -46,21 +63,22 @@ def chat(cfg: dict, system: str, user: str, temperature: float = 0.3,
                 _nctx = int(cfg.get("ai_num_ctx", 16384))
             except Exception:
                 _nctx = 16384
-            r = requests.post(root + "/api/chat", headers=headers,
-                              json={"model": model, "messages": messages,
-                                    "stream": False,
-                                    "options": {"temperature": temperature,
-                                                "num_ctx": max(2048, _nctx)}},
-                              timeout=timeout)
-            r.raise_for_status()
-            out = ((r.json() or {}).get("message") or {}).get("content", "").strip()
+            j = _post(root + "/api/chat",
+                      {"model": model, "messages": messages, "stream": False,
+                       "options": {"temperature": temperature,
+                                   "num_ctx": max(2048, _nctx)}})
+            out = ((j or {}).get("message") or {}).get("content", "").strip()
         else:
-            r = requests.post(base + "/chat/completions", headers=headers,
-                              json={"model": model, "messages": messages,
-                                    "temperature": temperature,
-                                    "keep_alive": "30m"}, timeout=timeout)
-            r.raise_for_status()
-            out = r.json()["choices"][0]["message"]["content"].strip()
+            j = _post(base + "/chat/completions",
+                      {"model": model, "messages": messages,
+                       "temperature": temperature, "keep_alive": "30m"})
+            out = j["choices"][0]["message"]["content"].strip()
         return (True, out) if out else (False, "AI returned nothing.")
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            body = ""
+        return (False, f"AI request failed: HTTP {e.code} {body}".strip())
     except Exception as e:
         return (False, f"AI request failed: {e}")
