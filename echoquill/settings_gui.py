@@ -1437,15 +1437,14 @@ class SettingsWindow:
             def status(t):
                 self.win.after(0, lambda: self.fb_status.configure(text=t))
             try:
-                import requests
+                from . import nethttp
                 from . import __version__
                 status("Sending…")
-                r = requests.post(self.FEEDBACK_URL, data={
+                nethttp.post_json(self.FEEDBACK_URL, data={
                     "message": msg,
                     "email": self.fb_email.get().strip(),
                     "_subject": f"EchoQuill feedback (v{__version__})",
                 }, headers={"Accept": "application/json"}, timeout=15)
-                r.raise_for_status()
                 status("Sent — thank you! 💙")
                 self.win.after(0, lambda: self.fb_text.delete("1.0", "end"))
             except Exception:
@@ -2176,7 +2175,7 @@ class SettingsWindow:
                 except Exception:
                     pass
             try:
-                import requests
+                from . import nethttp
                 # Ollama native API (Ollama Cloud / any base ending in /api)
                 # lists models at /api/tags, not the OpenAI /models path.
                 ollama_native = base.endswith("/api") or (
@@ -2188,9 +2187,8 @@ class SettingsWindow:
                     for url, kind in ((root + "/api/tags", "tags"),
                                       (root + "/v1/models", "models")):
                         try:
-                            r = requests.get(url, headers=hdr, timeout=30)
-                            r.raise_for_status()
-                            data = r.json()
+                            data = nethttp.get_json(url, headers=hdr,
+                                                    timeout=30)
                             if kind == "tags":
                                 ids = sorted({m.get("name") for m in
                                               (data.get("models") or [])
@@ -2211,9 +2209,8 @@ class SettingsWindow:
                                "anthropic-version": "2023-06-01"}
                     else:
                         hdr = {"Authorization": f"Bearer {key}"}
-                    r = requests.get(base + "/models", headers=hdr, timeout=30)
-                    r.raise_for_status()
-                    data = r.json()
+                    data = nethttp.get_json(base + "/models", headers=hdr,
+                                            timeout=30)
                     items = data.get("data") or data.get("models") or []
                     ids = sorted({m.get("id") for m in items if m.get("id")})
                 if ids:

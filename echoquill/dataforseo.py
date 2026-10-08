@@ -41,16 +41,15 @@ def configured(cfg) -> bool:
 
 def _post(cfg, url, payload, timeout=60):
     """POST to DataForSEO. Returns (ok, data_or_error)."""
-    import requests
+    from . import nethttp
     tok = _auth(cfg)
     if not tok:
         return (False, "DataForSEO login/password not set (Settings).")
     try:
-        r = requests.post(url, headers={"Authorization": "Basic " + tok,
-                                        "Content-Type": "application/json"},
-                          data=json.dumps(payload), timeout=timeout)
-        r.raise_for_status()
-        data = r.json()
+        data = nethttp.post_json(
+            url, json_body=payload, timeout=timeout,
+            headers={"Authorization": "Basic " + tok,
+                     "Content-Type": "application/json"})
     except Exception as e:
         return (False, f"DataForSEO request failed: {str(e)[:120]}")
     if str(data.get("status_code")) != "20000":

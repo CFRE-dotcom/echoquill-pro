@@ -13,14 +13,13 @@ REVALIDATE_DAYS = 14
 
 def activate(cfg: dict, key: str) -> str:
     """Activate this machine. Returns '' on success, else an error message."""
-    import requests
+    from . import nethttp
     from . import config as cfgmod
     try:
-        r = requests.post(ACTIVATE_URL, data={
+        data = nethttp.post_json(ACTIVATE_URL, data={
             "license_key": key.strip(),
             "instance_name": "EchoQuill Pro (Windows)",
         }, headers={"Accept": "application/json"}, timeout=20)
-        data = r.json()
         if data.get("activated"):
             cfg["pro_license_key"] = key.strip()
             cfg["pro_instance_id"] = (data.get("instance") or {}).get("id", "")
@@ -33,14 +32,13 @@ def activate(cfg: dict, key: str) -> str:
 
 
 def _validate(cfg: dict) -> bool:
-    import requests
+    from . import nethttp
     from . import config as cfgmod
     try:
-        r = requests.post(VALIDATE_URL, data={
+        data = nethttp.post_json(VALIDATE_URL, data={
             "license_key": cfg.get("pro_license_key", ""),
             "instance_id": cfg.get("pro_instance_id", ""),
         }, headers={"Accept": "application/json"}, timeout=15)
-        data = r.json()
         ok = bool(data.get("valid"))
         if ok:
             cfg["pro_last_valid"] = time.time()
