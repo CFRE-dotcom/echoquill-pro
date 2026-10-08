@@ -5,7 +5,9 @@
 ; building dist\EchoQuill.exe with build_exe.bat.
 
 #define AppName "EchoQuill Pro"
-#define AppVersion "2.27.3"
+; Version is read live from version.txt at build time, so the shortcut's
+; emblem + version number are always current — never hard-coded/stale.
+#define AppVersion Trim(FileRead(FileOpen("version.txt")))
 #define AppExe "EchoQuill.exe"
 
 [Setup]
@@ -34,10 +36,11 @@ Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\EchoQuill"; Filename: "{app}\{#AppExe}"; Comment: "EchoQuill v{#AppVersion} - free local voice dictation"
 Name: "{group}\Uninstall EchoQuill"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\EchoQuill"; Filename: "{app}\{#AppExe}"; Comment: "EchoQuill v{#AppVersion} - free local voice dictation"; Tasks: desktopicon
+; Desktop shortcut is ALWAYS created (no checkbox), carrying the app's emblem
+; and the current version — refreshed on every update.
+Name: "{autodesktop}\EchoQuill"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\{#AppExe}"; Comment: "EchoQuill v{#AppVersion} - free local voice dictation"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
 Name: "startup"; Description: "Start EchoQuill automatically with &Windows"; GroupDescription: "Startup:"
 
 [Registry]
