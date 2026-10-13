@@ -8,6 +8,51 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.61.0  (2026-10-13)
+    Watcher now prints the REAL reason a channel returns nothing instead of the generic "possibly blocked." The scan was catching the yt-dlp fetch error and silently continuing, so every empty result looked identical. Each channel tab now logs its actual error (or "returned 0 items (no error)"), so a block, a challenge, or a real bug can be told apart.
+
+v2.60.0  (2026-10-13)
+    Installer ALWAYS lays down a fresh desktop shortcut carrying the app emblem and the current version, every update - no checkbox, no asking. The version is read live from version.txt at build time (it had been hard-coded and stale).
+
+v2.59.0  (2026-10-13)
+    Routed EVERY app network call (update check, DataForSEO web research, license activate/validate, AI OAuth refresh, model-list refresh, feedback, ElevenLabs TTS) through a stdlib HTTP helper that yt-dlp cannot break. See 2.58 for the root cause.
+
+v2.58.0  (2026-10-13)
+    Fix "AI request failed: 'Urllib3PercentREOverride' object has no attribute 'sub'" on the Q&A / Ask-AI. Root cause: yt-dlp monkey-patches the urllib3 library; the AI call used `requests`, which rides on urllib3, so once the video engine loaded in-process the AI calls broke. The AI call now uses Python's built-in HTTP, independent of urllib3.
+
+v2.57.0  (2026-10-13)
+    Auto-install the Deno JavaScript runtime into AppData and put it on PATH. YouTube now requires a JS runtime to solve its challenge; without it downloads get throttled/blocked even on a current engine. First launch downloads Deno once (~40 MB), refreshed ~monthly.
+
+v2.56.0  (2026-10-13)
+    Video engine (yt-dlp) now tracks the NIGHTLY channel and hot-reloads in place, and is refreshed right before every scheduled watcher scan - so YouTube fixes land within hours, with no app restart. Falls back to stable if nightly can't be reached.
+
+v2.55.0  (2026-10-13)
+    Watcher skips videos you already have in the folder BEFORE downloading/transcribing them, using the title from the queue. The folder check used to run only at the very end, so a re-added channel re-downloaded everything and discarded the duplicates - wasting bandwidth, proxy, and Whisper time.
+
+v2.54.0  (2026-10-13)
+    Crash-safe state files. The app hard-exits on close and saved state non-atomically, so an update interrupting a write could truncate a file - which on next launch read as empty and got overwritten blank. Every state file (watcher channels, settings, question sets, dictionary, favorites, folders, history) now writes atomically (temp + replace) with a .bak and recovery, so a kill mid-write can't wipe your data.
+
+v2.53.0  (2026-10-13)
+    Stop yt-dlp from wiping your cookies. yt-dlp overwrites whatever cookie file it's handed; the app pointed it straight at yours, so a blocked run could empty it. yt-dlp now gets a throwaway copy; your real file is kept separately and never written to.
+
+v2.52.0  (2026-10-13)
+    Auto-repair a cookies.txt that isn't valid Netscape format (missing header or a JSON export), and run without cookies rather than failing every video when it can't be used.
+
+v2.51.0  (2026-10-13)
+    Strip untraversable PATH entries (e.g. a Cua computer-use driver folder) before download. Such an entry made Windows throw WinError 448 when yt-dlp searched PATH for ffmpeg, killing every download before it started.
+
+v2.50.0  (2026-10-13)
+    Fix "tuple index out of range" on silent / music-only videos. The voice-activity filter finds no speech and faster-whisper raises; it now retries without VAD and, if there's truly no speech, saves the description/text instead of failing the whole video.
+
+v2.48.0  (2026-10-13)
+    Research project: its own AI-model picker (defaults to gpt-oss:120b, with each model's cost shown), a larger desktop-sized window, and a wrapping filter row so controls no longer run off-screen.
+
+v2.47.0  (2026-10-13)
+    Research runs to completion without draining your Ollama budget or wedging the account: free concurrency-429s retry patiently, real quota/limit errors wait a cooldown and resume, and failed sources are re-attempted until done.
+
+v2.45.0  (2026-10-13)
+    Research engine overhaul: set Ollama num_ctx so large prompts aren't silently truncated (the real cause of empty answers on big question sets), pack sources by size into far fewer AI calls, cap retries, add an optional per-run call ceiling, add checkpoint/resume + pause so a huge project never re-runs from scratch, and save projects under Documents\EchoQuill\ResearchProjects\<name>.
+
 v2.35.3  (2026-08-13)
     Fix "The page needs to be reloaded" YouTube errors. Root cause: the app shipped a yt-dlp auto-updater (to keep the video engine current with YouTube) but it was NEVER called - so the app was frozen on the bundled yt-dlp and broke when YouTube changed. The updater now runs at startup: it activates any newer yt-dlp already downloaded and fetches the latest in the background (checked ~every 12h). This is NOT caused by the tab-rename or country-check updates - those don't touch downloading. Also note: the "Could not copy Chrome cookie database" errors mean Chrome was open (locked cookie DB) - use an exported cookies.txt file instead of live-browser cookies so it works with Chrome running.
 

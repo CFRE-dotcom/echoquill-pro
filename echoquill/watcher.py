@@ -403,8 +403,13 @@ def _scan_sources(cfg, d, log):
             try:
                 fetch_n = min(limit * 8, 300) if kw else limit
                 items = fetch_channel(ch["url"], kind, fetch_n, cfg)
-            except Exception:
+            except Exception as _fe:
+                # surface the REAL reason instead of swallowing it — that's what
+                # made every 0-result look identical ("possibly blocked").
+                _emit(log, "    " + kind + ": fetch error — " + str(_fe)[:160])
                 continue
+            if not items:
+                _emit(log, "    " + kind + ": returned 0 items (no error)")
             if kw:
                 items = [it for it in items if kw in (it[1] or "").lower()]
             items = items[:limit]
