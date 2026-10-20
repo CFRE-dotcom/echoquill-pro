@@ -42,9 +42,10 @@ from echoquill import config as cfgmod   # noqa: E402
 from echoquill import ai_call            # noqa: E402
 
 SEP = "*" * 50
-ERR_MARKERS = ("ai request failed", "http 401", "http 403", "http 429",
-               "http 500", "http 502", "http 503", "unauthorized",
-               "has no attribute", "traceback")
+# A real failure written by the app ALWAYS starts with this exact phrase.
+# Do NOT match loose strings like "http 403" — real answers about SEO/status
+# codes contain those and must NOT be treated as errors.
+ERR_PREFIX = "ai request failed"
 # Only these mean "stop the whole run" (bad key or bad model name).
 HARD_STOP = ("http 401", "http 403", "http 410", "unauthorized", "retired",
              "not found", "set up ai enhancement")
@@ -70,8 +71,9 @@ def _transcripts_root(cfg):
 
 
 def _is_error(ans):
-    low = ans.lower()
-    return any(m in low for m in ERR_MARKERS)
+    # ONLY the app's literal failure signature counts as an error. A good
+    # answer that merely mentions "403" or "unauthorized" is NOT an error.
+    return ans.strip().lower().startswith(ERR_PREFIX)
 
 
 def _ctx_from_transcript(path):
@@ -123,7 +125,7 @@ def find_failed(root, week_only):
                 txt = open(qa_path, encoding="utf-8", errors="replace").read()
             except OSError:
                 continue
-            if not any(m in txt.lower() for m in ERR_MARKERS):
+            if ERR_PREFIX not in txt.lower():
                 continue
             if week_only and now - os.path.getmtime(qa_path) > 7 * 86400:
                 continue
