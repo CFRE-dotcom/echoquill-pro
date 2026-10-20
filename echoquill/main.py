@@ -35,6 +35,7 @@ class App:
         self._record_started_at = 0.0
         self._busy = False
         self._seg_lock = threading.Lock()   # serialize pause-segment vs final transcribe
+        self._dict_cache = []                # pause-segments held until the pill stops
         self._last_text = ""
         self._mode = "dictate"          # dictate | command | write
         self._write_selection = ""
@@ -452,6 +453,7 @@ class App:
                 self._busy = False
                 self._mode = "dictate"
                 self._write_selection = ""
+                self._dict_cache = []     # drop any held pause-segments too
             self.events.put(("overlay", "result", "✖ Cancelled"))
         threading.Thread(target=run, daemon=True).start()
 
@@ -486,9 +488,10 @@ class App:
 
     def _dictation_segmenter(self):
         """While dictating, finalize a sentence after a silence pause WITHOUT
-        stopping the mic, so the user can keep talking. Pressing the pill /
-        hotkey still ends dictation fully (via _finish). Each pause-segment is
-        transcribed, cleaned, punctuated, and inserted on its own."""
+        stopping the mic, so the user can keep talking. Each pause-segment is
+        transcribed + punctuated and HELD in a cache (not typed yet). Pressing
+        the pill / hotkey ends dictation and _finish types the whole thing in
+        one go."""
         rec = self.recorder
         try:
             pause = float(self.cfg.get("dictation_pause_seconds", 3.0))
@@ -515,21 +518,33 @@ class App:
                     except Exception:
                         raw = ""
                     if raw and raw.strip():
-                        self._emit_dictation(raw, seg_dur, overlay=False)
+                        prepped = self._prep_dictation(raw)
+                        if prepped:
+                            self._dict_cache.append(prepped)
+                            self.events.put((
+                                "overlay", "live",
+                                f"🎧 {len(self._dict_cache)} sentence(s) ready "
+                                "— keep talking; press the pill to drop it in"))
                 spoke = False
                 last_loud = time.time()
 
-    def _emit_dictation(self, raw: str, duration: float, overlay: bool = True):
-        """Clean -> punctuate -> insert one dictation result. Shared by the
-        final _finish and the pause-segmenter."""
+    def _prep_dictation(self, raw: str) -> str:
+        """Clean + punctuate a raw transcription into final text ("" if nothing
+        usable). Does NOT type anything — used to cache pause-segments and to
+        prepare the final flush."""
         text = cleanup.process(raw, self.cfg, self.dictionary)
         if not text:
+            return ""
+        return (cleanup.finalize_dictation(text)
+                if self.cfg.get("auto_end_punctuation", True) else text)
+
+    def _insert_dictation(self, insert_text: str, duration: float,
+                          overlay: bool = True):
+        """Type the text once, copy as a safety net, record history."""
+        if not insert_text:
             if overlay:
                 self.events.put(("overlay", "result", "(heard nothing)"))
             return
-        insert_text = (cleanup.finalize_dictation(text)
-                       if self.cfg.get("auto_end_punctuation", True)
-                       else text)
         injector.insert(insert_text, self.cfg["insertion_mode"])
         if (self.cfg.get("always_copy", True)
                 and self.cfg["insertion_mode"] != "clipboard"):
@@ -544,6 +559,10 @@ class App:
             shown = ("Copied to clipboard: " + insert_text
                      if self.cfg["insertion_mode"] == "clipboard" else insert_text)
             self.events.put(("overlay", "result", shown))
+
+    def _emit_dictation(self, raw: str, duration: float, overlay: bool = True):
+        """Prep + type one result immediately (single-shot path)."""
+        self._insert_dictation(self._prep_dictation(raw), duration, overlay)
 
     def _autostop(self, fire_event):
         """Auto-finish ~1.3s after the user stops talking (command/write modes)."""
@@ -666,8 +685,13 @@ class App:
             if self._mode == "write":
                 self._finish_write(raw)
                 return
-            # Default on: end the utterance with punctuation + a trailing space.
-            self._emit_dictation(raw, duration, overlay=True)
+            # Flush: cached pause-segments (held while you talked) + this final
+            # chunk, all typed in ONE go. Punctuation + trailing space already
+            # applied to each piece.
+            final = self._prep_dictation(raw)
+            cached = "".join(self._dict_cache)
+            self._dict_cache = []
+            self._insert_dictation(cached + final, duration, overlay=True)
         except Exception as e:
             self.events.put(("overlay", "result", f"Error: {e}"))
         finally:
