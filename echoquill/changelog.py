@@ -8,7 +8,7 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
-v2.64.0  (2026-10-20)
+v2.64.1  (2026-10-20)
     Dictation pause now HOLDS instead of typing mid-sentence. When you pause ~3 seconds, EchoQuill still transcribes and punctuates that sentence in the background, but it now caches it quietly instead of typing it into your document. Nothing is shown and nothing is typed until you press the pill to stop — then the whole thing drops in at once, cleanly punctuated. Cancel discards the held text. (The pause length is still "dictation_pause_seconds"; turn pause-segmenting off entirely with "dictation_segment_on_pause".)
 
 v2.63.0  (2026-10-19)
