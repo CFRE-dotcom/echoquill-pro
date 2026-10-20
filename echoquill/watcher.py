@@ -252,6 +252,18 @@ def set_enabled(cid, on):
     _mutate(fn)
 
 
+def all_paused():
+    """Global master switch. When True, scans do nothing regardless of each
+    source's own enabled/paused state — which is left untouched, so turning it
+    back off restores exactly what was running before."""
+    return bool(load().get("paused_all"))
+
+
+def set_all_paused(on):
+    """Flip the global 'Pause all' switch without changing per-source flags."""
+    _mutate(lambda d: d.__setitem__("paused_all", bool(on)))
+
+
 def clear_source_queue(cid):
     """Remove this source's queued/done items AND its seen list, so it can be
     re-pulled fresh. Keeps the source itself."""
@@ -434,6 +446,9 @@ def _scan_sources(cfg, d, log):
 def check_new(cfg, log=lambda s: None):
     """Scan every enabled source. When the proxy is on, verify a live IP FIRST
     so scans aren't run on a blocked IP. Returns count queued."""
+    if load().get("paused_all"):
+        _emit(log, "Watcher is paused (Pause all is ON) — skipping this scan.")
+        return 0
     from . import proxy
     # Pull + hot-reload the newest yt-dlp engine BEFORE scanning, so each
     # scheduled cycle runs on a current engine (YouTube changes often, and the
@@ -681,6 +696,9 @@ def run_once(cfg, log=lambda s: None, cancel=lambda: False):
             return 0
         _BUSY = True
     try:
+        if load().get("paused_all"):
+            _emit(log, "Watcher is paused (Pause all is ON) — not scanning or processing.")
+            return 0
         check_new(cfg, log)
         return process_pending(cfg, log, cancel)
     finally:

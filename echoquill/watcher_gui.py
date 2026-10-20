@@ -180,6 +180,14 @@ class WatcherWindow:
         _bstop = ttk.Button(brow, text="Stop", command=self._stop)
         _bstop.pack(side="left", padx=8)
         helptip.tip(_bstop, "Halts the current run after the video in progress.")
+        self._b_pause_all = ttk.Button(brow, text="Pause all",
+                                        command=self._toggle_pause_all)
+        self._b_pause_all.pack(side="left", padx=8)
+        helptip.tip(self._b_pause_all,
+                    "Master switch: pause EVERY source at once (scheduled scans "
+                    "and processing stop). Each source keeps its own paused/active "
+                    "state, so Resume all puts everything back exactly as it was.")
+        self._sync_pause_all_btn()
         _bclr = ttk.Button(brow, text="Clear queue", command=self._clear_queue)
         _bclr.pack(side="left", padx=8)
         helptip.tip(_bclr, "Removes items WAITING to run (pending + retrying). Keeps finished history, counts, and channels.")
@@ -565,6 +573,7 @@ class WatcherWindow:
 
     def _refresh(self):
         d = watcher.load()
+        self._sync_pause_all_btn()
         self.lb.delete(0, "end")
         self._chan_ids = []
         for ch in self._sort_channels(d["channels"]):
@@ -1067,6 +1076,27 @@ class WatcherWindow:
         self._refresh()
         self._set_status("Queue order shuffled.")
 
+    def _sync_pause_all_btn(self):
+        """Label the master button to match the stored global-pause state."""
+        try:
+            self._b_pause_all.config(
+                text="Resume all" if watcher.all_paused() else "Pause all")
+        except Exception:
+            pass
+
+    def _toggle_pause_all(self):
+        on = not watcher.all_paused()
+        watcher.set_all_paused(on)
+        self._sync_pause_all_btn()
+        if on:
+            self._set_status("All sources paused — scheduled scans and "
+                             "processing are off until you Resume all.")
+            self._log("Pause all: ON — watcher will not scan or process.")
+        else:
+            self._set_status("Resumed all — each source is back to its own "
+                             "paused/active setting.")
+            self._log("Pause all: OFF — watcher resumed.")
+
     def _toggle_pause(self):
         sel = self.lb.curselection()
         if not sel:
@@ -1184,6 +1214,11 @@ class WatcherWindow:
             pass
 
     def _check_now(self):
+        if watcher.all_paused():
+            self._set_status("Watcher is paused (Pause all is ON) — click "
+                             "Resume all first.")
+            self._log("Check now ignored — Pause all is ON.")
+            return
         self._cancel = False
         self._set_status("Checking channels…")
         self._log("Checking for new uploads…")

@@ -8,6 +8,11 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.63.0  (2026-10-19)
+    Two additions:
+    (1) Channel Watcher — "Pause all" button. A master switch next to Stop that pauses EVERY source at once: scheduled scans and queue processing both stop until you click "Resume all". Each source keeps its own paused/active state, so resuming puts everything back exactly as it was. "Check now" is ignored while paused and tells you so.
+    (2) Settings → Transcription → "Where files are saved". Browse to any folder on any drive (e.g. E:\EchoQuill) for where EchoQuill saves transcripts, Q&A, downloaded video/audio, narrations and the watcher log — to keep large video files off your C: drive. New files go to the new location; files already saved are not moved automatically. "Reset to default" returns to Documents\EchoQuill.
+
 v2.62.0  (2026-10-17)
     Dictation now punctuates and segments itself. Two things, both on by default:
     (1) Every dictation ends with punctuation + a trailing space, so stopping mid-thought leaves a clean break and the next dictation starts after a space instead of jamming into the last word. (new "auto_end_punctuation" setting)
