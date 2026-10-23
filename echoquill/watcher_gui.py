@@ -56,6 +56,23 @@ def _entry(parent, var, width=None, tip=None):
     return e
 
 
+def _folder_combo(parent, var, cfg, width=22, tip=None):
+    """Editable dropdown of existing Transcriptions subfolders (+ '(main
+    folder)'). The user picks one, types a new name, or leaves it blank."""
+    from . import media_gui
+    cb = ttk.Combobox(parent, textvariable=var, width=width,
+                      values=media_gui.subfolder_choices(cfg))
+    if tip:
+        helptip.tip(cb, tip)
+    return cb
+
+
+def _folder_val(s):
+    """'(main folder)' (or blank) -> '' (the Transcriptions root)."""
+    s = (s or "").strip()
+    return "" if s == "(main folder)" else s
+
+
 def _tip(w, text):
     """Attach a tooltip and return the widget (for inline .pack chaining)."""
     helptip.tip(w, text)
@@ -267,7 +284,7 @@ class WatcherWindow:
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Folder:").pack(side="left")
         self.folder_var = tk.StringVar()
-        _entry(r, self.folder_var, 22, tip="Subfolder under Transcriptions to save this source (backslashes nest).").pack(side="left", padx=(6, 12))
+        _folder_combo(r, self.folder_var, self.cfg, 22, tip="Pick an existing folder under Transcriptions, type a new name (backslashes nest), or leave blank for the main folder.").pack(side="left", padx=(6, 12))
         self.sv = tk.BooleanVar(value=False)
         self.sa = tk.BooleanVar(value=False)
         self.sd = tk.BooleanVar(value=False)
@@ -324,7 +341,7 @@ class WatcherWindow:
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Folder:").pack(side="left")
         self.pl_folder = tk.StringVar()
-        _entry(r, self.pl_folder, 22, tip="Subfolder under Transcriptions for this playlist.").pack(side="left", padx=(6, 12))
+        _folder_combo(r, self.pl_folder, self.cfg, 22, tip="Pick an existing folder under Transcriptions, type a new name, or leave blank for the main folder.").pack(side="left", padx=(6, 12))
         self.plv = tk.BooleanVar(value=False)
         self.pla = tk.BooleanVar(value=False)
         self.pld = tk.BooleanVar(value=False)
@@ -410,7 +427,7 @@ class WatcherWindow:
         r = ttk.Frame(f); r.pack(fill="x", padx=8, pady=1)
         ttk.Label(r, text="Folder:").pack(side="left")
         self.s_folder = tk.StringVar()
-        _entry(r, self.s_folder, 22, tip="Subfolder under Transcriptions for this search.").pack(side="left", padx=(6, 12))
+        _folder_combo(r, self.s_folder, self.cfg, 22, tip="Pick an existing folder under Transcriptions, type a new name, or leave blank for the main folder.").pack(side="left", padx=(6, 12))
         self.ssv = tk.BooleanVar(value=False)
         self.ssa = tk.BooleanVar(value=False)
         self.ssd = tk.BooleanVar(value=False)
@@ -707,7 +724,7 @@ class WatcherWindow:
             "set_name": ("" if self.set_var.get() in ("—", "")
                          else self.set_var.get()),
             "transcript_mode": self.tmode_var.get(),
-            "folder": self.folder_var.get().strip(),
+            "folder": _folder_val(self.folder_var.get()),
             "save_video": self.sv.get(), "save_audio": self.sa.get(),
             "save_desc": self.sd.get(), "save_comments": self.sc.get(),
         }
@@ -881,7 +898,7 @@ class WatcherWindow:
             "set_name": ("" if self.pl_set.get() in ("—", "")
                          else self.pl_set.get()),
             "transcript_mode": self.pl_tmode.get(),
-            "folder": self.pl_folder.get().strip(),
+            "folder": _folder_val(self.pl_folder.get()),
             "save_video": self.plv.get(), "save_audio": self.pla.get(),
             "save_desc": self.pld.get(), "save_comments": self.plc.get(),
         }
@@ -968,7 +985,7 @@ class WatcherWindow:
             "set_name": ("" if self.s_set.get() in ("—", "")
                          else self.s_set.get()),
             "transcript_mode": self.s_tmode.get(),
-            "folder": self.s_folder.get().strip(),
+            "folder": _folder_val(self.s_folder.get()),
             "save_video": self.ssv.get(), "save_audio": self.ssa.get(),
             "save_desc": self.ssd.get(), "save_comments": self.ssc.get(),
         }

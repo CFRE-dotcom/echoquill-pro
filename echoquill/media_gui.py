@@ -525,6 +525,73 @@ def transcripts_dir(cfg) -> str:
     return _subfolder(cfg, "Transcriptions")
 
 
+MAIN_FOLDER_LABEL = "(main folder)"
+
+
+def subfolder_choices(cfg):
+    """List the existing subfolders inside the Transcriptions folder, as
+    backslash-separated relative paths, for a folder-picker dropdown. First
+    item is '(main folder)' = the Transcriptions root itself."""
+    root = transcripts_dir(cfg)
+    out = []
+    try:
+        for dp, _dns, _fs in os.walk(root):
+            rel = os.path.relpath(dp, root)
+            if rel and rel != ".":
+                out.append(rel.replace("/", "\\"))
+    except OSError:
+        pass
+    out.sort(key=str.lower)
+    return [MAIN_FOLDER_LABEL] + out
+
+
+def choose_save_folder(parent, cfg, title="Choose a folder"):
+    """Modal folder-picker: a dropdown of existing Transcriptions subfolders
+    (plus '(main folder)'), editable to type a new one, with Browse for any
+    folder. Returns the chosen absolute directory (created), or None if
+    cancelled."""
+    import tkinter as tk
+    from tkinter import ttk, filedialog
+    from .auto_batch import resolve_folder
+    win = tk.Toplevel(parent)
+    win.title(title)
+    win.transient(parent)
+    win.grab_set()
+    try:
+        theme.apply(win)
+    except Exception:
+        pass
+    res = {"dir": None}
+    ttk.Label(win, text="Save into which folder?\n(choose an existing one under "
+              "your Transcriptions folder, type a new name, or Browse)").pack(
+              anchor="w", padx=12, pady=(12, 6))
+    var = tk.StringVar(value=MAIN_FOLDER_LABEL)
+    combo = ttk.Combobox(win, textvariable=var, width=52,
+                         values=subfolder_choices(cfg))
+    combo.pack(fill="x", padx=12)
+
+    def _browse():
+        d = filedialog.askdirectory(parent=win, initialdir=transcripts_dir(cfg),
+                                    title="Choose or create a folder")
+        if d:
+            var.set(d)
+
+    def _ok():
+        raw = var.get().strip()
+        if raw == MAIN_FOLDER_LABEL or not raw:
+            raw = ""
+        res["dir"] = resolve_folder(cfg, raw, create=True)
+        win.destroy()
+
+    row = ttk.Frame(win)
+    row.pack(fill="x", padx=12, pady=12)
+    ttk.Button(row, text="Browse / new folder…", command=_browse).pack(side="left")
+    ttk.Button(row, text="Cancel", command=win.destroy).pack(side="right")
+    ttk.Button(row, text="Save here", command=_ok).pack(side="right", padx=6)
+    parent.wait_window(win)
+    return res["dir"]
+
+
 def meetings_dir(cfg) -> str:
     return _subfolder(cfg, "Meetings")
 
@@ -1347,16 +1414,12 @@ class AskWindow:
         answer = self.out.get("1.0", "end").strip()
         if not answer:
             return
-        # Ask WHERE to save (defaults to the Transcriptions folder + the video's
-        # Q&A name), instead of silently writing to the main folder.
-        path = filedialog.asksaveasfilename(
-            parent=self.win, defaultextension=".txt",
-            initialdir=transcripts_dir(self.cfg),
-            initialfile=safe_filename(f"{self.title} - Q&A") + ".txt",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            title="Save this Q&A — choose where")
-        if not path:
+        # Dropdown of existing Transcriptions subfolders (or '(main folder)',
+        # or type/browse a new one) — not a silent write to the main folder.
+        folder = choose_save_folder(self.win, self.cfg, "Save this Q&A")
+        if not folder:
             return
+        path = os.path.join(folder, safe_filename(f"{self.title} - Q&A") + ".txt")
         sep = "*" * 50
         block = f"{sep}\n{sep}\nQ: {self._last_q}\n\nA: {answer}\n\n"
         try:
