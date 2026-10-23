@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.66.2  (2026-10-23)
+    Channel Watcher per-channel actions moved onto each channel. The main window now keeps only the global "Pause all / Resume all" (plus run controls); the per-channel Delete, Pause/Resume, Wipe, and Focus buttons are gone from it. Double-click any channel (e.g. ShaneHummus) to open its own panel with Pause/Resume, Edit, ★ Focus, Open folder, Wipe results, and Delete — all for just that channel.
+
 v2.66.1  (2026-10-23)
     Folder picking is now a dropdown of your real folders, everywhere you save.
     (1) Ask AI → "Save as .txt…" now pops a folder chooser: a dropdown listing every existing subfolder in your Transcriptions folder (plus "(main folder)"), editable to type a new name, with Browse for anywhere else. No more silent dump into the main folder. Saving to the same file still stacks answers.

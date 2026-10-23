@@ -142,8 +142,8 @@ class WatcherWindow:
     def _build_list_tab(self, f):
         hdr = ttk.Frame(f); hdr.pack(fill="x", padx=8, pady=(8, 2))
         ttk.Label(hdr, style="Dim.TLabel", wraplength=520, text=(
-            "Channels and topic-searches you watch. Double-click a row to edit "
-            "it (opens the Add tab) · hover for stats.")).pack(
+            "Channels and topic-searches you watch. Double-click a row to open "
+            "it — pause/resume, edit, wipe or delete that one · hover for stats.")).pack(
             side="left", anchor="w")
         self._sort_labels = ["Most recent", "Order added", "Name A-Z",
                              "Type", "Set", "Most videos", "Active first"]
@@ -160,31 +160,15 @@ class WatcherWindow:
         self.lb.configure(yscrollcommand=_lbsb.set)
         _lbsb.pack(side="right", fill="y")
         self.lb.pack(side="left", fill="both", expand=True)
-        self.lb.bind("<Double-Button-1>", self._edit_selected)
+        self.lb.bind("<Double-Button-1>", self._open_selected_panel)
         self.lb.bind("<Button-3>", self._on_right_click)
         self.lb.bind("<Motion>", self._hover)
         self.lb.bind("<Leave>", lambda _e: self._hide_tip())
+        # Per-channel actions (pause/resume, edit, wipe, focus, delete) now live
+        # in the double-click panel for each channel — not on the main window.
         lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 4))
-        _bd = ttk.Button(lrow, text="Delete", command=self._delete)
-        _bd.pack(side="left")
-        helptip.tip(_bd, "Removes the source AND everything stored for it "
-                    "(seen list + queued items). Asks first.")
-        _bp = ttk.Button(lrow, text="Pause / Resume", command=self._toggle_pause)
-        _bp.pack(side="left", padx=6)
-        helptip.tip(_bp, "Pause stops it being scanned; Resume turns it back on "
-                    "(and un-retires an expired search). Takes effect next cycle.")
-        _bw = ttk.Button(lrow, text="Wipe its results",
-                         command=self._clear_source)
-        _bw.pack(side="left", padx=6)
-        helptip.tip(_bw, "Clears this source's queued/finished items AND its "
-                    "seen-list so it re-pulls fresh. Files already on disk are "
-                    "NOT deleted.")
-        _bf = ttk.Button(lrow, text="★ Focus", command=self._toggle_focus)
-        _bf.pack(side="left", padx=6)
-        helptip.tip(_bf, "Push this source to the FRONT of the queue until it's "
-                    "caught up. Click again to un-focus. Marked with ★.")
-        _br = ttk.Button(lrow, text="Randomize", command=self._randomize)
-        _br.pack(side="left", padx=6)
+        _br = ttk.Button(lrow, text="Randomize queue", command=self._randomize)
+        _br.pack(side="left")
         helptip.tip(_br, "Shuffle the pending queue order right now.")
 
         # run controls + status sit ABOVE the log
@@ -796,6 +780,73 @@ class WatcherWindow:
         except Exception:
             pass
         self._refresh()
+
+    def _select_cid(self, cid):
+        """Select the listbox row for this channel so the shared per-channel
+        handlers (which read the selection) act on it. Returns True if found."""
+        try:
+            idx = self._chan_ids.index(cid)
+        except (ValueError, AttributeError):
+            return False
+        self.lb.selection_clear(0, "end")
+        self.lb.selection_set(idx)
+        self.lb.activate(idx)
+        return True
+
+    def _open_selected_panel(self, _e=None):
+        sel = self.lb.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        if idx < len(getattr(self, "_chan_ids", [])):
+            self._open_channel_panel(self._chan_ids[idx])
+
+    def _open_channel_panel(self, cid):
+        """Double-click panel for ONE channel: pause/resume, edit, focus, wipe,
+        open folder, delete — all for that channel."""
+        d = watcher.load()
+        ch = next((c for c in d["channels"] if c.get("id") == cid), None)
+        if not ch:
+            return
+        win = tk.Toplevel(self.win)
+        win.title(ch.get("name") or "Channel")
+        win.transient(self.win)
+        win.grab_set()
+        try:
+            theme.apply(win)
+        except Exception:
+            pass
+        paused = not ch.get("enabled", True)
+        ttk.Label(win, text=(ch.get("name") or ch.get("url", "")),
+                  style="Section.TLabel").pack(anchor="w", padx=14, pady=(12, 2))
+        ttk.Label(win, style="Dim.TLabel",
+                  text=("Paused — not being scanned" if paused else "Active")
+                  ).pack(anchor="w", padx=14, pady=(0, 8))
+
+        def act(handler, close=True):
+            if not self._select_cid(cid):
+                win.destroy()
+                return
+            if close:
+                win.destroy()
+            handler()
+
+        col = ttk.Frame(win)
+        col.pack(fill="x", padx=14, pady=(0, 12))
+        ttk.Button(col, text=("Resume" if paused else "Pause"),
+                   command=lambda: act(self._toggle_pause)).pack(fill="x", pady=2)
+        ttk.Button(col, text="Edit…",
+                   command=lambda: act(self._edit_selected)).pack(fill="x", pady=2)
+        ttk.Button(col, text="★ Focus / Un-focus",
+                   command=lambda: act(self._toggle_focus)).pack(fill="x", pady=2)
+        ttk.Button(col, text="Open folder",
+                   command=lambda: self._open_folder(cid)).pack(fill="x", pady=2)
+        ttk.Button(col, text="Wipe its results",
+                   command=lambda: act(self._clear_source)).pack(fill="x", pady=2)
+        ttk.Button(col, text="Delete this channel",
+                   command=lambda: act(self._delete)).pack(fill="x", pady=2)
+        ttk.Button(col, text="Close",
+                   command=win.destroy).pack(fill="x", pady=(10, 0))
 
     def _on_right_click(self, e):
         """Right-click a row -> context menu with Open folder."""
