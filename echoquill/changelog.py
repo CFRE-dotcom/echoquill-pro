@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.66.3  (2026-10-23)
+    Channel Watcher — double-click goes back to the edit tab, no pop-up. Double-clicking a channel (e.g. ShaneHummus), playlist, or keyword search opens that source's edit tab exactly like it used to — the 2.66.2 pop-up window is gone. The per-source actions from that pop-up now sit on the edit tab itself, as a "This source:" button row: Pause / Resume, ★ Focus, Wipe its results, Open folder, and Delete this channel — each acting on just the source you opened. The main window still keeps only the global "Pause all / Resume all" plus the run controls.
+
 v2.66.2  (2026-10-23)
     Channel Watcher per-channel actions moved onto each channel. The main window now keeps only the global "Pause all / Resume all" (plus run controls); the per-channel Delete, Pause/Resume, Wipe, and Focus buttons are gone from it. Double-click any channel (e.g. ShaneHummus) to open its own panel with Pause/Resume, Edit, ★ Focus, Open folder, Wipe results, and Delete — all for just that channel.
 

@@ -142,8 +142,9 @@ class WatcherWindow:
     def _build_list_tab(self, f):
         hdr = ttk.Frame(f); hdr.pack(fill="x", padx=8, pady=(8, 2))
         ttk.Label(hdr, style="Dim.TLabel", wraplength=520, text=(
-            "Channels and topic-searches you watch. Double-click a row to open "
-            "it — pause/resume, edit, wipe or delete that one · hover for stats.")).pack(
+            "Channels and topic-searches you watch. Double-click a row to edit "
+            "it (opens its tab, where you can pause, wipe, focus or delete that "
+            "one) · hover for stats.")).pack(
             side="left", anchor="w")
         self._sort_labels = ["Most recent", "Order added", "Name A-Z",
                              "Type", "Set", "Most videos", "Active first"]
@@ -160,12 +161,13 @@ class WatcherWindow:
         self.lb.configure(yscrollcommand=_lbsb.set)
         _lbsb.pack(side="right", fill="y")
         self.lb.pack(side="left", fill="both", expand=True)
-        self.lb.bind("<Double-Button-1>", self._open_selected_panel)
+        self.lb.bind("<Double-Button-1>", self._edit_selected)
         self.lb.bind("<Button-3>", self._on_right_click)
         self.lb.bind("<Motion>", self._hover)
         self.lb.bind("<Leave>", lambda _e: self._hide_tip())
-        # Per-channel actions (pause/resume, edit, wipe, focus, delete) now live
-        # in the double-click panel for each channel — not on the main window.
+        # Per-source actions (pause/resume, wipe, focus, delete) live on each
+        # source's own edit tab (reached by double-click), not on the main
+        # window. The main window keeps only the global run controls below.
         lrow = ttk.Frame(f); lrow.pack(fill="x", padx=8, pady=(0, 4))
         _br = ttk.Button(lrow, text="Randomize queue", command=self._randomize)
         _br.pack(side="left")
@@ -286,6 +288,8 @@ class WatcherWindow:
                     "your edits).")
         self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
                                           command=self._cancel_edit)
+        self._build_source_actions(f, lambda: self._editing,
+                                   "Delete this channel")
 
     def _build_playlist_form(self, f):
         self.pl_form_lbl = ttk.Label(f, text="Add a playlist",
@@ -344,6 +348,8 @@ class WatcherWindow:
                     "(or save your edits).")
         self.cancel_playlist_btn = ttk.Button(arow, text="Cancel edit",
                                               command=self._cancel_playlist_edit)
+        self._build_source_actions(f, lambda: self._editing_playlist,
+                                   "Delete this playlist")
 
     def _build_search_form(self, f):
         self.s_form_lbl = ttk.Label(f, text="Search by keyword",
@@ -430,6 +436,8 @@ class WatcherWindow:
                     "list (or save your edits).")
         self.cancel_search_btn = ttk.Button(arow, text="Cancel edit",
                                             command=self._cancel_search_edit)
+        self._build_source_actions(f, lambda: self._editing_search,
+                                   "Delete this search")
 
     def _build_schedule_tab(self, f):
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
@@ -793,60 +801,43 @@ class WatcherWindow:
         self.lb.activate(idx)
         return True
 
-    def _open_selected_panel(self, _e=None):
-        sel = self.lb.curselection()
-        if not sel:
+    def _run_source_action(self, cid, handler):
+        """Point the shared per-source handlers (which read the list selection)
+        at `cid`, then run one. Used by the action buttons on each edit tab."""
+        if not cid:
+            self._set_status("Double-click a row in the list first to open it.")
             return
-        idx = sel[0]
-        if idx < len(getattr(self, "_chan_ids", [])):
-            self._open_channel_panel(self._chan_ids[idx])
-
-    def _open_channel_panel(self, cid):
-        """Double-click panel for ONE channel: pause/resume, edit, focus, wipe,
-        open folder, delete — all for that channel."""
-        d = watcher.load()
-        ch = next((c for c in d["channels"] if c.get("id") == cid), None)
-        if not ch:
+        if not self._select_cid(cid):
+            self._set_status("Reopen it from the list first.")
             return
-        win = tk.Toplevel(self.win)
-        win.title(ch.get("name") or "Channel")
-        win.transient(self.win)
-        win.grab_set()
-        try:
-            theme.apply(win)
-        except Exception:
-            pass
-        paused = not ch.get("enabled", True)
-        ttk.Label(win, text=(ch.get("name") or ch.get("url", "")),
-                  style="Section.TLabel").pack(anchor="w", padx=14, pady=(12, 2))
-        ttk.Label(win, style="Dim.TLabel",
-                  text=("Paused — not being scanned" if paused else "Active")
-                  ).pack(anchor="w", padx=14, pady=(0, 8))
+        handler()
 
-        def act(handler, close=True):
-            if not self._select_cid(cid):
-                win.destroy()
-                return
-            if close:
-                win.destroy()
-            handler()
+    def _build_source_actions(self, parent, get_cid, delete_label):
+        """A row of per-source action buttons for an edit tab. They act on the
+        source currently loaded in that tab (get_cid), always visible."""
+        row = ttk.Frame(parent)
+        row.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Label(row, text="This source:", style="Dim.TLabel").pack(
+            side="left", padx=(0, 6))
 
-        col = ttk.Frame(win)
-        col.pack(fill="x", padx=14, pady=(0, 12))
-        ttk.Button(col, text=("Resume" if paused else "Pause"),
-                   command=lambda: act(self._toggle_pause)).pack(fill="x", pady=2)
-        ttk.Button(col, text="Edit…",
-                   command=lambda: act(self._edit_selected)).pack(fill="x", pady=2)
-        ttk.Button(col, text="★ Focus / Un-focus",
-                   command=lambda: act(self._toggle_focus)).pack(fill="x", pady=2)
-        ttk.Button(col, text="Open folder",
-                   command=lambda: self._open_folder(cid)).pack(fill="x", pady=2)
-        ttk.Button(col, text="Wipe its results",
-                   command=lambda: act(self._clear_source)).pack(fill="x", pady=2)
-        ttk.Button(col, text="Delete this channel",
-                   command=lambda: act(self._delete)).pack(fill="x", pady=2)
-        ttk.Button(col, text="Close",
-                   command=win.destroy).pack(fill="x", pady=(10, 0))
+        def mk(text, handler, tip):
+            b = ttk.Button(row, text=text,
+                           command=lambda: self._run_source_action(get_cid(),
+                                                                    handler))
+            b.pack(side="left", padx=(0, 6))
+            helptip.tip(b, tip)
+            return b
+
+        mk("Pause / Resume", self._toggle_pause,
+           "Pause or resume just this source (toggles).")
+        mk("★ Focus", self._toggle_focus,
+           "Make this source process first (toggles).")
+        mk("Wipe its results", self._clear_source,
+           "Clear this source's queue + seen list. Saved files are NOT deleted.")
+        mk("Open folder", lambda: self._open_folder(get_cid()),
+           "Open this source's saved Transcriptions folder.")
+        mk(delete_label, self._delete,
+           "Delete this source and all its stored data. Can't be undone.")
 
     def _on_right_click(self, e):
         """Right-click a row -> context menu with Open folder."""
