@@ -8,7 +8,7 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
-v2.66.0  (2026-10-23)
+v2.66.1  (2026-10-23)
     Folder picking is now a dropdown of your real folders, everywhere you save.
     (1) Ask AI → "Save as .txt…" now pops a folder chooser: a dropdown listing every existing subfolder in your Transcriptions folder (plus "(main folder)"), editable to type a new name, with Browse for anywhere else. No more silent dump into the main folder. Saving to the same file still stacks answers.
     (2) Channel Watcher — the Folder box when adding a channel, playlist, or search is now that same dropdown of existing folders instead of a blank box you had to guess at. Leave it blank (or pick "(main folder)") for the root. Type a new name to create one (backslashes still nest).
