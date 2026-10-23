@@ -76,16 +76,54 @@ def _is_error(ans):
     return ans.strip().lower().startswith(ERR_PREFIX)
 
 
-def _ctx_from_transcript(path):
-    """Return (title, url, context) from a transcript .txt (header then body)."""
-    raw = open(path, encoding="utf-8", errors="replace").read()
+_TRANS_SPLIT = re.compile(r'=+\s*TRANSCRIPTION\s*=+', re.I)
+_DESC_SPLIT = re.compile(r'=+\s*VIDEO DESCRIPTION\s*=+', re.I)
+
+
+def _parse_transcript(raw):
+    """Return (title, url, description, transcription) from a transcript file.
+    Handles the app's '===== VIDEO DESCRIPTION ===== / ===== TRANSCRIPTION ====='
+    layout, and plain files with no markers."""
     lines = raw.split("\n")
     title = lines[0].strip() if lines else ""
     url = lines[1].strip() if len(lines) > 1 else ""
-    body = raw.split("\n\n", 1)[1] if "\n\n" in raw else raw
-    if len(body) > 24000:                       # same budget ask_ai uses
-        body = body[:12000] + "\n[...]\n" + body[-12000:]
-    return title, url, body
+    desc, trans = "", ""
+    parts = _TRANS_SPLIT.split(raw, maxsplit=1)
+    if len(parts) == 2:
+        trans = parts[1].strip()
+        d = _DESC_SPLIT.split(parts[0], maxsplit=1)
+        if len(d) == 2:
+            desc = d[1].strip()
+    else:
+        trans = (raw.split("\n\n", 1)[1] if "\n\n" in raw else raw).strip()
+    return title, url, desc, trans
+
+
+def _transcription_len(path):
+    try:
+        _, _, _, trans = _parse_transcript(
+            open(path, encoding="utf-8", errors="replace").read())
+        return len(trans)
+    except OSError:
+        return 0
+
+
+def _write_transcript(path, title, url, desc, trans):
+    out = f"{title}\n{url}\n"
+    if desc:
+        out += f"\n========== VIDEO DESCRIPTION ==========\n{desc}\n"
+    out += f"\n========== TRANSCRIPTION ==========\n{trans}"
+    open(path, "w", encoding="utf-8").write(out)
+
+
+def _ctx_from_transcript(path):
+    """Return (title, url, context) — context is the REAL transcription text
+    (not the description), so answers are grounded in what was actually said."""
+    raw = open(path, encoding="utf-8", errors="replace").read()
+    title, url, _desc, trans = _parse_transcript(raw)
+    if len(trans) > 24000:
+        trans = trans[:12000] + "\n[...]\n" + trans[-12000:]
+    return title, url, trans
 
 
 def _answer(cfg, question, title, url, context, model_override):
@@ -106,9 +144,106 @@ def _answer(cfg, question, title, url, context, model_override):
     return ai_call.chat(use, system, question, temperature=0.1, timeout=180)
 
 
-def find_failed(root, week_only):
-    """Return list of (qa_path, transcript_path, title, url, blocks) needing work.
-    blocks = list of [question, answer, needs_redo(bool)]."""
+def _is_weak(q, a, min_chars):
+    """A redo-worthy answer: an error, empty, a stub, or too short — but NOT a
+    trivial question (where little content is the correct answer)."""
+    s = a.strip()
+    if _is_error(s):
+        return True
+    ql = q.strip().lower()
+    if len(ql) < 5 or ql in ("ask nothing", "n/a", "none", "nothing"):
+        return False                      # trivial question — short answer is fine
+    if s == "" or s in ("-", "–", "—") or s == "​":
+        return True
+    if s.lower().startswith("ai returned nothing"):
+        return True
+    return len(s) < min_chars
+
+
+MIN_TR = 200          # transcript body shorter than this = "empty", try re-transcribe
+MEDIA_EXT = (".mp4", ".webm", ".mkv", ".mov", ".m4a", ".mp3", ".wav", ".opus")
+_WHISPER = {"model": None, "size": None}
+
+
+def _find_media(folder, stem):
+    """Find the saved video/audio for a Q&A base name in its folder."""
+    if not os.path.isdir(folder):
+        return None
+    for x in os.listdir(folder):
+        xl = x.lower()
+        if x.startswith(stem) and xl.endswith(MEDIA_EXT):
+            return os.path.join(folder, x)
+    # some media keep a format tag before the ext (…f399.mp4) — match loosely
+    for x in os.listdir(folder):
+        xl = x.lower()
+        if xl.endswith(MEDIA_EXT) and _norm(os.path.splitext(x)[0]).startswith(
+                _norm(stem)[:40]):
+            return os.path.join(folder, x)
+    return None
+
+
+def _fetch_captions(url, cfg, log):
+    """Pull the video's OWN YouTube captions (no Whisper). Uses your EchoQuill
+    cookies + proxy. Logs the REAL outcome per video: which caption languages
+    exist, or that YouTube genuinely has none, or the actual error."""
+    if not (url or "").startswith("http"):
+        return ""
+    import tempfile
+    import glob
+    import shutil
+    try:
+        import yt_dlp
+        from echoquill.media_gui import _parse_vtt, _ensure_cookiefile, _apply_proxy
+    except Exception as e:
+        log(f"    caption tools unavailable: {str(e)[:120]}")
+        return ""
+    langs = ["en", "en-US", "en-GB", "en-orig"]
+    tmp = tempfile.mkdtemp(prefix="eqcap_")
+    base = {"quiet": True, "no_warnings": True, "skip_download": True,
+            "outtmpl": os.path.join(tmp, "%(id)s.%(ext)s")}
+    _ensure_cookiefile(cfg)
+    cf = ((cfg or {}).get("yt_cookies_file", "") or "").strip()
+    if cf and os.path.exists(cf):
+        base["cookiefile"] = cf
+    _apply_proxy(base, cfg)
+    try:
+        # 1) what captions does the video actually have?
+        with yt_dlp.YoutubeDL(base) as ydl:
+            info = ydl.extract_info(url, download=False)
+        subs = list((info or {}).get("subtitles", {}).keys())
+        autos = list((info or {}).get("automatic_captions", {}).keys())
+        en_auto = [a for a in autos if a.lower().startswith("en")]
+        log(f"    captions: manual={subs[:4] or 'none'}  auto-en={en_auto[:3] or 'none'}")
+        if not subs and not en_auto:
+            log("    -> YouTube has NO captions for this video")
+            return ""
+        # 2) download + parse them
+        dl = dict(base)
+        dl.update({"writesubtitles": True, "writeautomaticsub": True,
+                   "subtitleslangs": langs, "subtitlesformat": "vtt"})
+        with yt_dlp.YoutubeDL(dl) as ydl:
+            ydl.extract_info(url, download=True)
+        vtts = glob.glob(os.path.join(tmp, "*.vtt"))
+        if not vtts:
+            log("    -> captions listed but none downloaded")
+            return ""
+        vtts.sort(key=lambda f: (0 if ".en" in os.path.basename(f).lower() else 1))
+        _segs, text = _parse_vtt(open(vtts[0], encoding="utf-8",
+                                      errors="ignore").read())
+        return (text or "").strip()
+    except Exception as e:
+        log(f"    caption fetch ERROR: {str(e)[:160]}")
+        return ""
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def find_failed(root, week_only, include_short=False, min_chars=25,
+                retranscribe=False):
+    """Return list of (qa_path, transcript_path, blocks) needing work.
+    blocks = list of [question, answer, needs_redo(bool)].
+    Default: only answers that literally failed ("AI request failed").
+    include_short=True also redoes empty/stub/too-short answers."""
     now = time.time()
     out = []
     for dp, _, fs in os.walk(root):
@@ -125,19 +260,33 @@ def find_failed(root, week_only):
                 txt = open(qa_path, encoding="utf-8", errors="replace").read()
             except OSError:
                 continue
-            if ERR_PREFIX not in txt.lower():
-                continue
             if week_only and now - os.path.getmtime(qa_path) > 7 * 86400:
                 continue
-            tr = tmap.get(_norm(f[:-len(" - Q&A.txt")]))
-            if not tr or os.path.getsize(tr) < 50:
-                continue                        # can't heal without a transcript
+            stem = f[:-len(" - Q&A.txt")]
+            tr = tmap.get(_norm(stem))
+            # the video URL is line 2 of the Q&A file (and the transcript)
+            hdr = txt.split("\n")
+            url = hdr[1].strip() if len(hdr) > 1 else ""
+            # length of the REAL transcription section (ignore description)
+            body_len = _transcription_len(tr) if tr else 0
+            empty_tr = body_len < MIN_TR
+            can_retx = (retranscribe and empty_tr and url.startswith("http")
+                        and not os.path.exists(qa_path + ".nocaps"))
+            # cheap pre-filter when we're NOT doing the heavier modes
+            if (not include_short and not can_retx
+                    and ERR_PREFIX not in txt.lower()):
+                continue
+            if not tr and not can_retx:
+                continue                       # nothing to work from
             blocks = [[m.group("q").strip(), m.group("a").strip(), False]
                       for m in _BLOCK.finditer(txt)]
             for b in blocks:
-                b[2] = _is_error(b[1])
-            if any(b[2] for b in blocks):
-                out.append((qa_path, tr, blocks))
+                if _is_error(b[1]):
+                    b[2] = True
+                elif include_short:
+                    b[2] = _is_weak(b[0], b[1], min_chars)
+            if any(b[2] for b in blocks) or can_retx:
+                out.append((qa_path, tr, url, can_retx, blocks))
     out.sort(key=lambda x: os.path.getmtime(x[0]), reverse=True)  # newest first
     return out
 
@@ -158,6 +307,18 @@ def main():
     ap.add_argument("--model", default="", help="override AI model for this run")
     ap.add_argument("--root", default="", help="override Transcriptions folder")
     ap.add_argument("--log", default="", help="log file (default <root>/qa_backfill.log)")
+    ap.add_argument("--fix-short", action="store_true",
+                    help="also redo empty/stub/too-short answers (use a stronger model)")
+    ap.add_argument("--min-chars", type=int, default=25,
+                    help="with --fix-short, answers shorter than this get redone")
+    ap.add_argument("--retranscribe", action="store_true",
+                    help="re-transcribe videos whose transcript is empty, from "
+                         "their saved media, then re-answer")
+    ap.add_argument("--whisper", default="",
+                    help="Whisper model size for --retranscribe (default: your "
+                         "configured size, else 'base'). Try 'small' for accuracy.")
+    ap.add_argument("--lang", default="en",
+                    help="language for re-transcription (default en; '' = auto-detect)")
     args = ap.parse_args()
 
     cfg = cfgmod.load()
@@ -181,22 +342,27 @@ def main():
     print(f"Provider: {cfg.get('ai_provider','?')}   Model: {model}"
           + (f"  (override)" if args.model else ""))
 
-    files = find_failed(root, args.week)
+    files = find_failed(root, args.week, include_short=args.fix_short,
+                        min_chars=args.min_chars, retranscribe=args.retranscribe)
     if args.max:
         files = files[:args.max]
-    total_q = sum(sum(1 for b in bl if b[2]) for _, _, bl in files)
-    print(f"Files to heal: {len(files)}   failed answers to redo: {total_q}"
+    total_q = sum(sum(1 for b in bl if b[2]) for *_, bl in files)
+    retx_n = sum(1 for *_, can, _ in files if can)
+    print(f"Files to work: {len(files)}   answers to redo: {total_q}"
+          + (f"   videos to re-caption: {retx_n}" if args.retranscribe else "")
           + ("   [last 7 days]" if args.week else ""))
     if not files:
-        print("Nothing to do — no failed Q&A found.")
+        print("Nothing to do.")
         return 0
 
     if args.dry_run:
-        for qa, tr, bl in files:
+        for qa, tr, url, can, bl in files:
             n = sum(1 for b in bl if b[2])
-            print(f"  [{n:>2} redo] {os.path.relpath(qa, root)}")
-        est = total_q * (24000 / 4 + 350)       # rough tokens, head/tail capped
-        print(f"\nDRY RUN — no calls made. Rough token estimate: ~{est:,.0f}.")
+            tag = "RE-CAPTION+answer all" if can else f"{n:>2} answers"
+            print(f"  [{tag}] {os.path.relpath(qa, root)}")
+        est = total_q * (24000 / 4 + 350)
+        print(f"\nDRY RUN — no calls made. "
+              f"Rough token estimate: ~{est:,.0f}.")
         return 0
 
     healed = calls = redone = 0
@@ -210,11 +376,45 @@ def main():
             f"{redone} | AI calls: {calls} | est tokens: ~{est_tokens:,} | "
             f"elapsed: {time.time()-t0:.0f}s ===")
 
-    for idx, (qa, tr, blocks) in enumerate(files, 1):
-        title, url, ctx = _ctx_from_transcript(tr)
+    for idx, (qa, tr, vurl, can_retx, blocks) in enumerate(files, 1):
         rel = os.path.relpath(qa, root)
-        todo = [b for b in blocks if b[2]]
-        log(f"\n[{idx}/{len(files)}] {rel}  ({len(todo)} to redo)")
+        log(f"\n[{idx}/{len(files)}] {rel}")
+        # ---- refill empty transcripts from the video's OWN YouTube captions ----
+        if can_retx:
+            old_len = _transcription_len(tr) if tr else 0
+            log(f"    thin transcript ({old_len}c) — fetching the video's captions")
+            new = _fetch_captions(vurl, cfg, log)
+            if len(new) >= 15 and len(new) > old_len:   # got real caption text
+                t_title = t_url = t_desc = ""
+                if tr and os.path.exists(tr):
+                    t_title, t_url, t_desc, _ = _parse_transcript(
+                        open(tr, encoding="utf-8", errors="replace").read())
+                if not t_title:
+                    t_title = os.path.basename(qa)[:-len(" - Q&A.txt")]
+                if not t_url:
+                    t_url = vurl
+                tr = tr or os.path.join(os.path.dirname(qa),
+                                        os.path.basename(qa)[:-len(" - Q&A.txt")] + ".txt")
+                try:
+                    _write_transcript(tr, t_title, t_url, t_desc, new)
+                    # went from near-nothing to real content -> redo all answers
+                    if old_len < 40:
+                        for b in blocks:
+                            b[2] = True
+                    log(f"    captions recovered: {len(new)}c"
+                        + (" — re-answering all" if old_len < 40 else ""))
+                except OSError as e:
+                    log(f"    could not write transcript: {e}")
+            else:
+                try:
+                    open(qa + ".nocaps", "w").close()   # no captions — don't retry
+                except OSError:
+                    pass
+                log("    no captions available for this video — leaving as is")
+        title, url, ctx = _ctx_from_transcript(tr) if tr and os.path.exists(tr) else ("", "", "")
+        todo = [b for b in blocks if b[2]] if ctx.strip() else []
+        if todo:
+            log(f"    {len(todo)} answer(s) to redo")
         for b in todo:
             q = b[0]
             answer = None

@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.66.0  (2026-10-23)
+    Ask AI → "Save as .txt…" now asks you WHERE to save. Instead of silently appending the answer to a file in the main Transcriptions folder, it opens a Save dialog (defaulting to your Transcriptions folder and the video's "<name> - Q&A.txt") so you choose the folder and filename. Picking an existing file still appends, so answers stack. (The separate "Auto-save answers" checkbox still auto-files to the default location when you want that.)
+
 v2.65.0  (2026-10-20)
     Per-app tone is now pick-from-a-list. Settings → AI Enhancement → Per-app tone: the two boxes are now dropdowns. The app box lists common programs PLUS whatever you have open right now (so you can just pick Outlook, Slack, Word, Chrome, etc.), and the instruction box offers ready-made tones (Professional, Formal email, Casual, Text-message, Concise, Bullet points, Technical, and more). Both are still editable — type your own if you want. Reminder: per-app tone needs AI Enhancement on, and it matches by program, so browser tabs (Gmail, Outlook web) all count as your browser.
 

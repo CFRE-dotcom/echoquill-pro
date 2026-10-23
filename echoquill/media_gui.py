@@ -11,7 +11,7 @@ from . import config as cfgmod
 from . import helptip
 
 MEDIA_HELP = 'How to transcribe video and audio\n\n- Paste a URL from YouTube (incl. Shorts), TikTok, and ~1,800 sites, then click Transcribe URL.\n- Choose a file on this PC to transcribe any audio or video file.\n- Drag and drop: drop an audio/video file anywhere on this window and it transcribes automatically.\n- Batch: many URLs - paste a whole list; each is transcribed one at a time and auto-saved (named after the video) in your Transcriptions folder.\n- Stop cancels a transcription in progress.\n- Find in transcript: type a word to highlight it, with timestamps.\n- Ask AI: after transcribing, ask questions and get answers from the video itself, with timestamps.\n- Skool / members-only: paste the embedded video link in the lesson (YouTube, Vimeo, Loom or Wistia). For the Skool native player, open the video, press F12 - Network tab - filter m3u8, and paste that .m3u8 link. For login-gated videos turn on Settings - Transcription - Sign in via browser.\n\nEverything runs on your PC - nothing is uploaded.'
-ASK_HELP = 'How to use Ask AI\n\n- Type a question about the video you just transcribed and click Ask.\n- Answers come only from the video transcript, and cite the timestamps where the info was said, like [12:34].\n- If the video does not cover it, it says so - it will not make things up.\n- Copy answer copies the reply.\n- Save answer appends the Q and A to a file named after the video, in your Transcriptions folder. Ask more and they stack in the same file.\n\nRequires AI Enhancement set up in Settings, AI Enhancement.'
+ASK_HELP = 'How to use Ask AI\n\n- Type a question about the video you just transcribed and click Ask.\n- Answers come only from the video transcript, and cite the timestamps where the info was said, like [12:34].\n- If the video does not cover it, it says so - it will not make things up.\n- Copy answer copies the reply.\n- Save as .txt lets you choose where to save the Q and A (it defaults to your Transcriptions folder and the video name). Pick the same file again and answers stack in it.\n\nRequires AI Enhancement set up in Settings, AI Enhancement.'
 
 
 
@@ -1347,9 +1347,25 @@ class AskWindow:
         answer = self.out.get("1.0", "end").strip()
         if not answer:
             return
-        saved = self._append_qa(self._last_q, answer)
-        self.copy_status.configure(
-            text=(f"Saved to {saved} ✓" if saved else "Save failed"))
+        # Ask WHERE to save (defaults to the Transcriptions folder + the video's
+        # Q&A name), instead of silently writing to the main folder.
+        path = filedialog.asksaveasfilename(
+            parent=self.win, defaultextension=".txt",
+            initialdir=transcripts_dir(self.cfg),
+            initialfile=safe_filename(f"{self.title} - Q&A") + ".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            title="Save this Q&A — choose where")
+        if not path:
+            return
+        sep = "*" * 50
+        block = f"{sep}\n{sep}\nQ: {self._last_q}\n\nA: {answer}\n\n"
+        try:
+            with open(path, "a", encoding="utf-8") as f:   # append so it stacks
+                f.write(block)
+            self.copy_status.configure(
+                text=f"Saved to {os.path.basename(path)} ✓")
+        except Exception:
+            self.copy_status.configure(text="Save failed")
         self.win.after(2500, lambda: self.copy_status.configure(text=""))
 
     def _toggle_autosave(self):
