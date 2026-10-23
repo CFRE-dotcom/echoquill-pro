@@ -8,6 +8,12 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.66.5  (2026-10-23)
+    Channel Watcher — "Check now" is now on every add/edit tab too, not just the main window. After you add or save a channel, playlist, or keyword search, the Check now button is right there to scan immediately (it scans all sources, so add/save the new one first and it's included).
+
+v2.66.4  (2026-10-23)
+    Channel Watcher — the per-source Pause/Resume, Focus, Wipe and Delete buttons on each edit tab now always show their result, immediately. The button relabels (Pause ⇄ Resume) and the confirmation line under it updates BEFORE the list refreshes, so even if the background list refresh hiccups, you still see exactly what happened. Pressing Pause/Resume no longer looks like it does nothing.
+
 v2.66.3  (2026-10-23)
     Channel Watcher — double-click goes back to the edit tab, no pop-up. Double-clicking a channel (e.g. ShaneHummus), playlist, or keyword search opens that source's edit tab exactly like it used to — the 2.66.2 pop-up window is gone. The per-source actions from that pop-up now sit on the edit tab itself, as a "This source:" button row: Pause / Resume, ★ Focus, Wipe its results, Open folder, and Delete this channel — each acting on just the source you opened. The main window still keeps only the global "Pause all / Resume all" plus the run controls.
 

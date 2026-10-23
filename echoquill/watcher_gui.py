@@ -288,8 +288,12 @@ class WatcherWindow:
                     "your edits).")
         self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
                                           command=self._cancel_edit)
-        self._build_source_actions(f, lambda: self._editing,
-                                   "Delete this channel")
+        _cn = ttk.Button(arow, text="Check now", command=self._check_now)
+        _cn.pack(side="right")
+        helptip.tip(_cn, "Scan all sources now for new uploads and start "
+                    "transcribing — add/save this one first so it's included.")
+        self._ch_pause_btn, self._ch_act_msg = self._build_source_actions(
+            f, lambda: self._editing, "Delete this channel")
 
     def _build_playlist_form(self, f):
         self.pl_form_lbl = ttk.Label(f, text="Add a playlist",
@@ -348,8 +352,12 @@ class WatcherWindow:
                     "(or save your edits).")
         self.cancel_playlist_btn = ttk.Button(arow, text="Cancel edit",
                                               command=self._cancel_playlist_edit)
-        self._build_source_actions(f, lambda: self._editing_playlist,
-                                   "Delete this playlist")
+        _cn = ttk.Button(arow, text="Check now", command=self._check_now)
+        _cn.pack(side="right")
+        helptip.tip(_cn, "Scan all sources now for new uploads and start "
+                    "transcribing — add/save this one first so it's included.")
+        self._pl_pause_btn, self._pl_act_msg = self._build_source_actions(
+            f, lambda: self._editing_playlist, "Delete this playlist")
 
     def _build_search_form(self, f):
         self.s_form_lbl = ttk.Label(f, text="Search by keyword",
@@ -436,8 +444,12 @@ class WatcherWindow:
                     "list (or save your edits).")
         self.cancel_search_btn = ttk.Button(arow, text="Cancel edit",
                                             command=self._cancel_search_edit)
-        self._build_source_actions(f, lambda: self._editing_search,
-                                   "Delete this search")
+        _cn = ttk.Button(arow, text="Check now", command=self._check_now)
+        _cn.pack(side="right")
+        helptip.tip(_cn, "Scan all sources now for new uploads and start "
+                    "transcribing — add/save this one first so it's included.")
+        self._s_pause_btn, self._s_act_msg = self._build_source_actions(
+            f, lambda: self._editing_search, "Delete this search")
 
     def _build_schedule_tab(self, f):
         ttk.Label(f, style="Dim.TLabel", wraplength=720, text=(
@@ -801,43 +813,129 @@ class WatcherWindow:
         self.lb.activate(idx)
         return True
 
-    def _run_source_action(self, cid, handler):
-        """Point the shared per-source handlers (which read the list selection)
-        at `cid`, then run one. Used by the action buttons on each edit tab."""
-        if not cid:
-            self._set_status("Double-click a row in the list first to open it.")
-            return
-        if not self._select_cid(cid):
-            self._set_status("Reopen it from the list first.")
-            return
-        handler()
-
     def _build_source_actions(self, parent, get_cid, delete_label):
-        """A row of per-source action buttons for an edit tab. They act on the
-        source currently loaded in that tab (get_cid), always visible."""
+        """A row of per-source action buttons for an edit tab, plus a feedback
+        line right beneath them. They act on the source loaded in that tab
+        (get_cid). Returns (pause_btn, msg_label) so the edit loaders can set
+        the Pause/Resume label to match the source's real state."""
         row = ttk.Frame(parent)
-        row.pack(fill="x", padx=8, pady=(0, 8))
+        row.pack(fill="x", padx=8, pady=(0, 2))
         ttk.Label(row, text="This source:", style="Dim.TLabel").pack(
             side="left", padx=(0, 6))
+        msg = ttk.Label(parent, style="Dim.TLabel", text="")
+        msg.pack(anchor="w", padx=8, pady=(0, 8))
+
+        pause_btn = ttk.Button(row, text="Pause")
+        pause_btn.configure(
+            command=lambda: self._source_toggle_pause(get_cid(), pause_btn, msg))
+        pause_btn.pack(side="left", padx=(0, 6))
+        helptip.tip(pause_btn, "Pause or resume just this source. The label "
+                    "shows its current state.")
 
         def mk(text, handler, tip):
             b = ttk.Button(row, text=text,
-                           command=lambda: self._run_source_action(get_cid(),
-                                                                    handler))
+                           command=lambda: handler(get_cid(), msg))
             b.pack(side="left", padx=(0, 6))
             helptip.tip(b, tip)
             return b
 
-        mk("Pause / Resume", self._toggle_pause,
-           "Pause or resume just this source (toggles).")
-        mk("★ Focus", self._toggle_focus,
+        mk("★ Focus", self._source_toggle_focus,
            "Make this source process first (toggles).")
-        mk("Wipe its results", self._clear_source,
+        mk("Wipe its results", self._source_wipe,
            "Clear this source's queue + seen list. Saved files are NOT deleted.")
-        mk("Open folder", lambda: self._open_folder(get_cid()),
+        mk("Open folder", lambda cid, _m: self._open_folder(cid),
            "Open this source's saved Transcriptions folder.")
-        mk(delete_label, self._delete,
+        mk(delete_label,
+           lambda cid, m: self._source_delete(cid, m, pause_btn),
            "Delete this source and all its stored data. Can't be undone.")
+        return pause_btn, msg
+
+    def _sync_pause_btn(self, btn, enabled):
+        try:
+            btn.configure(text="Pause" if enabled else "Resume")
+        except Exception:
+            pass
+
+    def _get_source(self, cid):
+        if not cid:
+            return None
+        d = watcher.load()
+        return next((c for c in d["channels"] if c.get("id") == cid), None)
+
+    def _safe_refresh(self):
+        """Refresh the list, but never let a refresh error swallow the button's
+        visible feedback (which is set BEFORE this is called)."""
+        try:
+            self._refresh()
+        except Exception as e:
+            self._log(f"(list refresh failed: {e})")
+
+    def _source_toggle_pause(self, cid, pause_btn, msg):
+        ch = self._get_source(cid)
+        if not ch:
+            msg.configure(text="Open a source first — double-click one in the "
+                          "list."); return
+        new_on = not ch.get("enabled", True)   # True = resumed/active
+        watcher.set_enabled(cid, new_on)
+        # visible feedback FIRST, so it shows even if the list refresh errors
+        self._sync_pause_btn(pause_btn, new_on)
+        msg.configure(text=("▶  Resumed — this source is active again."
+                            if new_on else
+                            "⏸  Paused — this source will not be scanned."))
+        self._safe_refresh()
+
+    def _source_toggle_focus(self, cid, msg):
+        ch = self._get_source(cid)
+        if not ch:
+            msg.configure(text="Open a source first — double-click one in the "
+                          "list."); return
+        new_on = not ch.get("focus")
+        watcher.set_focus(cid, new_on)
+        msg.configure(text=("★  Focused — this source goes first."
+                            if new_on else "☆  Un-focused — back to normal order."))
+        self._safe_refresh()
+
+    def _source_wipe(self, cid, msg):
+        ch = self._get_source(cid)
+        if not ch:
+            msg.configure(text="Open a source first — double-click one in the "
+                          "list."); return
+        label = ch.get("query") or ch.get("url") or "this source"
+        if not messagebox.askyesno(
+                "Wipe results",
+                f"Clear all queued/finished items and the seen-list for:\n\n"
+                f"{label}\n\nThe source stays and will re-pull fresh on the "
+                "next check. Files already saved to disk are NOT deleted.",
+                parent=self.win):
+            return
+        watcher.clear_source_queue(cid)
+        msg.configure(text="✓  Wiped — queue + seen-list cleared for this source.")
+        self._safe_refresh()
+
+    def _source_delete(self, cid, msg, pause_btn):
+        ch = self._get_source(cid)
+        if not ch:
+            msg.configure(text="Open a source first — double-click one in the "
+                          "list."); return
+        label = ch.get("query") or ch.get("url") or "this source"
+        if not messagebox.askyesno(
+                "Delete watch",
+                f"Delete this watch and ALL stored data for it?\n\n{label}\n\n"
+                "This removes its seen-video list and any queued items. "
+                "This can't be undone.", parent=self.win):
+            return
+        kind = ch.get("kind", "channel")
+        watcher.delete_channel(cid)
+        if kind == "search" and self._editing_search == cid:
+            self._cancel_search_edit()
+        elif kind == "playlist" and self._editing_playlist == cid:
+            self._cancel_playlist_edit()
+        elif self._editing == cid:
+            self._cancel_edit()
+        self._sync_pause_btn(pause_btn, True)
+        self._safe_refresh()
+        self._goto_list()
+        self._set_status("✓ Deleted the watch and its data.")
 
     def _on_right_click(self, e):
         """Right-click a row -> context menu with Open folder."""
@@ -920,6 +1018,10 @@ class WatcherWindow:
         self.form_lbl.configure(text="Edit channel")
         self.add_btn.configure(text="✔ Save changes")
         self.cancel_edit_btn.pack(side="left", padx=8)
+        self._sync_pause_btn(self._ch_pause_btn, ch.get("enabled", True))
+        self._ch_act_msg.configure(
+            text=("⏸ Currently paused." if not ch.get("enabled", True)
+                  else "▶ Currently active."))
         self._set_status("Editing — change anything, then Save changes.")
 
     def _cancel_edit(self):
@@ -927,6 +1029,8 @@ class WatcherWindow:
         self.form_lbl.configure(text="Add a channel")
         self.add_btn.configure(text="＋ Add channel")
         self.cancel_edit_btn.pack_forget()
+        self._sync_pause_btn(self._ch_pause_btn, True)
+        self._ch_act_msg.configure(text="")
         self._clear_form()
 
     # ---------- playlist sources ----------
@@ -989,6 +1093,10 @@ class WatcherWindow:
         self.pl_form_lbl.configure(text="Edit playlist")
         self.add_playlist_btn.configure(text="✔ Save changes")
         self.cancel_playlist_btn.pack(side="left", padx=8)
+        self._sync_pause_btn(self._pl_pause_btn, ch.get("enabled", True))
+        self._pl_act_msg.configure(
+            text=("⏸ Currently paused." if not ch.get("enabled", True)
+                  else "▶ Currently active."))
         self._set_status("Editing playlist — change anything, then Save changes.")
 
     def _cancel_playlist_edit(self):
@@ -996,6 +1104,8 @@ class WatcherWindow:
         self.pl_form_lbl.configure(text="Add a playlist")
         self.add_playlist_btn.configure(text="＋ Add playlist")
         self.cancel_playlist_btn.pack_forget()
+        self._sync_pause_btn(self._pl_pause_btn, True)
+        self._pl_act_msg.configure(text="")
         self._clear_playlist_form()
 
     # ---------- search sources ----------
@@ -1099,6 +1209,10 @@ class WatcherWindow:
         self.s_form_lbl.configure(text="Edit search")
         self.add_search_btn.configure(text="✔ Save changes")
         self.cancel_search_btn.pack(side="left", padx=8)
+        self._sync_pause_btn(self._s_pause_btn, ch.get("enabled", True))
+        self._s_act_msg.configure(
+            text=("⏸ Currently paused." if not ch.get("enabled", True)
+                  else "▶ Currently active."))
         self._set_status("Editing search — change anything, then Save changes.")
 
     def _cancel_search_edit(self):
@@ -1106,6 +1220,8 @@ class WatcherWindow:
         self.s_form_lbl.configure(text="Search by keyword")
         self.add_search_btn.configure(text="＋ Add search")
         self.cancel_search_btn.pack_forget()
+        self._sync_pause_btn(self._s_pause_btn, True)
+        self._s_act_msg.configure(text="")
         self._clear_search_form()
 
     def _save_order(self, _label=None):
