@@ -338,11 +338,14 @@ def _queue_item(cfg, ch, u, t):
     }
 
 
-def _scan_sources(cfg, d, log):
-    """The actual per-source scan (channels + searches). Returns count queued."""
+def _scan_sources(cfg, d, log, only=None):
+    """The actual per-source scan (channels + searches). Returns count queued.
+    only = a source id: scan just that one source."""
     from .auto_batch import fetch_channel
     added = 0
     for ch in d["channels"]:
+        if only is not None and ch.get("id") != only:
+            continue
         if not ch.get("enabled", True):
             continue
         if ch.get("kind") == "search" and is_expired(ch):
@@ -443,8 +446,8 @@ def _scan_sources(cfg, d, log):
     return added
 
 
-def check_new(cfg, log=lambda s: None):
-    """Scan every enabled source. When the proxy is on, verify a live IP FIRST
+def check_new(cfg, log=lambda s: None, only=None):
+    """Scan every enabled source (or just source id `only`). When the proxy is on, verify a live IP FIRST
     so scans aren't run on a blocked IP. Returns count queued."""
     if load().get("paused_all"):
         _emit(log, "Watcher is paused (Pause all is ON) — skipping this scan.")
@@ -472,7 +475,7 @@ def check_new(cfg, log=lambda s: None):
             _emit(log, "  proxy: no live IP after tries — skipping this scan.")
             return 0
     try:
-        added = _scan_sources(cfg, d, log)
+        added = _scan_sources(cfg, d, log, only)
 
         def _merge(cur):
             existing = {(q.get("channel_id"), q.get("url"))
@@ -564,8 +567,9 @@ def randomize_queue():
     _mutate(fn)
 
 
-def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
+def process_pending(cfg, log=lambda s: None, cancel=lambda: False, only=None):
     """Process every due pending/failed item once. Returns count newly done.
+    only = a source id: process just that source's items.
     Serialized by run_once (do not call directly from two threads)."""
     done = 0
     try:
@@ -575,9 +579,12 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
         d = load()
         processed = 0
         ordered = _due_order(cfg, d)       # focus-first, then fair/order/random
+        if only is not None:
+            ordered = [x for x in ordered if x.get("channel_id") == only]
         _now = time.time()
         retry_cands = [x for x in d["queue"]
-                       if x.get("save_video") and x.get("video_needed")
+                       if (only is None or x.get("channel_id") == only)
+                       and x.get("save_video") and x.get("video_needed")
                        and x.get("status") == "done"
                        and x.get("video_next_try", 0) <= _now]
         n_total = len(ordered) + len(retry_cands)
@@ -637,6 +644,8 @@ def process_pending(cfg, log=lambda s: None, cancel=lambda: False):
                 break
             if per_cycle and processed >= per_cycle:
                 break
+            if only is not None and item.get("channel_id") != only:
+                continue
             if not (item.get("save_video") and item.get("video_needed")
                     and item.get("status") == "done"):
                 continue
@@ -701,6 +710,26 @@ def run_once(cfg, log=lambda s: None, cancel=lambda: False):
             return 0
         check_new(cfg, log)
         return process_pending(cfg, log, cancel)
+    finally:
+        with _LOCK:
+            _BUSY = False
+
+
+def run_once_source(cfg, cid, log=lambda s: None, cancel=lambda: False):
+    """Scan + process ONE source (id `cid`) only, as one serialized cycle.
+    Returns (new_queued, done), or None if a cycle was already running."""
+    global _BUSY
+    with _LOCK:
+        if _BUSY:
+            return None
+        _BUSY = True
+    try:
+        if load().get("paused_all"):
+            _emit(log, "Watcher is paused (Pause all is ON) — not scanning or processing.")
+            return (0, 0)
+        added = check_new(cfg, log, only=cid)
+        done = process_pending(cfg, log, cancel, only=cid)
+        return (added, done)
     finally:
         with _LOCK:
             _BUSY = False

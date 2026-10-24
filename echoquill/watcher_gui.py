@@ -288,10 +288,11 @@ class WatcherWindow:
                     "your edits).")
         self.cancel_edit_btn = ttk.Button(arow, text="Cancel edit",
                                           command=self._cancel_edit)
-        _cn = ttk.Button(arow, text="Check now", command=self._check_now)
+        _cn = ttk.Button(arow, text="Check now",
+                         command=lambda: self._check_source(self._editing, self._ch_act_msg))
         _cn.pack(side="right")
-        helptip.tip(_cn, "Scan all sources now for new uploads and start "
-                    "transcribing — add/save this one first so it's included.")
+        helptip.tip(_cn, "Check only THIS source now for new videos and "
+                    "process just its items — save it first if it's new.")
         self._ch_pause_btn, self._ch_act_msg = self._build_source_actions(
             f, lambda: self._editing, "Delete this channel")
 
@@ -352,10 +353,11 @@ class WatcherWindow:
                     "(or save your edits).")
         self.cancel_playlist_btn = ttk.Button(arow, text="Cancel edit",
                                               command=self._cancel_playlist_edit)
-        _cn = ttk.Button(arow, text="Check now", command=self._check_now)
+        _cn = ttk.Button(arow, text="Check now",
+                         command=lambda: self._check_source(self._editing_playlist, self._pl_act_msg))
         _cn.pack(side="right")
-        helptip.tip(_cn, "Scan all sources now for new uploads and start "
-                    "transcribing — add/save this one first so it's included.")
+        helptip.tip(_cn, "Check only THIS source now for new videos and "
+                    "process just its items — save it first if it's new.")
         self._pl_pause_btn, self._pl_act_msg = self._build_source_actions(
             f, lambda: self._editing_playlist, "Delete this playlist")
 
@@ -444,10 +446,11 @@ class WatcherWindow:
                     "list (or save your edits).")
         self.cancel_search_btn = ttk.Button(arow, text="Cancel edit",
                                             command=self._cancel_search_edit)
-        _cn = ttk.Button(arow, text="Check now", command=self._check_now)
+        _cn = ttk.Button(arow, text="Check now",
+                         command=lambda: self._check_source(self._editing_search, self._s_act_msg))
         _cn.pack(side="right")
-        helptip.tip(_cn, "Scan all sources now for new uploads and start "
-                    "transcribing — add/save this one first so it's included.")
+        helptip.tip(_cn, "Check only THIS source now for new videos and "
+                    "process just its items — save it first if it's new.")
         self._s_pause_btn, self._s_act_msg = self._build_source_actions(
             f, lambda: self._editing_search, "Delete this search")
 
@@ -1387,6 +1390,53 @@ class WatcherWindow:
             self.win.after(500, self._tick_monitor)
         except Exception:
             pass
+
+    def _check_source(self, cid, msg):
+        """Per-tab Check now: scan + process ONLY the source open on this tab
+        and show the result on that tab's message line."""
+        ch = self._get_source(cid)
+        if not ch:
+            msg.configure(text="Open or save a source first — then Check now."); return
+        if watcher.all_paused():
+            msg.configure(text="Watcher is paused (Pause all is ON) — click "
+                          "Resume all first."); return
+        if not ch.get("enabled", True):
+            msg.configure(text="⏸  This source is paused — Resume it first."); return
+        self._cancel = False
+        msg.configure(text="Checking this source…")
+        label = ch.get("query") or ch.get("url") or cid
+        self._log(f"Checking one source: {label}")
+
+        def ui(fn):
+            try:
+                self.win.after(0, fn)
+            except Exception:
+                pass
+
+        def run():
+            try:
+                res = watcher.run_once_source(self.cfg, cid,
+                                              cancel=lambda: self._cancel)
+            except Exception as e:
+                ui(lambda e=e: msg.configure(text=f"Check failed: {str(e)[:80]}"))
+                return
+            if res is None:
+                ui(lambda: msg.configure(text="A check is already running — "
+                                         "try again when it finishes."))
+                return
+            added, done = res
+            if done:
+                notify.send(
+                    "EchoQuill - new results",
+                    f"{done} new video(s) transcribed - check your "
+                    "Transcriptions folder.")
+            txt = (f"Done — {added} new" + (f", {done} finished." if done else ".")
+                   if added else
+                   (f"Nothing new — {done} queued item(s) finished."
+                    if done else "Nothing new."))
+            ui(lambda: msg.configure(text=txt))
+            ui(self._safe_refresh)
+        threading.Thread(target=run, daemon=True).start()
 
     def _check_now(self):
         if watcher.all_paused():

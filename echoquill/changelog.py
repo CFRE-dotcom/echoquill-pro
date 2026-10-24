@@ -8,6 +8,9 @@ For anything not listed, see the Releases page on GitHub.
 ECHOQUILL PRO
 ============================================================
 
+v2.66.6  (2026-10-23)
+    Channel Watcher — the "Check now" button on each channel / playlist / keyword-search tab now checks ONLY the source open on that tab: it scans just that one for new videos, processes just its items, and shows the result on the same tab ("Checking this source…" → "Done — N new" / "Nothing new"). The main-window Check now still scans everything.
+
 v2.66.5  (2026-10-23)
     Channel Watcher — "Check now" is now on every add/edit tab too, not just the main window. After you add or save a channel, playlist, or keyword search, the Check now button is right there to scan immediately (it scans all sources, so add/save the new one first and it's included).
 
